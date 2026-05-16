@@ -20,7 +20,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr" className={`${dmSans.variable} h-full antialiased`}>
-      <body className="h-full bg-brand-dark text-brand-cream">
+      <body className="h-full text-brand-cream">
         <div className="flex h-screen">
           <Sidebar />
           <main className="flex-1 overflow-y-auto">{children}</main>

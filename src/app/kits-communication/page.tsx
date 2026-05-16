@@ -98,6 +98,43 @@ const monthLabel: Record<string, string> = {
   December: "Décembre",
 };
 
+type CommQuarterId = "Q1" | "Q2" | "Q3" | "Q4";
+
+type CommQuarter = {
+  id: CommQuarterId;
+  months: string[];
+};
+
+const commQuarters: CommQuarter[] = [
+  { id: "Q1", months: ["January", "February", "March"] },
+  { id: "Q2", months: ["April", "May", "June"] },
+  { id: "Q3", months: ["July", "August", "September"] },
+  { id: "Q4", months: ["October", "November", "December"] },
+];
+
+const DEFAULT_QUARTER_ID: CommQuarterId = (() => {
+  const idx = allMonths.indexOf(TODAY_MONTH);
+  if (idx <= 2) return "Q1";
+  if (idx <= 5) return "Q2";
+  if (idx <= 8) return "Q3";
+  return "Q4";
+})();
+
+function quarterStatus(q: CommQuarter): "past" | "current" | "upcoming" {
+  if (monthStatus(q.months[q.months.length - 1]) === "past") return "past";
+  if (monthStatus(q.months[0]) === "upcoming") return "upcoming";
+  return "current";
+}
+
+function commQuarterProgress(q: CommQuarter): number {
+  const qs = quarterStatus(q);
+  if (qs === "past") return 100;
+  if (qs === "upcoming") return 0;
+  const todayIdx = allMonths.indexOf(TODAY_MONTH);
+  const startIdx = allMonths.indexOf(q.months[0]);
+  return Math.round((todayIdx - startIdx) * 33 + 15);
+}
+
 const LETSTALK_LISTING_URL =
   "https://app.livestorm.co/teale-1/upcoming?limit=5";
 
@@ -320,21 +357,17 @@ export default function KitsCommunicationPage() {
   ).length;
 
   return (
-    <div className="relative px-10 py-12">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -top-32 right-0 h-[460px] w-[460px] translate-x-20 rounded-full bg-brand-teal-bright/10 blur-3xl"
-      />
-      <div className="relative z-10 mx-auto max-w-6xl">
+    <div className="px-9 py-8">
+      <div className="mx-auto max-w-[1280px]">
         <header className="mb-9 grid items-end gap-10 lg:grid-cols-[1fr_auto]">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-teal-bright">
+            <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-[2.5px] text-[#5eead4]">
               Kits de communication
             </p>
-            <h1 className="mt-4 max-w-3xl text-5xl font-medium leading-[1.05] tracking-tight text-brand-cream">
+            <h1 className="mt-3 text-[34px] font-semibold tracking-[-0.5px] text-brand-cream">
               Votre bibliothèque de contenus prêts à l&apos;emploi
             </h1>
-            <p className="mt-4 max-w-2xl text-base leading-relaxed text-brand-muted-on-dark">
+            <p className="text-[13px] leading-relaxed text-[#94a8a0]">
               Communiquez efficacement autour de Teale : kits de lancement,
               actualités mensuelles, templates d&apos;emails par thématique.
               Téléchargez ou copiez les ressources en un clic.
@@ -764,9 +797,9 @@ function CommCoverCard({
     <button
       type="button"
       onClick={onOpen}
-      className="group flex flex-col overflow-hidden rounded-2xl border border-brand-border-dark bg-brand-surface text-left transition-all hover:-translate-y-0.5 hover:border-brand-green-bright/40"
+      className={`group flex flex-col overflow-hidden rounded-2xl border border-brand-border-dark text-left transition-all hover:-translate-y-0.5 hover:border-brand-green-bright/40 ${gradient}`}
     >
-      <div className={`relative h-20 overflow-hidden ${gradient}`}>
+      <div className="relative h-20 shrink-0 overflow-hidden">
         <span
           className="absolute bottom-2.5 right-3 text-2xl text-white/80 drop-shadow-md"
           aria-hidden
@@ -774,7 +807,7 @@ function CommCoverCard({
           {emoji}
         </span>
       </div>
-      <div className="flex flex-1 flex-col px-4 pb-4 pt-3">
+      <div className="flex flex-1 flex-col bg-brand-surface px-4 pb-4 pt-3">
         <div className="mb-2.5 flex gap-1.5">
           <span className="rounded-full bg-brand-green-bright/15 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-[0.12em] text-brand-green-bright">
             {item.type === "Let's talk" ? "Let's talk" : "Playlist"}
@@ -855,464 +888,270 @@ function AnimationSection({
   items: AnimationItem[];
   onOpen: (it: AnimationItem) => void;
 }) {
-  const [activeMonth, setActiveMonth] = useState<string>(TODAY_MONTH);
+  const [activeQId, setActiveQId] = useState<CommQuarterId>(DEFAULT_QUARTER_ID);
 
-  const grouped: Record<string, AnimationItem[]> = {};
-  for (const it of items) {
-    (grouped[it.month] ||= []).push(it);
-  }
-  const selectedItems = grouped[activeMonth] ?? [];
-  const status = monthStatus(activeMonth);
+  const quarter = commQuarters.find((q) => q.id === activeQId)!;
+
+  const quarterItems = items.filter((i) => quarter.months.includes(i.month));
+  const upcomingCount = quarterItems.filter((i) => monthStatus(i.month) !== "past").length;
+
+  const nextItem = useMemo<AnimationItem | null>(() => {
+    for (const month of quarter.months) {
+      if (monthStatus(month) !== "past") {
+        const found = items.find((i) => i.month === month);
+        if (found) return found;
+      }
+    }
+    return null;
+  }, [items, quarter]);
 
   return (
-    <>
-      <section>
-        <header className="mb-5">
-          <h2 className="flex items-center gap-3 text-2xl font-medium tracking-tight text-brand-cream">
-            <span aria-hidden>📅</span>
-            Calendrier annuel
-          </h2>
-          <p className="mt-1.5 ml-1 text-sm text-brand-muted-on-dark">
-            Cliquez sur un mois pour voir les communications associées.
-          </p>
-        </header>
+    <section>
+      <header className="mb-5">
+        <h2 className="flex items-center gap-3 text-2xl font-medium tracking-tight text-brand-cream">
+          <span aria-hidden>📅</span>
+          Calendrier annuel
+        </h2>
+        <p className="mt-1.5 ml-1 text-sm text-brand-muted-on-dark">
+          Cliquez sur un trimestre pour voir les communications associées.
+        </p>
+      </header>
 
-        <CalendarBanner
-          items={items}
-          activeMonth={activeMonth}
-          onSelect={setActiveMonth}
-        />
-      </section>
+      <div className="mb-7 grid grid-cols-4 gap-[10px]">
+        {commQuarters.map((q) => (
+          <QuarterTabComm
+            key={q.id}
+            quarter={q}
+            isActive={q.id === activeQId}
+            onClick={() => setActiveQId(q.id)}
+          />
+        ))}
+      </div>
 
-      <section>
-        <SelectedMonthHeader
-          month={activeMonth}
-          status={status}
-          count={selectedItems.length}
-        />
+      <div className="mb-[18px] flex items-baseline justify-between">
+        <div className="text-[14px] font-semibold tracking-[0.3px] text-[#e8f5ef]">
+          Communications du trimestre{" "}
+          <span className="text-[#5eead4]">·</span>{" "}
+          <span className="font-medium text-[#94a8a0]">{activeQId} 2026</span>
+        </div>
+        <div className="text-[11px] uppercase tracking-[0.5px] text-[#6b7c75]">
+          {quarterItems.length} kit{quarterItems.length > 1 ? "s" : ""} · {upcomingCount} à venir
+        </div>
+      </div>
 
-        {selectedItems.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-brand-border-dark bg-brand-surface/30 px-6 py-10 text-center">
-            <p className="text-sm text-brand-muted-on-dark">
-              Aucune communication programmée ce mois-ci.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {selectedItems.map((it) => (
-              <BigCommCard
-                key={it.id}
-                item={it}
-                onOpen={() => onOpen(it)}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-    </>
+      <div className="grid grid-cols-3 gap-[14px]">
+        {quarter.months.map((month) => (
+          <MonthColumnComm
+            key={month}
+            month={month}
+            items={items.filter((i) => i.month === month)}
+            nextItem={nextItem}
+            onOpen={onOpen}
+          />
+        ))}
+      </div>
+    </section>
   );
 }
 
-function BigCommCard({
-  item,
-  onOpen,
+function QuarterTabComm({
+  quarter,
+  isActive,
+  onClick,
 }: {
-  item: AnimationItem;
-  onOpen: () => void;
+  quarter: CommQuarter;
+  isActive: boolean;
+  onClick: () => void;
 }) {
-  const gradient = pickGradient(item.id);
-  const emoji = pickEmoji(item.title);
-  const status = monthStatus(item.month);
-  const isLetsTalk = item.type === "Let's talk";
-  const isCurrent = status === "current";
-  const hasLanding = !!item.landing;
-  const totalVisuals = item.imagesFr.length + item.imagesEn.length;
-  const langLabel =
-    item.languages.length === 2
-      ? "FR/EN"
-      : item.languages[0] ?? "FR";
+  const status = quarterStatus(quarter);
+  const progress = commQuarterProgress(quarter);
+  const monthAbbrs = quarter.months
+    .map((m) => (monthLabel[m] ?? m).slice(0, 3))
+    .join(" · ");
 
   return (
     <button
       type="button"
-      onClick={onOpen}
-      className="group flex flex-col overflow-hidden rounded-3xl border border-brand-border-dark bg-brand-surface text-left transition-all hover:-translate-y-1 hover:border-brand-green-bright/40"
+      onClick={onClick}
+      className={`rounded-[11px] border p-[14px_16px] text-left transition-all ${
+        status === "past"
+          ? "border-transparent opacity-50 hover:opacity-80"
+          : isActive
+            ? "border-[rgba(94,234,212,0.3)] bg-[rgba(94,234,212,0.07)] shadow-[0_0_0_1px_rgba(94,234,212,0.15),0_8px_28px_-10px_rgba(94,234,212,0.5)]"
+            : "border-transparent hover:bg-white/[0.03]"
+      }`}
     >
-      <div className={`relative flex h-28 items-end p-3.5 ${gradient}`}>
+      <div className="mb-2 flex items-center justify-between">
         <span
-          className="text-3xl drop-shadow-md"
-          aria-hidden
+          className={`text-[11px] font-bold tracking-[1px] ${
+            isActive ? "text-[#5eead4]" : "text-[#94a8a0]"
+          }`}
         >
-          {emoji}
+          {quarter.id}
+        </span>
+        <span
+          className={`text-[9px] uppercase tracking-[0.5px] ${
+            isActive
+              ? "rounded-[4px] bg-[#5eead4] px-[7px] py-[3px] font-bold text-[#042f2a]"
+              : "text-[#6b7c75]"
+          }`}
+        >
+          {status === "past" ? "Passé" : status === "current" ? "Maintenant" : "À venir"}
         </span>
       </div>
-      <div className="flex flex-1 flex-col px-5 pb-5 pt-4">
-        <div className="mb-2.5 flex flex-wrap gap-1.5">
-          <span
-            className={`rounded-full px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-[0.12em] ${
-              isLetsTalk
-                ? "bg-brand-salmon/15 text-brand-salmon"
-                : "bg-brand-green-bright/15 text-brand-green-bright"
-            }`}
-          >
-            {isLetsTalk ? "Let's talk" : "Playlist"}
-          </span>
-          <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-[0.12em] text-brand-muted-on-dark">
-            {langLabel}
-          </span>
-          {isCurrent && (
-            <span className="rounded-full bg-brand-green-bright/15 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-[0.12em] text-brand-green-bright">
-              En ce moment
-            </span>
-          )}
-        </div>
-        <h4 className="mb-auto text-[15px] font-medium leading-snug text-brand-cream">
-          {cleanTitle(item.title)}
-        </h4>
-        <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-3.5 text-xs text-brand-muted-on-dark">
-          <span>
-            {totalVisuals > 0 && `${totalVisuals} visuel${totalVisuals > 1 ? "s" : ""}`}
-            {totalVisuals > 0 && hasLanding && " · "}
-            {hasLanding && "Landing"}
-            {totalVisuals === 0 && !hasLanding && "—"}
-          </span>
-          <span className="inline-flex items-center gap-1 font-semibold text-brand-teal-bright">
-            Aperçu →
-          </span>
-        </div>
+      <div className="mb-[10px] text-[10px] tracking-[0.3px] text-[#6b7c75]">{monthAbbrs}</div>
+      <div className="h-[3px] overflow-hidden rounded-[2px] bg-white/[0.05]">
+        <div
+          className={`h-full rounded-[2px] ${
+            status === "past"
+              ? "bg-[rgba(148,168,160,0.4)]"
+              : "bg-gradient-to-r from-[#5eead4] to-[#2dd4bf]"
+          }`}
+          style={{ width: `${progress}%` }}
+        />
       </div>
     </button>
   );
 }
 
-function LetsTalksList() {
-  return (
-    <div>
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-muted-on-dark">
-          <span aria-hidden>📺</span> Prochains Let&apos;s Talks
-        </h3>
-        <a
-          href={LETSTALK_LISTING_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-[11px] text-brand-accent hover:underline"
-        >
-          Ouvrir Livestorm
-          <span aria-hidden>↗</span>
-        </a>
-      </div>
-      <div className="overflow-hidden rounded-xl border border-brand-border-dark bg-white">
-        <iframe
-          src={LETSTALK_LISTING_URL}
-          title="Prochains Let's Talks teale"
-          loading="lazy"
-          referrerPolicy="no-referrer-when-downgrade"
-          className="block h-[420px] w-full border-0"
-        />
-      </div>
-    </div>
-  );
-}
-
-function LetsTalkRow({ item }: { item: UpcomingLetsTalk }) {
-  const langLabel =
-    item.language === "FR" ? "En français 🇫🇷" : "En anglais 🇬🇧";
-  return (
-    <a
-      href={item.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="group flex items-center gap-4 rounded-xl border border-transparent bg-brand-surface px-4 py-3 transition-colors hover:border-brand-accent/40"
-    >
-      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#E6AA99]/15 text-[#E6AA99]">
-        <span aria-hidden>📺</span>
-      </span>
-      <div className="min-w-0 flex-1">
-        <h4 className="truncate text-sm font-medium text-brand-cream">
-          {item.title}
-        </h4>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-brand-muted-on-dark">
-          <span className="text-brand-accent">{item.timeUntil}</span>
-          <span aria-hidden>·</span>
-          <span>{item.duration}</span>
-          <span aria-hidden>·</span>
-          <span>{langLabel}</span>
-        </div>
-      </div>
-      <div className="hidden shrink-0 text-right sm:block">
-        <div className="text-[12px] font-medium text-brand-cream">
-          {item.dateLabel}
-        </div>
-      </div>
-      <span className="ml-2 inline-flex shrink-0 items-center gap-1.5 rounded-full bg-brand-accent px-3 py-1.5 text-[11px] font-medium text-brand-dark transition-colors group-hover:bg-brand-accent/90">
-        S&apos;inscrire
-        <svg
-          width="11"
-          height="11"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.25"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden
-        >
-          <path d="M15 3h6v6" />
-          <path d="M10 14 21 3" />
-          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-        </svg>
-      </span>
-    </a>
-  );
-}
-
-function SelectedMonthHeader({
+function MonthColumnComm({
   month,
-  status,
-  count,
+  items,
+  nextItem,
+  onOpen,
 }: {
   month: string;
-  status: MonthStatus;
-  count: number;
+  items: AnimationItem[];
+  nextItem: AnimationItem | null;
+  onOpen: (it: AnimationItem) => void;
 }) {
-  const config: Record<
-    MonthStatus,
-    {
-      label: string;
-      description: string;
-      borderClass: string;
-      bgClass: string;
-      textClass: string;
-      barClass: string;
-      badgeClass: string;
-    }
-  > = {
-    past: {
-      label: "Passé",
-      description: "Communications déjà diffusées ce mois-ci.",
-      borderClass: "border-brand-muted-on-dark/30",
-      bgClass: "bg-brand-muted-on-dark/[0.05]",
-      textClass: "text-brand-muted-on-dark",
-      barClass: "bg-brand-muted-on-dark/60",
-      badgeClass: "bg-brand-muted-on-dark/15 text-brand-muted-on-dark",
-    },
-    current: {
-      label: "En cours",
-      description: "Communications actives ce mois-ci, à relayer dès maintenant.",
-      borderClass: "border-brand-accent/50",
-      bgClass: "bg-brand-accent/[0.06]",
-      textClass: "text-brand-accent",
-      barClass: "bg-brand-accent",
-      badgeClass: "bg-brand-accent/20 text-brand-accent",
-    },
-    upcoming: {
-      label: "À venir",
-      description: "Communications à préparer pour ce mois.",
-      borderClass: "border-brand-upcoming/50",
-      bgClass: "bg-brand-upcoming/[0.06]",
-      textClass: "text-brand-upcoming",
-      barClass: "bg-brand-upcoming",
-      badgeClass: "bg-brand-upcoming/20 text-brand-upcoming",
-    },
-  };
-  const c = config[status];
-  if (status === "current") {
-    return (
-      <header className="relative mb-5 overflow-hidden rounded-3xl bg-gradient-to-br from-[#f4ecd8] to-[#ead9c0] px-7 py-6 text-[#244038]">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-brand-accent/30 blur-2xl"
-        />
-        <div className="relative flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="flex items-center gap-3 text-3xl font-medium tracking-tight">
-              {monthLabel[month] ?? month} 2026
-              <span className="rounded-full bg-[#2a7d4a]/20 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[#1f5d37]">
-                En cours
-              </span>
-            </h3>
-            <p className="mt-1 text-sm text-[#4d6961]">{c.description}</p>
-          </div>
-          <div className="text-right">
-            <div className="text-5xl font-semibold leading-none text-[#2a7d4a]">
-              {count}
-            </div>
-            <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#4d6961]">
-              Communication{count > 1 ? "s" : ""}
-            </div>
-          </div>
-        </div>
-      </header>
-    );
-  }
+  const status = monthStatus(month);
+  const doneCount = items.filter((i) => monthStatus(i.month) === "past").length;
+  const upcomingCount = items.length - doneCount;
+
   return (
-    <header
-      className={`relative mb-5 overflow-hidden rounded-2xl border ${c.borderClass} ${c.bgClass} px-5 py-4`}
+    <div
+      className={`rounded-[13px] border p-[18px] transition-colors ${
+        status === "current"
+          ? "border-[rgba(94,234,212,0.15)] bg-[rgba(94,234,212,0.035)]"
+          : "border-white/[0.04] bg-white/[0.012]"
+      }`}
     >
-      <span
-        aria-hidden
-        className={`absolute inset-y-0 left-0 w-1 ${c.barClass}`}
-      />
-      <div className="flex flex-wrap items-center justify-between gap-3 pl-2">
-        <div>
-          <div className="flex items-baseline gap-3">
-            <h3 className="text-2xl font-medium text-brand-cream">
-              {monthLabel[month] ?? month} 2026
-            </h3>
-            <span
-              className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${c.badgeClass}`}
-            >
-              {c.label}
+      <div className="mb-4 flex items-center justify-between border-b border-white/5 pb-3">
+        <div className="flex items-center gap-[9px]">
+          <h4
+            className={`text-[12px] font-bold uppercase tracking-[1.8px] ${
+              status === "past" ? "text-[#6b7c75]" : "text-[#e8f5ef]"
+            }`}
+          >
+            {monthLabel[month]}
+          </h4>
+          {status === "current" && (
+            <span className="rounded-[4px] bg-[#5eead4] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] text-[#042f2a]">
+              En cours
             </span>
-          </div>
-          <p className="mt-1 text-sm text-brand-muted-on-dark">
-            {c.description}
-          </p>
+          )}
         </div>
-        <div className="text-right">
-          <div className={`text-3xl font-medium leading-none ${c.textClass}`}>
-            {count}
-          </div>
-          <div className="mt-1 text-[11px] uppercase tracking-wider text-brand-muted-on-dark">
-            communication{count > 1 ? "s" : ""}
-          </div>
-        </div>
+        <span className="text-[10px] tracking-[0.5px] text-[#6b7c75]">
+          {items.length === 0
+            ? "—"
+            : doneCount > 0 && upcomingCount === 0
+              ? `${doneCount} fait${doneCount > 1 ? "s" : ""}`
+              : upcomingCount > 0
+                ? `${upcomingCount} à venir`
+                : "—"}
+        </span>
       </div>
-    </header>
+
+      {items.length === 0 ? (
+        <p className="py-5 text-center text-[11px] italic text-[#6b7c75]">
+          Pas de communication programmée.
+        </p>
+      ) : (
+        <ul className="space-y-0">
+          {items.map((item) => (
+            <CommEventRow
+              key={item.id}
+              item={item}
+              isNext={item === nextItem}
+              onOpen={() => onOpen(item)}
+            />
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
-function CalendarBanner({
-  items,
-  activeMonth,
-  onSelect,
+function CommEventRow({
+  item,
+  isNext,
+  onOpen,
 }: {
-  items: AnimationItem[];
-  activeMonth: string;
-  onSelect: (m: string) => void;
+  item: AnimationItem;
+  isNext: boolean;
+  onOpen: () => void;
 }) {
-  const summary: Record<
-    string,
-    { letsTalk?: string; kit?: string; count: number }
-  > = {};
-  for (const m of allMonths) summary[m] = { count: 0 };
-  for (const it of items) {
-    const s = summary[it.month];
-    if (!s) continue;
-    s.count += 1;
-    if (it.type === "Let's talk" && !s.letsTalk) {
-      s.letsTalk = cleanTitle(it.title);
-    } else if (it.type === "Playlist" && !s.kit) {
-      s.kit = cleanTitle(it.title);
-    }
-  }
+  const isDone = monthStatus(item.month) === "past";
+  const isLetsTalk = item.type === "Let's talk";
 
   return (
-    <div className="rounded-3xl border border-brand-border-dark bg-brand-surface p-6 sm:p-7">
-      <div className="mb-5 flex flex-wrap items-center gap-5 text-[12px] text-brand-muted-on-dark">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-brand-muted-on-dark/40" />
-          Passé
+    <li className="relative">
+      {isNext && (
+        <span className="absolute -top-2 right-2.5 z-10 rounded-[4px] bg-[#5eead4] px-[7px] py-[3px] text-[8px] font-bold tracking-[0.5px] text-[#042f2a]">
+          Prochain
         </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-brand-green-bright shadow-[0_0_0_3px_rgba(168,232,149,0.2)]" />
-          En cours
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-brand-salmon" />
-          À venir
-        </span>
-      </div>
-      <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-        {allMonths.map((month) => {
-          const s = summary[month];
-          const status = monthStatus(month);
-          const isActive = month === activeMonth;
-          const isFutureEmpty = status === "upcoming" && s.count === 0;
-
-          let cellClasses =
-            "min-h-[110px] cursor-pointer rounded-2xl border bg-brand-dark/40 p-3.5 text-left transition-all";
-          if (isActive) {
-            cellClasses +=
-              " border-brand-green-bright bg-brand-green-bright/15 shadow-[0_0_0_2px_rgba(168,232,149,0.25)]";
-          } else if (status === "current") {
-            cellClasses +=
-              " border-brand-green-bright/50 bg-brand-green-bright/[0.10] hover:bg-brand-green-bright/15";
-          } else if (status === "past") {
-            cellClasses +=
-              " border-transparent opacity-55 hover:opacity-100 hover:border-brand-border-dark";
-          } else {
-            cellClasses +=
-              " border-transparent hover:border-brand-border-dark";
-          }
-
-          const monthNameClass =
-            isActive || status === "current"
-              ? "text-brand-green-bright"
-              : "text-brand-cream/80";
-
-          const countBadgeClass = isFutureEmpty
-            ? "bg-brand-salmon/15 text-brand-salmon"
-            : isActive || status === "current"
-              ? "bg-brand-green-bright/25 text-brand-green-bright"
-              : "bg-white/[0.06] text-brand-cream";
-
-          return (
-            <button
-              key={month}
-              type="button"
-              onClick={() => onSelect(month)}
-              aria-pressed={isActive}
-              className={cellClasses}
+      )}
+      <button
+        type="button"
+        onClick={onOpen}
+        className={`group mb-2.5 flex w-full gap-2.5 rounded-[10px] border p-3 text-left transition-all ${
+          isDone
+            ? "border-transparent opacity-[0.38] hover:opacity-70"
+            : isNext
+              ? "border-[rgba(94,234,212,0.18)] bg-[rgba(94,234,212,0.05)]"
+              : "border-transparent hover:border-white/5 hover:bg-white/[0.025]"
+        }`}
+      >
+        <div className="w-9 shrink-0 pt-0.5 text-center text-xl leading-none">
+          {isLetsTalk ? "📺" : "🎵"}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="mb-1.5 flex items-center gap-1.5">
+            <span
+              className={`rounded-[4px] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] ${
+                isLetsTalk
+                  ? "bg-[rgba(244,168,154,0.2)] text-[#f4a89a]"
+                  : "bg-[rgba(94,234,212,0.15)] text-[#5eead4]"
+              }`}
             >
-              <div className="mb-2.5 flex items-center justify-between">
-                <span
-                  className={`text-[11px] font-bold uppercase tracking-[0.14em] ${monthNameClass}`}
-                >
-                  {(monthLabel[month] ?? month).slice(0, 4)}
-                </span>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${countBadgeClass}`}
-                >
-                  {s.count > 0 ? s.count : "—"}
-                </span>
-              </div>
-              <div
-                className={`space-y-1 text-[11.5px] leading-relaxed ${
-                  isFutureEmpty
-                    ? "text-brand-muted-on-dark/60"
-                    : "text-brand-muted-on-dark"
-                }`}
-              >
-                {isFutureEmpty ? (
-                  <div className="truncate">À programmer</div>
-                ) : (
-                  <>
-                    {s.letsTalk && (
-                      <div className="truncate">
-                        {pickEmoji(s.letsTalk)}{" "}
-                        {s.letsTalk.slice(0, 26)}
-                        {s.letsTalk.length > 26 && "…"}
-                      </div>
-                    )}
-                    {s.kit && (
-                      <div className="truncate">
-                        🎵 {s.kit.slice(0, 26)}
-                        {s.kit.length > 26 && "…"}
-                      </div>
-                    )}
-                    {!s.letsTalk && !s.kit && (
-                      <div className="truncate">—</div>
-                    )}
-                  </>
-                )}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </div>
+              {isLetsTalk ? "LET'S TALK" : "PLAYLIST"}
+            </span>
+            <span
+              className={`ml-auto flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-full text-[9px] ${
+                isDone
+                  ? "bg-[rgba(94,234,212,0.2)] text-[#5eead4]"
+                  : "border-[1.5px] border-white/15"
+              }`}
+              aria-hidden
+            >
+              {isDone ? "✓" : ""}
+            </span>
+          </div>
+          <div
+            className={`mb-1 text-[12.5px] font-medium leading-snug ${
+              isDone ? "text-[#6b7c75] line-through" : "text-[#e8f5ef]"
+            }`}
+          >
+            {cleanTitle(item.title)}
+          </div>
+          <div className="text-[10px] text-[#6b7c75]">
+            {item.languages.map((l) => (l === "FR" ? "🇫🇷" : "🇬🇧")).join(" ")}
+            {item.languages.length === 2 && " · FR / EN"}
+          </div>
+        </div>
+      </button>
+    </li>
   );
 }
 
@@ -1390,75 +1229,6 @@ function TextKitCard({
         Aperçu & téléchargement
         <span aria-hidden>→</span>
       </span>
-    </button>
-  );
-}
-
-function AnimationCard({
-  item,
-  onOpen,
-}: {
-  item: AnimationItem;
-  onOpen: () => void;
-}) {
-  const totalImages = item.imagesFr.length + item.imagesEn.length;
-  const totalPdfs = item.pdfFr.length + item.pdfEn.length;
-  const isCurrent = item.status.includes("Current");
-
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="group flex h-full flex-col rounded-xl border border-transparent bg-brand-surface p-4 text-left transition-colors hover:border-brand-accent/40"
-    >
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span
-          className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${typeStyle(item.type)}`}
-        >
-          {item.type}
-        </span>
-        {item.languages.map((l) => (
-          <span
-            key={l}
-            className="rounded-full bg-brand-cream/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-brand-cream"
-          >
-            {l}
-          </span>
-        ))}
-        {isCurrent && (
-          <span
-            className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${statusStyle(item.status)}`}
-          >
-            En ce moment
-          </span>
-        )}
-      </div>
-
-      <h4 className="mt-2 line-clamp-2 text-sm font-medium leading-snug text-brand-cream">
-        {item.title}
-      </h4>
-
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-brand-muted-on-dark">
-        {totalImages > 0 && (
-          <span className="inline-flex items-center gap-1">
-            <ImageIcon /> {totalImages}
-          </span>
-        )}
-        {totalPdfs > 0 && (
-          <span className="inline-flex items-center gap-1">
-            <PdfIcon /> {totalPdfs}
-          </span>
-        )}
-        {item.landing && (
-          <span className="inline-flex items-center gap-1">
-            <LinkIcon /> Landing
-          </span>
-        )}
-        <span className="ml-auto inline-flex items-center gap-1 text-brand-accent transition-transform group-hover:translate-x-0.5">
-          Aperçu
-          <span aria-hidden>→</span>
-        </span>
-      </div>
     </button>
   );
 }

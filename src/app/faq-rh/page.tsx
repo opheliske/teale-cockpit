@@ -296,12 +296,8 @@ export default function FaqRhPage() {
     });
 
   return (
-    <div className="relative px-10 py-12">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -top-32 right-0 h-[460px] w-[460px] translate-x-20 rounded-full bg-brand-teal-bright/10 blur-3xl"
-      />
-      <div className="relative z-10 mx-auto max-w-5xl">
+    <div className="px-9 py-8">
+      <div className="mx-auto max-w-[1280px]">
         <header className="mb-9 grid items-end gap-10 lg:grid-cols-[1fr_auto]">
           <div className="flex items-start gap-6">
             <Image
@@ -314,13 +310,13 @@ export default function FaqRhPage() {
               className="hidden h-32 w-32 shrink-0 object-contain sm:block"
             />
             <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-teal-bright">
+              <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-[2.5px] text-[#5eead4]">
                 FAQ RH
               </p>
-              <h1 className="mt-4 max-w-3xl text-5xl font-medium leading-[1.05] tracking-tight text-brand-cream">
+              <h1 className="mt-3 text-[34px] font-semibold tracking-[-0.5px] text-brand-cream">
                 Déployer teale auprès de vos collaborateurs
               </h1>
-              <p className="mt-4 max-w-2xl text-base leading-relaxed text-brand-muted-on-dark">
+              <p className="text-[13px] leading-relaxed text-[#94a8a0]">
                 Toutes les réponses aux questions que vous vous posez pour
                 accompagner le lancement et l&apos;adoption de la plateforme
                 dans vos équipes.

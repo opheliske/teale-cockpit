@@ -10,6 +10,8 @@ import {
   urgencyModeLabels,
   type Urgency,
 } from "@/lib/urgencies";
+import { workshops } from "@/app/catalogue-ateliers/data";
+import { lancementKits, animationItems, emailTopicKits } from "@/app/kits-communication/data";
 
 const TODAY_MONTH = "May";
 const TODAY_YEAR = 2026;
@@ -135,27 +137,27 @@ const eventTypeConfig: Record<
   atelier: {
     label: "Atelier",
     emoji: "🎓",
-    pillClass: "bg-brand-accent/15 text-brand-accent",
+    pillClass: "bg-[rgba(168,85,247,0.15)] text-[#c4b5fd]",
   },
   kit: {
     label: "Kit comm",
     emoji: "📢",
-    pillClass: "bg-brand-green-bright/15 text-brand-green-bright",
+    pillClass: "bg-[rgba(94,234,212,0.15)] text-[#5eead4]",
   },
   point: {
     label: "Point CSM",
     emoji: "📞",
-    pillClass: "bg-brand-cream/10 text-brand-cream",
+    pillClass: "bg-[rgba(250,204,21,0.15)] text-[#fde047]",
   },
   qbr: {
     label: "QBR",
     emoji: "📊",
-    pillClass: "bg-brand-salmon/15 text-brand-salmon",
+    pillClass: "bg-[rgba(96,165,250,0.15)] text-[#93c5fd]",
   },
   onboarding: {
     label: "Onboarding",
     emoji: "🚀",
-    pillClass: "bg-brand-upcoming/15 text-brand-upcoming",
+    pillClass: "bg-[rgba(251,146,60,0.15)] text-[#fdba74]",
   },
   urgence: {
     label: "Urgence",
@@ -659,6 +661,39 @@ const eventsByYear: Record<Year, Record<string, PlanEvent[]>> = {
   2027: events2027,
 };
 
+const workshopMap: Record<string, string> = {
+  "Atelier « Communication non violente »": "cerveau-emotions-reactions",
+  "Atelier « Charge mentale »": "charge-mentale",
+  "Atelier « Gestion du stress »": "gerer-son-stress",
+  "Atelier de rentrée — gestion du stress": "gerer-son-stress",
+  "Atelier « Manager bienveillant »": "assertivite",
+  "Atelier de rentrée — sommeil": "insomnies-sommeil",
+  "Atelier « Octobre rose »": "maladie-chronique",
+  "Atelier QVCT": "premiers-pas-sante-mentale",
+  "Atelier « Cohésion d'équipe »": "cohesion-equipe",
+  "Atelier « Prévenir les RPS »": "prevenir-rps",
+};
+
+type KitRef = {
+  category: "lancement" | "animation" | "topics";
+  months?: string[];
+  topics?: string[];
+};
+
+const kitMap: Record<string, KitRef> = {
+  "Kit de lancement teale — diffusion": { category: "lancement" },
+  "Kit de communication Q2 — préparation": { category: "animation", months: ["April", "May", "June"] },
+  "Kit ressources santé mentale": { category: "topics", topics: ["STRESS MANAGEMENT", "PHYSICAL WELL-BEING AND STRESS"] },
+  "Kit de communication estival": { category: "topics", topics: ["WORK-LIFE BALANCE"] },
+  "Kit de communication rentrée": { category: "animation", months: ["September"] },
+  "Kit communication Octobre rose": { category: "animation", months: ["October"] },
+  "Kit communication QVCT": { category: "animation", months: ["June"] },
+  "Kit de communication Q1 — diffusion": { category: "lancement" },
+  "Kit communication rentrée 2025": { category: "animation", months: ["September"] },
+  "Kit QVCT 2025": { category: "animation", months: ["June"] },
+  "Kit de communication Q1 2027 — à co-construire": { category: "lancement" },
+};
+
 type CsmDocument = {
   id: string;
   title: string;
@@ -710,6 +745,32 @@ const documents: CsmDocument[] = [
     author: "Lucie Martin, CSM",
   },
 ];
+
+const frMonthAbbr: Record<string, string> = {
+  janv: "JAN", fév: "FÉV", mars: "MAR", avr: "AVR",
+  mai: "MAI", juin: "JUI", juil: "JUL", août: "AOÛ",
+  sept: "SEP", oct: "OCT", nov: "NOV", déc: "DÉC",
+};
+
+function parseDateLabel(dateStr: string): { day: string; mo: string } | null {
+  const match = dateStr.match(/^(\d+)/);
+  if (!match) return null;
+  const day = match[1].padStart(2, "0");
+  const rest = dateStr.slice(match[0].length).trim().replace(".", "").toLowerCase().split(" ")[0] ?? "";
+  const mo = frMonthAbbr[rest] ?? rest.slice(0, 3).toUpperCase();
+  return { day, mo };
+}
+
+function quarterProgress(q: Quarter, year: number): number {
+  const status = quarterStatus(q, year);
+  if (status === "past") return 100;
+  if (status === "upcoming") return 0;
+  const monthIdx = allMonths.indexOf(TODAY_MONTH);
+  const qStart = allMonths.indexOf(q.months[0]);
+  const qLen = q.months.length;
+  const elapsed = monthIdx - qStart;
+  return Math.round(((elapsed + 0.5) / qLen) * 100);
+}
 
 function defaultQuarter(year: Year): QuarterId {
   if (year === TODAY_YEAR) {
@@ -766,121 +827,106 @@ export default function MonPlanningPage() {
     setActiveQuarterId(defaultQuarter(y));
   };
 
+  // First upcoming event across the active quarter
+  const nextEvent = useMemo<PlanEvent | null>(() => {
+    for (const m of activeQuarter.months) {
+      const found = (yearEvents[m] ?? []).find((e) => !e.done);
+      if (found) return found;
+    }
+    return null;
+  }, [activeQuarter, yearEvents]);
+
+  const qEvents = activeQuarter.months.flatMap((m) => yearEvents[m] ?? []);
+  const qTotal = qEvents.length;
+  const qUpcoming = qEvents.filter((e) => !e.done).length;
+  const qDone = qTotal - qUpcoming;
+
   return (
     <>
-      <div className="relative flex h-screen flex-col px-10 py-6">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -top-32 right-0 h-[460px] w-[460px] translate-x-20 rounded-full bg-brand-teal-bright/10 blur-3xl"
-        />
-        <div className="relative z-10 mx-auto flex w-full max-w-6xl min-h-0 flex-1 flex-col">
-          <header className="mb-5 flex flex-wrap items-end justify-between gap-6">
+      <div className="px-9 py-8">
+        <div className="mx-auto max-w-[1280px]">
+
+          {/* Header */}
+          <header className="mb-7 flex items-start justify-between gap-6">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-teal-bright">
+              <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-[2.5px] text-[#5eead4]">
                 Pilotage
               </p>
-              <h1 className="mt-2 text-3xl font-medium tracking-tight text-brand-cream">
+              <h1 className="mb-1.5 text-[34px] font-semibold tracking-[-0.5px] text-[#e8f5ef]">
                 Suivi projet
               </h1>
-              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-brand-muted-on-dark">
-                Le plan annuel co-construit avec votre Customer Success
-                Manager. Naviguez de trimestre en trimestre.
+              <p className="max-w-[480px] text-[13px] leading-relaxed text-[#94a8a0]">
+                Plan annuel co-construit avec votre Customer Success Manager.
               </p>
             </div>
-            <div className="flex flex-col items-end gap-2.5">
-              <div className="flex gap-3">
-                <StatPill
-                  value={yearTotalEvents}
-                  label={`Événements ${activeYear}`}
-                  accent
-                />
-                <StatPill value={remainingEvents} label="À venir" />
-              </div>
-              <a
-                href="https://docs.google.com/spreadsheets/d/teale-listing-employes-template/edit"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-full border border-brand-teal-bright/40 bg-brand-teal-bright/10 px-4 py-2 text-[12px] font-medium text-brand-teal-bright transition-colors hover:bg-brand-teal-bright/20"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden
-                >
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <path d="M14 2v6h6" />
-                  <path d="M9 14l2 2 4-4" />
-                </svg>
-                Mettre à jour mon listing employés
-                <svg
-                  width="11"
-                  height="11"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.25"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="opacity-70"
-                  aria-hidden
-                >
-                  <path d="M15 3h6v6" />
-                  <path d="M10 14 21 3" />
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                </svg>
-              </a>
-            </div>
+            <a
+              href="https://docs.google.com/spreadsheets/d/teale-listing-employes-template/edit"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1 inline-flex shrink-0 items-center gap-2 rounded-[10px] border border-[rgba(94,234,212,0.25)] bg-[rgba(94,234,212,0.08)] px-4 py-2.5 text-[12px] font-medium text-[#5eead4] transition-all hover:-translate-y-px hover:bg-[rgba(94,234,212,0.15)]"
+            >
+              📋 Mettre à jour mon listing
+            </a>
           </header>
 
-          <section className="flex min-h-0 flex-1 flex-col">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <h2 className="flex items-center gap-2 text-lg font-medium text-brand-cream">
-                <span aria-hidden>📅</span> Planning annuel
-              </h2>
-              <YearSwitcher year={activeYear} onChange={switchYear} />
+          {/* Focus bar */}
+          <FocusBar
+            quarter={activeQuarter}
+            year={activeYear}
+            qUpcoming={qUpcoming}
+            qDone={qDone}
+          />
+
+          {/* Year switcher + quarter tabs */}
+          <div className="mb-7 grid items-center gap-6" style={{ gridTemplateColumns: "auto 1fr" }}>
+            <YearSwitcher year={activeYear} onChange={switchYear} />
+            <QuarterTabs active={activeQuarterId} year={activeYear} onSelect={setActiveQuarterId} />
+          </div>
+
+          {/* Section header */}
+          <div className="mb-5 flex items-baseline justify-between">
+            <div className="text-[14px] font-semibold tracking-[0.3px] text-[#e8f5ef]">
+              Événements du trimestre{" "}
+              <span className="text-[#5eead4]">·</span>{" "}
+              <span className="font-medium text-[#94a8a0]">
+                {activeQuarter.id} {activeYear}
+              </span>
             </div>
+            <div className="text-[11px] uppercase tracking-[0.5px] text-[#6b7c75]">
+              {qTotal} événement{qTotal !== 1 ? "s" : ""} · {qUpcoming} à venir
+            </div>
+          </div>
 
-            <QuarterTabs
-              active={activeQuarterId}
-              year={activeYear}
-              onSelect={setActiveQuarterId}
-            />
-
-            <QuarterBanner
-              quarter={activeQuarter}
-              year={activeYear}
-              yearEvents={yearEvents}
-            />
-
-            <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 md:grid-cols-3">
-              {activeQuarter.months.map((m) => (
+          {/* Month columns */}
+          <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
+            {activeQuarter.months.map((m) => {
+              const firstUpcomingInMonth = (yearEvents[m] ?? []).find((e) => !e.done) ?? null;
+              const isNextMonth =
+                nextEvent !== null && firstUpcomingInMonth === nextEvent;
+              return (
                 <MonthColumn
                   key={m}
                   month={m}
                   year={activeYear}
                   events={yearEvents[m] ?? []}
+                  nextEvent={isNextMonth ? nextEvent : null}
                   onOpen={(event) => setActiveEvent({ event, month: m })}
                 />
-              ))}
-            </div>
-          </section>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      <div className="relative border-t border-brand-border-dark px-10 pb-12 pt-10">
-        <div className="mx-auto max-w-6xl">
+      {/* Documents */}
+      <div className="border-t border-white/[0.04] px-9 pb-12 pt-10">
+        <div className="mx-auto max-w-[1280px]">
           <header className="mb-5">
-            <h2 className="flex items-center gap-3 text-2xl font-medium tracking-tight text-brand-cream">
+            <h2 className="flex items-center gap-3 text-2xl font-medium tracking-tight text-[#e8f5ef]">
               <span aria-hidden>📂</span>
               Documents partagés par votre CSM
             </h2>
-            <p className="mt-1.5 ml-1 text-sm text-brand-muted-on-dark">
+            <p className="mt-1.5 ml-1 text-sm text-[#94a8a0]">
               Plans, bilans et guides pour suivre votre partenariat teale.
             </p>
           </header>
@@ -912,40 +958,22 @@ function YearSwitcher({
   onChange: (y: Year) => void;
 }) {
   return (
-    <div className="inline-flex items-center gap-1 rounded-full border border-brand-border-dark bg-brand-surface p-1">
+    <div className="inline-flex items-center gap-0.5 rounded-[11px] border border-white/5 bg-white/[0.025] p-[3px]">
       {AVAILABLE_YEARS.map((y) => {
         const isActive = y === year;
-        const isPast = y < TODAY_YEAR;
-        const isFuture = y > TODAY_YEAR;
         return (
           <button
             key={y}
             type="button"
             onClick={() => onChange(y)}
             aria-pressed={isActive}
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors ${
+            className={`rounded-[8px] px-3 py-[7px] text-[11px] font-semibold tracking-[0.5px] transition-all ${
               isActive
-                ? "bg-brand-teal-bright/20 text-brand-teal-bright"
-                : "text-brand-muted-on-dark hover:text-brand-cream"
+                ? "bg-[rgba(94,234,212,0.14)] text-[#5eead4]"
+                : "text-[#94a8a0] hover:text-[#e8f5ef]"
             }`}
           >
             {y}
-            {y === TODAY_YEAR && (
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${isActive ? "bg-brand-teal-bright" : "bg-brand-green-bright"}`}
-                aria-hidden
-              />
-            )}
-            {!isActive && isPast && (
-              <span className="text-[9px] uppercase tracking-wider opacity-60">
-                Archive
-              </span>
-            )}
-            {!isActive && isFuture && (
-              <span className="text-[9px] uppercase tracking-wider opacity-60">
-                À venir
-              </span>
-            )}
           </button>
         );
       })}
@@ -963,10 +991,11 @@ function QuarterTabs({
   onSelect: (id: QuarterId) => void;
 }) {
   return (
-    <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+    <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
       {quarters.map((q) => {
         const isActive = q.id === active;
         const status = quarterStatus(q, year);
+        const progress = quarterProgress(q, year);
         const monthsAbbr = q.months
           .map((m) => monthLabel[m].slice(0, 3))
           .join(" · ");
@@ -976,82 +1005,40 @@ function QuarterTabs({
             type="button"
             onClick={() => onSelect(q.id)}
             aria-pressed={isActive}
-            className={`group relative overflow-hidden rounded-2xl border px-4 py-3 text-left transition-all ${
+            className={`rounded-[11px] border px-4 py-3.5 text-left transition-all ${
               isActive
-                ? `border-transparent bg-gradient-to-br ${q.gradient} text-white shadow-lg ring-2 ring-brand-green-bright/30`
-                : "border-brand-border-dark bg-brand-surface hover:border-brand-green-bright/40"
+                ? "border-[rgba(94,234,212,0.3)] bg-[rgba(94,234,212,0.07)] shadow-[0_0_0_1px_rgba(94,234,212,0.15),0_8px_28px_-10px_rgba(94,234,212,0.5)]"
+                : status === "past"
+                  ? "border-transparent opacity-50 hover:opacity-80"
+                  : "border-transparent hover:bg-white/[0.03]"
             }`}
           >
-            <div className="flex items-center justify-between gap-2">
-              <span
-                className={`text-[10px] font-bold uppercase tracking-[0.14em] ${
-                  isActive ? "text-white/90" : "text-brand-muted-on-dark"
-                }`}
-              >
-                <span className="mr-1">{q.emoji}</span> {q.id}
+            <div className="mb-2 flex items-center justify-between">
+              <span className={`flex items-center gap-1.5 text-[11px] font-bold tracking-[1px] ${isActive ? "text-[#5eead4]" : "text-[#94a8a0]"}`}>
+                {q.emoji} {q.id}
               </span>
-              {status === "current" && (
-                <span
-                  className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] ${
-                    isActive
-                      ? "bg-white/20 text-white"
-                      : "bg-brand-green-bright/20 text-brand-green-bright"
-                  }`}
-                >
-                  <span className="relative flex h-1 w-1">
-                    <span
-                      className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-70 ${
-                        isActive ? "bg-white" : "bg-brand-green-bright"
-                      }`}
-                    />
-                    <span
-                      className={`relative inline-flex h-1 w-1 rounded-full ${
-                        isActive ? "bg-white" : "bg-brand-green-bright"
-                      }`}
-                    />
-                  </span>
+              {status === "current" ? (
+                <span className="rounded-[4px] bg-[#5eead4] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] text-[#042f2a]">
                   Maintenant
                 </span>
-              )}
-              {status === "past" && (
-                <span
-                  className={`text-[9px] font-semibold uppercase tracking-[0.12em] ${
-                    isActive ? "text-white/70" : "text-brand-muted-on-dark"
-                  }`}
-                >
-                  Passé
-                </span>
-              )}
-              {status === "upcoming" && (
-                <span
-                  className={`text-[9px] font-semibold uppercase tracking-[0.12em] ${
-                    isActive ? "text-white/70" : "text-brand-muted-on-dark"
-                  }`}
-                >
-                  À venir
+              ) : (
+                <span className="text-[9px] uppercase tracking-[0.5px] text-[#6b7c75]">
+                  {status === "past" ? "Passé" : "À venir"}
                 </span>
               )}
             </div>
-            <div
-              className={`mt-1.5 text-[9px] font-bold uppercase tracking-[0.16em] ${
-                isActive ? "text-white/70" : "text-brand-muted-on-dark"
-              }`}
-            >
-              Objectif
-            </div>
-            <div
-              className={`truncate text-sm font-medium ${
-                isActive ? "text-white" : "text-brand-cream"
-              }`}
-            >
-              {q.theme}
-            </div>
-            <div
-              className={`mt-1 text-[11px] ${
-                isActive ? "text-white/80" : "text-brand-muted-on-dark"
-              }`}
-            >
-              {monthsAbbr}
+            <div className="mb-0.5 text-[13px] font-semibold text-[#e8f5ef]">{q.theme}</div>
+            <div className="mb-2.5 text-[10px] tracking-[0.3px] text-[#6b7c75]">{monthsAbbr}</div>
+            <div className="h-[3px] overflow-hidden rounded-full bg-white/5">
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${progress}%`,
+                  background: status === "past"
+                    ? "rgba(148,168,160,0.4)"
+                    : "linear-gradient(90deg, #5eead4 0%, #2dd4bf 100%)",
+                }}
+              />
             </div>
           </button>
         );
@@ -1060,30 +1047,53 @@ function QuarterTabs({
   );
 }
 
-function QuarterBanner({
+function FocusBar({
   quarter,
   year,
-  yearEvents,
+  qUpcoming,
+  qDone,
 }: {
   quarter: Quarter;
   year: Year;
-  yearEvents: Record<string, PlanEvent[]>;
+  qUpcoming: number;
+  qDone: number;
 }) {
-  const totalQ = quarter.months.reduce(
-    (n, m) => n + (yearEvents[m]?.length ?? 0),
-    0
-  );
+  const status = quarterStatus(quarter, year);
+  const progress = quarterProgress(quarter, year);
   return (
-    <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-border-dark bg-brand-surface/50 px-4 py-3">
-      <p className="max-w-3xl text-[13px] leading-relaxed text-brand-muted-on-dark">
-        <span className="font-semibold uppercase tracking-[0.14em] text-brand-teal-bright">
-          Objectif {quarter.id} {year} :
-        </span>{" "}
-        <span className="text-brand-cream">{quarter.subtitle}</span>
-      </p>
-      <span className="shrink-0 text-[11px] uppercase tracking-wider text-brand-muted-on-dark">
-        {totalQ} événement{totalQ > 1 ? "s" : ""} ce trimestre
-      </span>
+    <div className="relative mb-7 overflow-hidden rounded-2xl border border-[rgba(94,234,212,0.22)] px-7 py-5"
+      style={{ background: "linear-gradient(135deg, rgba(94,234,212,0.12) 0%, rgba(94,234,212,0.03) 100%)" }}
+    >
+      {/* Left accent bar */}
+      <div className="absolute inset-y-0 left-0 w-1 rounded-l-2xl" style={{ background: "linear-gradient(180deg, #5eead4 0%, #2dd4bf 100%)" }} />
+
+      <div className="flex flex-wrap items-center gap-8">
+        <div className="flex-1">
+          <div className="mb-2.5 inline-flex items-center gap-1.5 rounded-[5px] bg-[#5eead4] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[1.2px] text-[#042f2a]">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#042f2a]" aria-hidden />
+            {status === "current" ? "En cours" : status === "past" ? "Terminé" : "À venir"} · {quarter.id} {year}
+          </div>
+          <div className="mb-1.5 text-[20px] font-semibold text-[#e8f5ef]">{quarter.theme}</div>
+          <div className="text-[13px] leading-relaxed text-[#c1d4cc]">{quarter.subtitle}</div>
+        </div>
+
+        <div className="flex gap-7 border-l border-[rgba(94,234,212,0.18)] pl-8">
+          <div className="text-center">
+            <div className="text-[30px] font-bold leading-none tabular-nums text-[#5eead4]">{qUpcoming}</div>
+            <div className="mt-1.5 text-[10px] uppercase tracking-[1px] text-[#94a8a0]">À venir</div>
+          </div>
+          <div className="text-center">
+            <div className="text-[30px] font-bold leading-none tabular-nums text-[#5eead4]">{qDone}</div>
+            <div className="mt-1.5 text-[10px] uppercase tracking-[1px] text-[#94a8a0]">Faits</div>
+          </div>
+          <div className="text-center">
+            <div className="text-[30px] font-bold leading-none tabular-nums text-[#5eead4]">
+              {progress}<span className="text-[15px] text-[#94a8a0]">%</span>
+            </div>
+            <div className="mt-1.5 text-[10px] uppercase tracking-[1px] text-[#94a8a0]">Trimestre</div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1092,67 +1102,66 @@ function MonthColumn({
   month,
   year,
   events,
+  nextEvent,
   onOpen,
 }: {
   month: string;
   year: Year;
   events: PlanEvent[];
+  nextEvent: PlanEvent | null;
   onOpen: (event: PlanEvent) => void;
 }) {
   const status = monthStatus(month, year);
-  const monthEvents = events;
-
-  let frameClass =
-    "flex min-h-0 flex-col rounded-2xl border bg-brand-surface p-4 transition-colors";
-  if (status === "current") {
-    frameClass +=
-      " border-brand-green-bright/50 shadow-[0_0_0_2px_rgba(168,232,149,0.15)]";
-  } else if (status === "past") {
-    frameClass += " border-brand-border-dark opacity-70";
-  } else {
-    frameClass += " border-brand-border-dark";
-  }
+  const doneCount = events.filter((e) => e.done).length;
+  const upcomingCount = events.filter((e) => !e.done).length;
 
   return (
-    <div className={frameClass}>
-      <header className="mb-3 flex items-baseline justify-between gap-2">
-        <h4
-          className={`text-sm font-semibold uppercase tracking-[0.12em] ${
-            status === "current"
-              ? "text-brand-green-bright"
-              : "text-brand-cream"
-          }`}
-        >
-          {monthLabel[month]}
+    <div
+      className={`rounded-[13px] border p-[18px] transition-colors ${
+        status === "current"
+          ? "border-[rgba(94,234,212,0.15)] bg-[rgba(94,234,212,0.035)]"
+          : "border-white/[0.04] bg-white/[0.012]"
+      }`}
+    >
+      <div className="mb-4 flex items-center justify-between border-b border-white/5 pb-3">
+        <div className="flex items-center gap-2.5">
+          <h4
+            className={`text-[12px] font-bold tracking-[1.8px] uppercase ${
+              status === "past" ? "text-[#6b7c75]" : "text-[#e8f5ef]"
+            }`}
+          >
+            {monthLabel[month]}
+          </h4>
           {status === "current" && (
-            <span className="ml-2 inline-flex items-center gap-1 text-[9px] font-bold normal-case tracking-normal text-brand-green-bright">
-              <span className="h-1.5 w-1.5 rounded-full bg-brand-green-bright" />
+            <span className="rounded-[4px] bg-[#5eead4] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] text-[#042f2a]">
               En cours
             </span>
           )}
-        </h4>
-        <span
-          className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-            monthEvents.length === 0
-              ? "bg-white/[0.04] text-brand-muted-on-dark"
-              : status === "current"
-                ? "bg-brand-green-bright/20 text-brand-green-bright"
-                : "bg-white/[0.06] text-brand-cream"
-          }`}
-        >
-          {monthEvents.length === 0
+        </div>
+        <span className="text-[10px] tracking-[0.5px] text-[#6b7c75]">
+          {events.length === 0
             ? "—"
-            : `${monthEvents.length} évén.`}
+            : doneCount > 0 && upcomingCount === 0
+              ? `${doneCount} fait${doneCount > 1 ? "s" : ""}`
+              : upcomingCount > 0
+                ? `${upcomingCount} à venir`
+                : "—"}
         </span>
-      </header>
-      {monthEvents.length === 0 ? (
-        <p className="text-[12px] italic text-brand-muted-on-dark/70">
+      </div>
+
+      {events.length === 0 ? (
+        <p className="py-5 text-center text-[11px] italic text-[#6b7c75]">
           Pas d&apos;événement programmé.
         </p>
       ) : (
-        <ul className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1">
-          {monthEvents.map((e, i) => (
-            <EventRow key={i} event={e} onOpen={() => onOpen(e)} />
+        <ul className="space-y-0">
+          {events.map((e, i) => (
+            <EventRow
+              key={i}
+              event={e}
+              isNext={e === nextEvent}
+              onOpen={() => onOpen(e)}
+            />
           ))}
         </ul>
       )}
@@ -1162,79 +1171,282 @@ function MonthColumn({
 
 function EventRow({
   event,
+  isNext,
   onOpen,
 }: {
   event: PlanEvent;
+  isNext: boolean;
   onOpen: () => void;
 }) {
   const cfg = eventTypeConfig[event.type];
+  const parsed = event.date ? parseDateLabel(event.date) : null;
+
   return (
-    <li>
+    <li className="relative">
+      {isNext && (
+        <span className="absolute -top-2 right-2.5 z-10 rounded-[4px] bg-[#5eead4] px-[7px] py-[3px] text-[8px] font-bold tracking-[0.5px] text-[#042f2a]">
+          Prochain
+        </span>
+      )}
       <button
         type="button"
         onClick={onOpen}
-        className="group flex w-full items-start gap-2.5 rounded-lg p-1.5 text-left -mx-1.5 transition-colors hover:bg-white/[0.04]"
+        className={`group flex w-full gap-2.5 rounded-[10px] border p-3 text-left transition-all ${
+          event.done
+            ? "border-transparent opacity-[0.38] hover:opacity-70"
+            : isNext
+              ? "border-[rgba(94,234,212,0.18)] bg-[rgba(94,234,212,0.05)]"
+              : "border-transparent hover:border-white/5 hover:bg-white/[0.025]"
+        } mb-2.5`}
       >
-        <span
-          className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg text-base ${cfg.pillClass}`}
-          aria-hidden
-        >
-          {cfg.emoji}
-        </span>
+        {/* Date block */}
+        <div className="w-10 shrink-0 pt-0.5 text-center">
+          {parsed ? (
+            <>
+              <div className={`text-[19px] font-bold leading-none tabular-nums ${event.done ? "text-[#6b7c75] line-through" : "text-[#e8f5ef]"}`}>
+                {parsed.day}
+              </div>
+              <div className="mt-[3px] text-[9px] uppercase tracking-[0.8px] text-[#6b7c75]">
+                {parsed.mo}
+              </div>
+            </>
+          ) : (
+            <div className="text-[13px] text-[#6b7c75]">—</div>
+          )}
+        </div>
+
+        {/* Body */}
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <span
-              className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] ${cfg.pillClass}`}
-            >
-              {cfg.label}
+          <div className="mb-1.5 flex items-center gap-1.5">
+            <span className={`rounded-[4px] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] ${cfg.pillClass}`}>
+              {cfg.label.toUpperCase()}
             </span>
-            {event.date && (
-              <span className="text-[10px] uppercase tracking-wider text-brand-muted-on-dark">
-                {event.date}
-              </span>
-            )}
+            {/* Checkmark */}
+            <span
+              className={`ml-auto flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-full text-[9px] ${
+                event.done
+                  ? "bg-[rgba(94,234,212,0.2)] text-[#5eead4]"
+                  : "border-[1.5px] border-white/15"
+              }`}
+              aria-hidden
+            >
+              {event.done ? "✓" : ""}
+            </span>
           </div>
-          <div
-            className={`mt-1 text-[13px] leading-snug ${
-              event.done
-                ? "text-brand-muted-on-dark line-through decoration-brand-muted-on-dark/40"
-                : "text-brand-cream"
-            }`}
-          >
+          <div className={`mb-1.5 text-[12.5px] font-medium leading-snug ${event.done ? "text-[#6b7c75] line-through" : "text-[#e8f5ef]"}`}>
             {event.title}
           </div>
           {event.scope && (
-            <div className="mt-1 flex flex-wrap items-center gap-1 text-[10px] text-brand-muted-on-dark">
+            <div className="flex flex-wrap items-center gap-2 text-[10px] text-[#6b7c75]">
               <ScopeInlineSummary scope={event.scope} />
             </div>
           )}
         </div>
-        {event.done ? (
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="mt-1 shrink-0 text-brand-green-bright"
-            aria-hidden
-          >
-            <path d="M5 12 10 17 19 7" />
-          </svg>
-        ) : (
-          <span
-            className="mt-1 shrink-0 text-brand-muted-on-dark opacity-0 transition-opacity group-hover:opacity-100"
-            aria-hidden
-          >
-            →
-          </span>
-        )}
       </button>
     </li>
   );
+}
+
+type KitStep = "before" | "dday" | "after";
+
+const atelierKitTiles: { id: KitStep; emoji: string; label: string; sub: string }[] = [
+  { id: "before", emoji: "📩", label: "Invitation J-7", sub: "Emails à envoyer avant l'atelier" },
+  { id: "dday",   emoji: "🔔", label: "Relance J-1",    sub: "Emails de rappel aux participants" },
+  { id: "after",  emoji: "✅", label: "Post-atelier",   sub: "Emails de suivi et ressources" },
+];
+
+function WorkshopDetail({ workshopId }: { workshopId: string }) {
+  const [openKit, setOpenKit] = useState<KitStep | null>(null);
+  const workshop = workshops.find((w) => w.id === workshopId);
+  if (!workshop) return null;
+
+  const kitItems = openKit
+    ? lancementKits.filter((k) => k.step === openKit && k.language === "FR").slice(0, 6)
+    : [];
+
+  return (
+    <>
+      <section>
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-teal-bright">
+          Objectifs
+        </h3>
+        <ul className="space-y-1.5">
+          {workshop.objectives.map((obj, i) => (
+            <li key={i} className="flex items-start gap-2 text-sm text-brand-cream">
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-accent" aria-hidden />
+              {obj}
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section>
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-teal-bright">
+          Programme
+        </h3>
+        <ol className="space-y-2">
+          {workshop.programme.map((step, i) => (
+            <li key={i} className="flex items-start gap-2.5">
+              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-dark text-[10px] font-bold text-brand-accent ring-1 ring-brand-accent/30">
+                {i + 1}
+              </span>
+              <span className="text-sm leading-snug text-brand-cream">{step.title}</span>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section>
+        <h3 className="mb-2.5 text-xs font-semibold uppercase tracking-[0.18em] text-brand-accent">
+          Kit de communication
+        </h3>
+        <div className="grid grid-cols-3 gap-2">
+          {atelierKitTiles.map((tile) => {
+            const isOpen = openKit === tile.id;
+            return (
+              <button
+                key={tile.id}
+                type="button"
+                onClick={() => setOpenKit(isOpen ? null : tile.id)}
+                aria-expanded={isOpen}
+                className={`flex flex-col gap-1.5 rounded-xl border p-3 text-left transition-all hover:-translate-y-px ${
+                  isOpen
+                    ? "border-brand-teal-bright/40 bg-brand-teal-bright/[0.08] shadow-[0_0_0_1px_rgba(94,234,212,0.15)]"
+                    : "border-brand-border-dark bg-brand-dark/40 hover:border-brand-teal-bright/25 hover:bg-brand-dark/60"
+                }`}
+              >
+                <span className="text-base" aria-hidden>{tile.emoji}</span>
+                <span className={`text-[11px] font-medium ${isOpen ? "text-brand-teal-bright" : "text-brand-cream"}`}>
+                  {tile.label}
+                </span>
+                <span className="text-[10px] leading-snug text-brand-muted-on-dark">
+                  {tile.sub}
+                </span>
+                <span className={`mt-0.5 text-[10px] font-medium transition-colors ${isOpen ? "text-brand-teal-bright" : "text-brand-muted-on-dark"}`}>
+                  {isOpen ? "Fermer ↑" : "Voir →"}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {openKit && kitItems.length > 0 && (
+          <div className="mt-3 rounded-xl border border-brand-border-dark bg-brand-dark/20 p-3">
+            <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-brand-muted-on-dark">
+              {atelierKitTiles.find((t) => t.id === openKit)?.label} — modèles disponibles
+            </p>
+            <ul className="space-y-1.5">
+              {kitItems.map((k) => (
+                <li
+                  key={k.id}
+                  className="flex items-center gap-2.5 rounded-lg border border-brand-border-dark bg-brand-surface/60 px-3 py-2"
+                >
+                  <span className="shrink-0 text-sm" aria-hidden>📧</span>
+                  <span className="text-[12px] text-brand-cream">{k.title}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
+
+function KitCatalogueSection({ kitRef }: { kitRef: KitRef }) {
+  const { category, months, topics } = kitRef;
+
+  if (category === "lancement") {
+    const stepLabels: Record<string, string> = {
+      before: "Avant l'événement",
+      dday: "Jour J",
+      after: "Après l'événement",
+    };
+    const frKits = lancementKits.filter((k) => k.language === "FR");
+    return (
+      <section>
+        <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-brand-accent">
+          Contenu du kit
+        </h3>
+        <div className="space-y-3">
+          {(["before", "dday", "after"] as const).map((step) => {
+            const stepKits = frKits.filter((k) => k.step === step).slice(0, 3);
+            if (stepKits.length === 0) return null;
+            return (
+              <div key={step}>
+                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-brand-muted-on-dark">
+                  {stepLabels[step]}
+                </div>
+                <ul className="space-y-1">
+                  {stepKits.map((k) => (
+                    <li
+                      key={k.id}
+                      className="flex items-center gap-2 rounded-lg bg-brand-dark/30 px-2.5 py-2 text-[12px] text-brand-cream"
+                    >
+                      <span aria-hidden className="shrink-0">📧</span>
+                      {k.title}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    );
+  }
+
+  if (category === "animation" && months && months.length > 0) {
+    const items = animationItems.filter((a) => months.includes(a.month));
+    if (items.length === 0) return null;
+    return (
+      <section>
+        <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-brand-accent">
+          Contenus d&apos;animation
+        </h3>
+        <ul className="space-y-2">
+          {items.slice(0, 6).map((item) => (
+            <li
+              key={item.id}
+              className="flex items-start gap-2.5 rounded-xl border border-brand-border-dark bg-brand-dark/30 px-3 py-2.5"
+            >
+              <span className="mt-0.5 shrink-0 rounded-md bg-brand-surface px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-brand-muted-on-dark">
+                {item.type}
+              </span>
+              <span className="text-[12px] leading-snug text-brand-cream">{item.title}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    );
+  }
+
+  if (category === "topics" && topics && topics.length > 0) {
+    const kits = emailTopicKits
+      .filter((k) => k.language === "FR" && topics.includes(k.topic))
+      .slice(0, 6);
+    if (kits.length === 0) return null;
+    return (
+      <section>
+        <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-brand-accent">
+          Emails thématiques
+        </h3>
+        <ul className="space-y-1.5">
+          {kits.map((k) => (
+            <li
+              key={k.id}
+              className="flex items-center gap-2 rounded-lg bg-brand-dark/30 px-2.5 py-2 text-[12px] text-brand-cream"
+            >
+              <span aria-hidden className="shrink-0">📧</span>
+              {k.title}
+            </li>
+          ))}
+        </ul>
+      </section>
+    );
+  }
+
+  return null;
 }
 
 function ScopeDetail({ scope }: { scope: EventScope }) {
@@ -1474,6 +1686,13 @@ function EventModal({
               {description}
             </p>
           </section>
+
+          {event.type === "atelier" && workshopMap[event.title] && (
+            <WorkshopDetail workshopId={workshopMap[event.title]} />
+          )}
+          {event.type === "kit" && kitMap[event.title] && (
+            <KitCatalogueSection kitRef={kitMap[event.title]} />
+          )}
 
           {event.scope && <ScopeDetail scope={event.scope} />}
 

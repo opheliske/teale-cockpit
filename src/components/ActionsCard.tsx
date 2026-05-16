@@ -16,6 +16,18 @@ type InternalAction = {
   overdue?: boolean;
 };
 
+const FR_MONTHS = [
+  "janvier", "février", "mars", "avril", "mai", "juin",
+  "juillet", "août", "septembre", "octobre", "novembre", "décembre",
+];
+
+function formatDueDate(iso: string): string {
+  const [year, month, day] = iso.split("-").map(Number);
+  const mo = FR_MONTHS[month - 1];
+  const thisYear = new Date().getFullYear();
+  return `Échéance le ${day} ${mo}${year !== thisYear ? ` ${year}` : ""}`;
+}
+
 export default function ActionsCard({ actions }: { actions: Action[] }) {
   const [items, setItems] = useState<InternalAction[]>(() =>
     actions.map((a, i) => ({ ...a, id: a.id ?? `init-${i}` }))
@@ -45,7 +57,7 @@ export default function ActionsCard({ actions }: { actions: Action[] }) {
   const submitNew = () => {
     const title = draftTitle.trim();
     if (!title) return;
-    const due = draftDue.trim() || "Sans échéance";
+    const due = draftDue ? formatDueDate(draftDue) : "Sans échéance";
     setItems((prev) => [
       ...prev,
       {
@@ -208,13 +220,17 @@ export default function ActionsCard({ actions }: { actions: Action[] }) {
                 placeholder="Intitulé de l'action…"
                 className="w-full rounded-lg border border-brand-border-dark bg-brand-dark px-3 py-2 text-sm text-brand-cream placeholder:text-brand-muted-on-dark focus:border-brand-accent focus:outline-none"
               />
-              <input
-                type="text"
-                value={draftDue}
-                onChange={(e) => setDraftDue(e.target.value)}
-                placeholder="Échéance (optionnel — ex. « Avant le 30 juin »)"
-                className="w-full rounded-lg border border-brand-border-dark bg-brand-dark px-3 py-2 text-[12px] text-brand-cream placeholder:text-brand-muted-on-dark focus:border-brand-accent focus:outline-none"
-              />
+              <div className="relative">
+                <label className="mb-1 block text-[10px] uppercase tracking-[0.12em] text-brand-muted-on-dark">
+                  Échéance (optionnel)
+                </label>
+                <input
+                  type="date"
+                  value={draftDue}
+                  onChange={(e) => setDraftDue(e.target.value)}
+                  className="w-full rounded-lg border border-brand-border-dark bg-brand-dark px-3 py-2 text-[12px] text-brand-cream [color-scheme:dark] focus:border-brand-accent focus:outline-none"
+                />
+              </div>
               <div className="flex gap-2">
                 <button
                   type="submit"

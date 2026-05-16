@@ -1,21 +1,21 @@
 @import "tailwindcss";
 
 :root {
-  --brand-dark: #042b2b;
-  --brand-sidebar: #0c1d1d;
-  --brand-sidebar-hover: #334141;
-  --brand-cream: #f0ede4;
-  --brand-surface: #163530;
-  --brand-cream-hover: #e5e1d4;
-  --brand-border-dark: #234540;
+  --brand-dark: #061a16;
+  --brand-sidebar: #08110e;
+  --brand-sidebar-hover: #1a2e29;
+  --brand-cream: #e8f5ef;
+  --brand-surface: #0e2520;
+  --brand-cream-hover: #d5ede3;
+  --brand-border-dark: #1a3530;
   --brand-border-cream: #d8d4c4;
-  --brand-muted-on-dark: #8a9994;
+  --brand-muted-on-dark: #94a8a0;
   --brand-muted-on-cream: #6e6a5e;
   --brand-accent: #84d4a6;
   --brand-highlight: #dced63;
   --brand-upcoming: #bb6146;
   --green-bright: #a8e895;
-  --teal-bright: #5fd1b5;
+  --teal-bright: #5eead4;
   --salmon: #f4a89a;
   --blue-soft: #8fb6c7;
 }
@@ -42,7 +42,8 @@
 }
 
 body {
-  background: var(--brand-dark);
+  background: radial-gradient(ellipse at top left, #0a2820 0%, #051612 60%, #030d0a 100%) fixed;
+  background-color: #030d0a;
   color: var(--brand-cream);
   font-family: var(--font-dm-sans), Arial, Helvetica, sans-serif;
 }

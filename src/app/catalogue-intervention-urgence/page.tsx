@@ -268,20 +268,16 @@ export default function CatalogueInterventionUrgencePage() {
   const [declareOpen, setDeclareOpen] = useState(false);
 
   return (
-    <div className="relative min-h-screen px-10 py-8">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -top-32 right-0 h-[460px] w-[460px] translate-x-20 rounded-full bg-brand-salmon/10 blur-3xl"
-      />
-      <div className="relative z-10 mx-auto max-w-6xl">
+    <div className="min-h-screen px-9 py-8">
+      <div className="mx-auto max-w-[1280px]">
         <header className="mb-8">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-salmon">
+          <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-[2.5px] text-brand-salmon">
             Bibliothèques · Avril 2026
           </p>
-          <h1 className="mt-2 text-3xl font-medium tracking-tight text-brand-cream">
+          <h1 className="mt-2 text-[34px] font-semibold tracking-[-0.5px] text-brand-cream">
             Catalogue intervention d&apos;urgence
           </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-brand-muted-on-dark">
+          <p className="text-[13px] leading-relaxed text-[#94a8a0]">
             L&apos;accompagnement teale en situation d&apos;urgence. Offre
             détaillée pour soutenir vos équipes face à un événement
             traumatique : communication, suivis individuels, groupes de parole
