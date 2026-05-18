@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { csmNavSections } from "@/lib/navigation-csm";
+import { csmHomeItem, csmNavSections } from "@/lib/navigation-csm";
 
 export default function CsmSidebar() {
   const pathname = usePathname();
@@ -29,6 +29,23 @@ export default function CsmSidebar() {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 pb-4">
+        {/* Home */}
+        <ul className="mb-6 flex flex-col gap-0.5">
+          <li>
+            <Link
+              href={csmHomeItem.href}
+              className={`block rounded-md px-3 py-2 text-sm transition-colors hover:bg-[rgba(139,92,246,0.12)] hover:text-[#c4b5fd] ${
+                pathname === csmHomeItem.href
+                  ? "bg-[rgba(139,92,246,0.15)] text-[#c4b5fd]"
+                  : "text-brand-cream"
+              }`}
+            >
+              {csmHomeItem.label}
+            </Link>
+          </li>
+        </ul>
+
+        {/* Sections */}
         {csmNavSections.map((section) => (
           <div key={section.title} className="mb-6">
             <h2 className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[rgba(167,139,250,0.5)]">

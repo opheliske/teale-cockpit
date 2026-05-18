@@ -8,19 +8,14 @@ export type NavSection = {
   items: NavItem[];
 };
 
+export const csmHomeItem: NavItem = { label: "Home", href: "/csm" };
+
 export const csmNavSections: NavSection[] = [
-  {
-    title: "Portefeuille",
-    items: [
-      { label: "Vue d'ensemble", href: "/csm" },
-      { label: "Clients", href: "/csm/clients" },
-    ],
-  },
   {
     title: "Opérations",
     items: [
-      { label: "Planning global", href: "/csm/planning" },
-      { label: "Ateliers", href: "/csm/ateliers" },
+      { label: "Suivi clients", href: "/csm/suivi-clients" },
+      { label: "QBR et Ateliers", href: "/csm/qbr-ateliers" },
     ],
   },
   {
@@ -28,6 +23,7 @@ export const csmNavSections: NavSection[] = [
     items: [
       { label: "Catalogue d'ateliers", href: "/csm/catalogue" },
       { label: "Kits de communication", href: "/csm/kits" },
+      { label: "Situation d'urgence", href: "/csm/urgence" },
     ],
   },
 ];
