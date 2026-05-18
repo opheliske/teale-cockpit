@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { workshops, themes, type Workshop } from "@/app/catalogue-ateliers/data";
+import { workshops, themes, type Workshop } from "@/app/(client)/catalogue-ateliers/data";
 
 type Format = "presentiel" | "distanciel" | "hybride";
 type Audience = "RH" | "Elus" | "Managers" | "Collaborateurs" | "Codir";

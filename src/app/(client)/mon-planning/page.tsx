@@ -10,8 +10,8 @@ import {
   urgencyModeLabels,
   type Urgency,
 } from "@/lib/urgencies";
-import { workshops } from "@/app/catalogue-ateliers/data";
-import { lancementKits, animationItems, emailTopicKits } from "@/app/kits-communication/data";
+import { workshops } from "@/app/(client)/catalogue-ateliers/data";
+import { lancementKits, animationItems, emailTopicKits } from "@/app/(client)/kits-communication/data";
 
 const TODAY_MONTH = "May";
 const TODAY_YEAR = 2026;

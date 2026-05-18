@@ -13,7 +13,7 @@ import {
   workshops,
   themes as workshopThemes,
   type Workshop,
-} from "@/app/catalogue-ateliers/data";
+} from "@/app/(client)/catalogue-ateliers/data";
 
 const workshopThemeNameById = Object.fromEntries(
   workshopThemes.map((t) => [t.id, t.name])
