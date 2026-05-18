@@ -1221,17 +1221,14 @@ function EventRow({
             <span className={`rounded-[4px] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] ${cfg.pillClass}`}>
               {cfg.label.toUpperCase()}
             </span>
-            {/* Checkmark */}
-            <span
-              className={`ml-auto flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-full text-[9px] ${
-                event.done
-                  ? "bg-[rgba(94,234,212,0.2)] text-[#5eead4]"
-                  : "border-[1.5px] border-white/15"
-              }`}
-              aria-hidden
-            >
-              {event.done ? "✓" : ""}
-            </span>
+            {event.done && (
+              <span
+                className="ml-auto flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-full bg-[rgba(94,234,212,0.2)] text-[9px] text-[#5eead4]"
+                aria-hidden
+              >
+                ✓
+              </span>
+            )}
           </div>
           <div className={`mb-1.5 text-[12.5px] font-medium leading-snug ${event.done ? "text-[#6b7c75] line-through" : "text-[#e8f5ef]"}`}>
             {event.title}

@@ -100,6 +100,110 @@ type DurationFilter = "all" | "1h" | "1h30" | "2h";
 type StatusFilter = "all" | "done" | "todo";
 type ViewMode = "grid" | "list";
 
+const themeColorLight: Record<string, string> = {
+  prevention:    "#ea580c",
+  stress:        "#0d9488",
+  epanouissement:"#65a30d",
+  relations:     "#0284c7",
+  resilience:    "#64748b",
+};
+
+function exportToPDF(selected: Workshop[]): void {
+  const date = new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  const totalMin = selected.reduce((s, w) => s + parseDurationMinutes(w.duration), 0);
+  const totalDur = formatTotalDuration(totalMin);
+
+  const workshopsHTML = selected.map((w, idx) => {
+    const color = themeColorLight[w.themeId] ?? "#475569";
+    const themeLabel = themeDisplayLabel[w.themeId] ?? w.themeId;
+    const emoji = pickWorkshopEmoji(w);
+    const objectives = w.objectives.map((o) => `<li>${o}</li>`).join("");
+    const programme = w.programme.map((step, i) => {
+      const items = step.items?.length
+        ? `<ul>${step.items.map((it) => `<li>${it}</li>`).join("")}</ul>`
+        : "";
+      return `<div class="step"><span class="step-n">${i + 1}</span><div><b>${step.title}</b>${items}</div></div>`;
+    }).join("");
+
+    return `
+      ${idx > 0 ? '<div class="break"></div>' : ""}
+      <div class="workshop">
+        <div class="wh">
+          <span class="emoji">${emoji}</span>
+          <div class="wh-meta">
+            <span class="tag" style="background:${color}22;color:${color}">${themeLabel.toUpperCase()}</span>
+            <span class="dur">⏱ ${w.duration}</span>
+            ${w.alreadyAnimated ? '<span class="done">✓ Déjà animé</span>' : ""}
+          </div>
+        </div>
+        <h2>${w.title}${w.subtitle ? ` <small>${w.subtitle}</small>` : ""}</h2>
+        <h3>Objectifs</h3>
+        <ul>${objectives}</ul>
+        <h3>Programme</h3>
+        <div class="prog">${programme}</div>
+        <h3>Pour qui ?</h3>
+        <ul>${w.targetAudience.map((t) => `<li>${t}</li>`).join("")}</ul>
+      </div>`;
+  }).join("");
+
+  const html = `<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Sélection d'ateliers — teale</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:13px;color:#1a2e28;background:#fff;padding:48px 52px}
+  header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:36px;padding-bottom:20px;border-bottom:2px solid #061a16}
+  .brand{font-size:22px;font-weight:800;letter-spacing:-0.5px;color:#061a16}
+  .brand span{color:#0d9488}
+  .summary{text-align:right;font-size:12px;color:#4b5e57;line-height:1.6}
+  .summary strong{color:#061a16}
+  h1{font-size:22px;font-weight:700;margin-bottom:4px;color:#061a16}
+  .workshop{margin-bottom:40px}
+  .wh{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+  .emoji{font-size:28px;width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:#f0f4f3;border-radius:10px;flex-shrink:0}
+  .wh-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .tag{padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.5px}
+  .dur{font-size:11px;color:#4b5e57}
+  .done{font-size:11px;color:#0d9488;font-weight:600}
+  h2{font-size:17px;font-weight:700;color:#061a16;margin-bottom:14px;line-height:1.3}
+  h2 small{font-size:13px;font-weight:400;color:#4b5e57;margin-left:6px}
+  h3{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#0d9488;margin:14px 0 7px}
+  ul{padding-left:18px;line-height:1.7;color:#2d4039}
+  ul li{margin-bottom:2px}
+  .prog{display:flex;flex-direction:column;gap:8px}
+  .step{display:flex;gap:10px;align-items:flex-start}
+  .step-n{width:20px;height:20px;border-radius:50%;background:#061a16;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+  .step ul{margin-top:4px;font-size:12px;color:#4b5e57}
+  .break{break-before:page;page-break-before:always}
+  @media print{body{padding:0}@page{margin:20mm 18mm}}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="brand">te<span>a</span>le</div>
+    <h1>Sélection d'ateliers</h1>
+  </div>
+  <div class="summary">
+    <strong>${selected.length} atelier${selected.length > 1 ? "s" : ""}</strong><br>
+    Durée totale : <strong>${totalDur}</strong><br>
+    Exporté le ${date}
+  </div>
+</header>
+${workshopsHTML}
+</body>
+</html>`;
+
+  const win = window.open("", "_blank");
+  if (!win) return;
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 400);
+}
+
 export default function CatalogueAteliersPage() {
   const [search, setSearch] = useState("");
   const [activeThemeId, setActiveThemeId] = useState<string | null>(null);
@@ -325,6 +429,7 @@ export default function CatalogueAteliersPage() {
             selected={selectedWorkshops}
             onRemove={toggleSelect}
             totalMinutes={totalMinutes}
+            onExport={() => exportToPDF(selectedWorkshops)}
           />
         </div>
       </div>
@@ -519,13 +624,6 @@ function WorkshopCard({
         <div className="flex gap-1.5">
           <button
             type="button"
-            title="Sauvegarder"
-            className="grid h-7 w-7 place-items-center rounded-[7px] border border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.03)] text-[12px] text-[#94a8a0] transition-all hover:border-[rgba(94,234,212,0.2)] hover:bg-[rgba(94,234,212,0.1)] hover:text-[#5eead4]"
-          >
-            ☆
-          </button>
-          <button
-            type="button"
             onClick={onSelect}
             title={isSelected ? "Retirer de ma sélection" : "Ajouter à ma sélection"}
             className={`grid h-7 w-7 place-items-center rounded-[7px] border text-[12px] transition-all ${
@@ -585,10 +683,12 @@ function PlanningBasket({
   selected,
   onRemove,
   totalMinutes,
+  onExport,
 }: {
   selected: Workshop[];
   onRemove: (id: string) => void;
   totalMinutes: number;
+  onExport: () => void;
 }) {
   return (
     <div className="sticky top-8 flex max-h-[calc(100vh-64px)] flex-col self-start rounded-[14px] border border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.02)] p-[18px]">
@@ -682,9 +782,10 @@ function PlanningBasket({
           </button>
           <button
             type="button"
+            onClick={onExport}
             className="mt-1.5 w-full rounded-[9px] border border-[rgba(255,255,255,0.06)] py-[9px] text-[11px] font-medium text-[#94a8a0] transition-colors hover:border-[rgba(255,255,255,0.12)] hover:text-[#e8f5ef]"
           >
-            Exporter la sélection
+            ↓ Exporter en PDF
           </button>
         </>
       )}

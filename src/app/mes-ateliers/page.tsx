@@ -95,6 +95,14 @@ const themeTagClass: Record<string, string> = {
   resilience:    "bg-[rgba(148,163,184,0.15)] text-[#cbd5e1]",
 };
 
+const themeEmojiBoxClass: Record<string, string> = {
+  prevention:    "bg-[rgba(251,146,60,0.12)]",
+  stress:        "bg-[rgba(94,234,212,0.1)]",
+  epanouissement:"bg-[rgba(132,204,22,0.12)]",
+  relations:     "bg-[rgba(125,211,252,0.12)]",
+  resilience:    "bg-[rgba(148,163,184,0.12)]",
+};
+
 const themeShortLabel: Record<string, string> = {
   prevention:    "PRÉVENTION",
   stress:        "STRESS & ÉMOTIONS",
@@ -862,75 +870,121 @@ function RowCard({ scheduled: s, clientFeedback, onOpen }: {
 
 // --- preserved components ---
 
-function AtelierCard({ scheduled, clientFeedback, onOpen }: {
+function AtelierCard({ scheduled: s, clientFeedback, onOpen }: {
   scheduled: ScheduledAtelier;
   clientFeedback?: { rating: number; comment: string };
   onOpen: () => void;
 }) {
-  const workshop = workshopById[scheduled.workshopId];
+  const workshop = workshopById[s.workshopId];
   if (!workshop) return null;
-  const gradient = themeGradient[workshop.themeId] ?? themeGradient.relations;
+  const status = scheduledStatus(s);
+  const days = dayDiff(s.isoDate);
   const emoji = pickWorkshopEmoji(workshop);
-  const status = scheduledStatus(scheduled);
-  const sCfg = statusConfig[status];
-  const fmtCfg = formatConfig[scheduled.format];
+  const fmtCfg = formatConfig[s.format];
+  const tagClass = themeTagClass[workshop.themeId] ?? "bg-[rgba(255,255,255,0.05)] text-[#94a8a0]";
+  const tagLabel = themeShortLabel[workshop.themeId] ?? workshop.themeId.toUpperCase();
+  const emojiBoxClass = themeEmojiBoxClass[workshop.themeId] ?? "bg-[rgba(255,255,255,0.04)]";
   const needsFeedback = status === "realise" && !clientFeedback;
+  const [c1, c2] = avatarColors(s.intervenant.name);
+  const inits = initials(s.intervenant.name);
+
+  const borderClass =
+    status === "annule"  ? "border-[rgba(255,255,255,0.05)] opacity-60" :
+    needsFeedback        ? "border-[rgba(250,204,21,0.2)]" :
+    status === "upcoming"? "border-[rgba(94,234,212,0.2)]" :
+                           "border-[rgba(255,255,255,0.05)]";
+
+  let badgeEl: ReactNode;
+  if (needsFeedback) {
+    badgeEl = <span className="rounded-[4px] bg-[rgba(250,204,21,0.14)] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.4px] text-[#fde047]">⭐ AVIS ATTENDU</span>;
+  } else if (status === "annule") {
+    badgeEl = <span className="rounded-[4px] bg-[rgba(252,165,165,0.12)] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.4px] text-[#fca5a5]">ANNULÉ</span>;
+  } else if (status === "realise") {
+    badgeEl = <span className="rounded-[4px] bg-[rgba(255,255,255,0.05)] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.4px] text-[#94a8a0]">RÉALISÉ</span>;
+  } else {
+    const label = days === 0 ? "AUJOURD'HUI" : days === 1 ? "DEMAIN" : `DANS ${days}J`;
+    badgeEl = <span className="rounded-[4px] bg-[rgba(94,234,212,0.12)] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.4px] text-[#5eead4]">{label}</span>;
+  }
 
   return (
-    <button
-      type="button"
+    <div
       onClick={onOpen}
-      className={`group flex h-full flex-col overflow-hidden rounded-2xl border border-brand-border-dark text-left transition-all hover:-translate-y-1 hover:border-brand-green-bright/40 ${gradient}`}
+      className={`flex cursor-pointer flex-col rounded-[13px] border bg-[rgba(255,255,255,0.02)] p-[14px] transition-all hover:-translate-y-0.5 hover:border-[rgba(94,234,212,0.25)] hover:bg-[rgba(255,255,255,0.035)] hover:shadow-[0_8px_24px_-10px_rgba(0,0,0,0.4)] ${borderClass}`}
     >
-      <div className="relative flex h-20 shrink-0 items-end p-3">
-        <span className="text-2xl drop-shadow-md" aria-hidden>{emoji}</span>
-        <span className={`absolute right-2.5 top-2.5 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] ${sCfg.badgeClass}`}>
-          <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60" />
-          {sCfg.label}
+      {/* top: emoji + status badge */}
+      <div className="mb-2.5 flex items-start justify-between">
+        <div
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] text-[22px] ${emojiBoxClass}`}
+          aria-hidden
+        >
+          {emoji}
+        </div>
+        {badgeEl}
+      </div>
+
+      {/* tags */}
+      <div className="mb-2 flex flex-wrap gap-[5px]">
+        <span className={`rounded-[4px] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] ${tagClass}`}>
+          {tagLabel}
+        </span>
+        <span className={`inline-flex items-center gap-1 rounded-[4px] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.3px] ${fmtCfg.pillClass}`}>
+          {fmtCfg.emoji} {fmtCfg.label}
         </span>
       </div>
-      <div className="flex flex-1 flex-col bg-brand-surface px-4 pb-4 pt-3">
-        <div className="mb-2 flex flex-wrap items-center gap-1">
-          <span className="rounded-full bg-brand-cream/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-brand-cream">
-            {themeNameById[workshop.themeId] ?? "Atelier"}
-          </span>
-          <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] ${fmtCfg.pillClass}`}>
-            {fmtCfg.emoji} {fmtCfg.label}
-          </span>
-        </div>
-        <h3 className="text-[13px] font-medium leading-snug text-brand-cream">{workshop.title}</h3>
-        <div className="mt-1.5 text-[11px] text-brand-muted-on-dark">{scheduled.dateLabel} · {scheduled.timeLabel}</div>
-        <div className="mt-2 flex flex-wrap gap-1">
-          {scheduled.audiences.slice(0, 3).map((a) => (
-            <span key={a} className="rounded-full bg-white/[0.04] px-1.5 py-0.5 text-[9px] text-brand-cream">
-              {audienceConfig[a].emoji} {audienceConfig[a].label}
-            </span>
-          ))}
-        </div>
-        {status === "realise" && scheduled.satisfaction !== undefined && (
-          <div className="mt-2 flex items-center justify-between rounded-lg bg-brand-dark/40 px-2.5 py-1.5">
-            <div className="flex items-center gap-1.5">
-              <StarRating value={scheduled.satisfaction} />
-              <span className="text-[11px] font-medium text-brand-cream">{scheduled.satisfaction.toFixed(1)}/5</span>
-            </div>
-            <span className="text-[10px] text-brand-muted-on-dark">{scheduled.participantFeedbacks ?? "—"} avis</span>
-          </div>
-        )}
-        {needsFeedback && (
-          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-brand-green-bright/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-brand-green-bright">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-green-bright opacity-70" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-brand-green-bright" />
-            </span>
-            Votre avis attendu
-          </div>
-        )}
-        <div className="mt-auto flex items-center justify-between border-t border-white/5 pt-3 text-[11px]">
-          <span className="text-brand-muted-on-dark">👤 {scheduled.intervenant.name}</span>
-          <span className="inline-flex items-center gap-1 font-semibold text-brand-teal-bright transition-transform group-hover:translate-x-0.5">Détail →</span>
-        </div>
+
+      {/* title */}
+      <div className={`mb-[6px] line-clamp-2 min-h-[36px] text-[13px] font-semibold leading-[1.35] ${status === "annule" ? "line-through text-[#94a8a0]" : "text-[#e8f5ef]"}`}>
+        {workshop.title}
       </div>
-    </button>
+
+      {/* date */}
+      <div className="mb-2 line-clamp-1 text-[11px] leading-[1.45] text-[#94a8a0]">
+        📅 {s.dateLabel} · {s.timeLabel}
+      </div>
+
+      {/* intervenant */}
+      <div className="mb-2.5 flex items-center gap-1.5 text-[11px] text-[#94a8a0]">
+        <span
+          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-[#042f2a]"
+          style={{ background: `linear-gradient(135deg, ${c1}, ${c2})` }}
+          aria-hidden
+        >
+          {inits}
+        </span>
+        {s.intervenant.name}
+      </div>
+
+      {/* audiences */}
+      <div className="flex flex-1 flex-wrap content-start gap-1">
+        {s.audiences.slice(0, 3).map((a) => (
+          <span key={a} className="rounded-[4px] bg-[rgba(255,255,255,0.04)] px-[6px] py-[2px] text-[9px] text-[#94a8a0]">
+            {audienceConfig[a].label}
+          </span>
+        ))}
+      </div>
+
+      {/* footer */}
+      <div className="mt-3 flex items-center justify-between border-t border-[rgba(255,255,255,0.04)] pt-2.5 text-[10.5px] text-[#6b7c75]">
+        <div>
+          {status === "realise" && s.satisfaction !== undefined ? (
+            <span className="flex items-center gap-1">
+              <span className="text-[#fde047]">★</span>
+              <span className="font-semibold text-[#e8f5ef]">{s.satisfaction.toFixed(1)}</span>
+              <span>/ 5 · {s.participantFeedbacks} avis</span>
+            </span>
+          ) : (
+            <span>⏱ {workshop.duration}</span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onOpen(); }}
+          className="font-semibold text-[#5eead4]"
+        >
+          Détail →
+        </button>
+      </div>
+    </div>
   );
 }
 
