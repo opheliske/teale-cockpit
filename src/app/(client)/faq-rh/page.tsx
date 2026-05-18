@@ -579,7 +579,7 @@ function FaqCard({
         className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
       >
         <span
-          className={`text-[15px] leading-snug ${
+          className={`text-[14px] leading-snug ${
             isOpen ? "font-medium text-brand-cream" : "text-brand-cream"
           }`}
         >

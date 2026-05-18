@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Sidebar from "@/components/Sidebar";
+import ClientImpersonationBanner from "@/components/ClientImpersonationBanner";
 
 export const metadata: Metadata = {
   title: "Teale — Vue Client",
@@ -14,7 +15,10 @@ export default function ClientLayout({
   return (
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      <main className="flex-1 overflow-y-auto">
+        <ClientImpersonationBanner />
+        {children}
+      </main>
     </div>
   );
 }

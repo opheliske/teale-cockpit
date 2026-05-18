@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { planStore, type StoredPlanState, type StoredPlanItemType } from "@/lib/plan-store";
+import { targetsStore, type TargetLabel } from "@/lib/targets-store";
+import { docsStore, type StoredDocument } from "@/lib/docs-store";
 import {
   getUrgencies,
   modalitiesToList,
@@ -16,6 +19,7 @@ import { lancementKits, animationItems, emailTopicKits } from "@/app/(client)/ki
 const TODAY_MONTH = "May";
 const TODAY_YEAR = 2026;
 const AVAILABLE_YEARS = [2025, 2026, 2027] as const;
+const CLIENT_ID = "bx";
 type Year = (typeof AVAILABLE_YEARS)[number];
 
 const allMonths = [
@@ -77,41 +81,38 @@ const quarters: Quarter[] = [
   {
     id: "Q1",
     label: "Q1 2026",
-    theme: "Lancement & onboarding",
-    subtitle:
-      "Activer la plateforme auprès de toutes les équipes et installer les bons réflexes.",
+    theme: "Ateliers & sensibilisation",
+    subtitle: "Charge mentale, webinaire managers et Communication CNV pour ancrer les usages.",
     months: ["January", "February", "March"],
     gradient: "from-[#4d6961] to-[#c2bbab]",
-    emoji: "🚀",
+    emoji: "🌱",
   },
   {
     id: "Q2",
     label: "Q2 2026",
-    theme: "Sensibilisation & engagement",
-    subtitle:
-      "Approfondir les usages avec les premiers ateliers et activations communautaires.",
+    theme: "Animation & engagement",
+    subtitle: "Leadership bienveillant, Manager coach et QBR H1 pour mesurer l'impact.",
     months: ["April", "May", "June"],
     gradient: "from-[#2d6b62] to-[#4cbfa6]",
-    emoji: "🌱",
+    emoji: "📈",
   },
   {
     id: "Q3",
     label: "Q3 2026",
-    theme: "Animation & fidélisation",
-    subtitle:
-      "Maintenir l'élan après l'été et préparer les temps forts d'automne.",
+    theme: "Bilan & renouvellement",
+    subtitle: "Finaliser les derniers ateliers et co-construire le plan N+1 avec la direction.",
     months: ["July", "August", "September"],
     gradient: "from-[#2a7d4a] to-[#a8e895]",
-    emoji: "🌿",
+    emoji: "📊",
   },
   {
     id: "Q4",
     label: "Q4 2026",
-    theme: "Bilan & perspectives",
-    subtitle: "Mesurer l'impact de l'année et co-construire le plan 2027.",
+    theme: "Post-contrat",
+    subtitle: "Le contrat 2025–2026 se termine en septembre. Le plan 2026–2027 est en cours de cadrage.",
     months: ["October", "November", "December"],
     gradient: "from-[#8fb6c7] to-[#2d6b62]",
-    emoji: "📊",
+    emoji: "🔄",
   },
 ];
 
@@ -221,10 +222,12 @@ type PlanEvent = {
   type: EventType;
   title: string;
   date?: string;
+  time?: string;
   done?: boolean;
   description?: string;
   details?: string[];
   scope?: EventScope;
+  targets?: string[];
 };
 
 function defaultDescription(type: EventType): string {
@@ -266,349 +269,234 @@ function urgencyToPlanEvent(u: Urgency, displayDate: string): PlanEvent {
 const events2026: Record<string, PlanEvent[]> = {
   January: [
     {
-      type: "onboarding",
-      title: "Onboarding équipes Codir & RH",
-      date: "12 janv.",
+      type: "atelier",
+      title: "Atelier « Charge mentale »",
+      date: "22 janv.",
       done: true,
-      details: ["20 participants", "Format : visio 1h + Q&A"],
-      scope: {
-        audiences: ["Codir", "RH"],
-        countries: ["France"],
-      },
+      details: ["Animé par Priscille D'Arexy", "41 inscrits · note 4.8/5"],
+      scope: { audiences: ["Collaborateurs", "Managers", "RH"], countries: ["France"] },
     },
     {
-      type: "kit",
-      title: "Kit de lancement teale — diffusion",
-      date: "20 janv.",
+      type: "point",
+      title: "Point CSM mensuel",
+      date: "15 janv.",
       done: true,
-      details: [
-        "Email d'annonce collaborateurs",
-        "Bannières Slack / Teams",
-        "FAQ rapide à distribuer",
-      ],
-      scope: { allCompany: true, countries: ["France", "Royaume-Uni"] },
+      details: ["Bilan adoption mois 4", "Alerte sous-conso Pulse identifiée"],
+      scope: { audiences: ["RH"], countries: ["France"] },
     },
   ],
   February: [
     {
       type: "atelier",
-      title: "Atelier « Communication non violente »",
-      date: "14 fév.",
+      title: "Webinaire managers & santé mentale",
+      date: "18 fév.",
       done: true,
-      details: [
-        "Animé par Bérénice Lefevre",
-        "25 inscrits, 22 présents",
-        "Note moyenne 4,7 / 5",
-      ],
-      scope: {
-        audiences: ["Managers", "Collaborateurs"],
-        departments: ["Tech", "Produit"],
-        countries: ["France"],
-      },
+      details: ["Animé par Lucie Martin", "52 participants · record Biocodex · note 4.8/5"],
+      scope: { audiences: ["Managers"], countries: ["France"] },
     },
     {
       type: "point",
       title: "Point CSM mensuel",
       date: "26 fév.",
       done: true,
-      details: ["Bilan adoption mois 1", "Validation kit Q2"],
+      details: ["Suivi webinaire managers", "Plan relance tokens Pulse"],
       scope: { audiences: ["RH"], countries: ["France"] },
     },
   ],
   March: [
     {
-      type: "qbr",
-      title: "Bilan trimestriel Q1",
+      type: "atelier",
+      title: "Atelier « Communication CNV »",
       date: "12 mars",
       done: true,
-      details: [
-        "Présenté au Codir + DRH",
-        "KPI engagement, indice santé mentale, top thématiques",
-      ],
-      scope: {
-        audiences: ["Codir", "RH"],
-        countries: ["France", "Royaume-Uni"],
-      },
+      details: ["Animé par Bérénice Lefevre", "29 inscrits · note 4.5/5"],
+      scope: { audiences: ["Managers", "Collaborateurs"], countries: ["France"] },
     },
     {
-      type: "kit",
-      title: "Kit de communication Q2 — préparation",
+      type: "qbr",
+      title: "QBR T2 — bilan 6 mois",
       date: "25 mars",
       done: true,
-      scope: { allCompany: true, countries: ["France", "Royaume-Uni"] },
+      details: ["NPS 7.4 → 7.8 (+4 pts)", "Engagement +6 pts", "Deck validé par Claire Fontaine"],
+      scope: { audiences: ["Codir", "RH"], countries: ["France"] },
     },
   ],
   April: [
     {
+      type: "kit",
+      title: "Kit prévention burnout",
+      date: "7 avr.",
+      done: true,
+      details: ["Email managers + email collaborateurs", "3 visuels Slack/Teams"],
+      scope: { allCompany: true, countries: ["France"] },
+    },
+    {
       type: "atelier",
-      title: "Atelier « Charge mentale »",
+      title: "Atelier « Leadership bienveillant »",
       date: "28 avr.",
       done: true,
-      details: ["Animé par Larissa Kalisch", "30 inscrits"],
-      scope: {
-        audiences: ["Collaborateurs", "Managers", "RH"],
-        departments: ["Customer Care", "Sales"],
-        countries: ["France"],
-      },
+      details: ["Animé par Carola Gawehn", "33 inscrits · note 4.9/5 — meilleur score"],
+      scope: { audiences: ["Managers"], countries: ["France"] },
     },
     {
       type: "point",
       title: "Point CSM mensuel",
       date: "10 avr.",
       done: true,
+      details: ["Suivi relance Pulse", "Validation thème atelier Q3"],
       scope: { audiences: ["RH"], countries: ["France"] },
     },
   ],
   May: [
     {
+      type: "atelier",
+      title: "Atelier « Manager coach »",
+      date: "19 mai",
+      details: ["Animé par Marc Dupont", "Lien inscription à diffuser"],
+      scope: { audiences: ["Managers"], countries: ["France"] },
+    },
+    {
       type: "point",
       title: "Point CSM mensuel",
-      date: "15 mai",
-      details: [
-        "Préparation atelier Gestion du stress",
-        "Validation kit ressources",
-      ],
+      date: "20 mai",
+      details: ["Bilan Q2 · Préparation QBR H1"],
       scope: { audiences: ["RH"], countries: ["France"] },
-    },
-    {
-      type: "atelier",
-      title: "Atelier « Gestion du stress »",
-      date: "22 mai",
-      details: [
-        "Animé par Marc Dupont",
-        "25 inscrits à ce jour",
-        "Lien Livestorm à diffuser à J-7",
-      ],
-      scope: {
-        audiences: ["Collaborateurs"],
-        departments: ["Tech", "Produit", "Customer Care"],
-        countries: ["France"],
-      },
-    },
-    {
-      type: "kit",
-      title: "Kit ressources santé mentale",
-      date: "29 mai",
-      details: [
-        "Email manager + email collaborateur",
-        "3 visuels Slack / Teams",
-      ],
-      scope: { allCompany: true, countries: ["France", "Royaume-Uni"] },
     },
   ],
   June: [
     {
-      type: "atelier",
-      title: "Atelier « Manager bienveillant »",
-      date: "10 juin",
-      details: ["Animé par Carola Gawehn"],
-      scope: {
-        audiences: ["Managers"],
-        countries: ["France", "Royaume-Uni"],
-      },
-    },
-    {
       type: "qbr",
-      title: "QBR Q2",
-      date: "30 juin",
-      details: ["Présentation au Codir", "Slides préparées en amont"],
-      scope: { audiences: ["Codir", "RH"], countries: ["France", "Royaume-Uni"] },
+      title: "QBR H1 Biocodex",
+      date: "2 juin",
+      details: ["Présentation Claire Fontaine + 2 DG", "Deck en cours de préparation (1/4 sections)"],
+      scope: { audiences: ["Codir", "RH"], countries: ["France"] },
     },
   ],
   July: [
     {
-      type: "kit",
-      title: "Kit de communication estival",
-      date: "8 juil.",
-      details: ["Conseils déconnexion vacances", "Affiches bureaux"],
-      scope: {
-        allCompany: true,
-        countries: ["France", "Royaume-Uni", "Espagne"],
-      },
+      type: "atelier",
+      title: "Atelier « Gestion des émotions »",
+      date: "17 juil.",
+      details: ["Animé par Larissa Kalisch"],
+      scope: { audiences: ["Collaborateurs", "Managers"], countries: ["France"] },
     },
   ],
-  August: [],
-  September: [
+  August: [
     {
       type: "atelier",
-      title: "Atelier de rentrée — gestion du stress",
-      date: "18 sept.",
+      title: "Atelier au choix — Résilience",
+      date: "27 août",
+      details: ["Dernier atelier du contrat · thème validé en juin"],
       scope: { audiences: ["Collaborateurs"], countries: ["France"] },
     },
     {
       type: "kit",
-      title: "Kit de communication rentrée",
-      date: "5 sept.",
-      scope: { allCompany: true, countries: ["France", "Royaume-Uni"] },
-    },
-    {
-      type: "point",
-      title: "Point CSM trimestriel",
-      date: "24 sept.",
-      scope: { audiences: ["RH"], countries: ["France"] },
-    },
-  ],
-  October: [
-    {
-      type: "atelier",
-      title: "Atelier « Octobre rose »",
-      date: "16 oct.",
-      scope: {
-        allCompany: true,
-        countries: ["France", "Royaume-Uni"],
-      },
-    },
-    {
-      type: "kit",
-      title: "Kit communication Octobre rose",
-      date: "1 oct.",
-      scope: {
-        allCompany: true,
-        countries: ["France", "Royaume-Uni", "Espagne"],
-      },
-    },
-  ],
-  November: [
-    {
-      type: "atelier",
-      title: "Atelier QVCT",
-      date: "20 nov.",
-      details: ["Semaine de la qualité de vie au travail"],
-      scope: {
-        allCompany: true,
-        countries: ["France"],
-      },
-    },
-    {
-      type: "kit",
-      title: "Kit communication QVCT",
-      date: "10 nov.",
-      scope: {
-        allCompany: true,
-        countries: ["France"],
-      },
-    },
-  ],
-  December: [
-    {
-      type: "qbr",
-      title: "QBR annuel — bilan & roadmap 2027",
-      date: "15 déc.",
-      details: ["Bilan complet de l'année", "Co-construction du plan 2027"],
-      scope: { audiences: ["Codir", "RH"], countries: ["France", "Royaume-Uni"] },
-    },
-    {
-      type: "point",
-      title: "Bilan annuel partagé",
-      date: "20 déc.",
-      scope: { audiences: ["RH"], countries: ["France"] },
-    },
-  ],
-};
-
-const events2025: Record<string, PlanEvent[]> = {
-  January: [
-    {
-      type: "kit",
-      title: "Kit de communication Q1 — diffusion",
-      date: "15 janv.",
-      done: true,
+      title: "Kit bilan annuel collaborateurs",
+      date: "3 août",
+      details: ["Email bilan + enquête satisfaction plateforme"],
       scope: { allCompany: true, countries: ["France"] },
     },
-  ],
-  February: [
-    {
-      type: "atelier",
-      title: "Atelier « Prévenir les RPS »",
-      date: "11 fév.",
-      done: true,
-      details: ["Animé par Adrien Bournas", "18 inscrits"],
-      scope: {
-        audiences: ["Managers", "RH"],
-        countries: ["France"],
-      },
-    },
     {
       type: "point",
-      title: "Point CSM mensuel",
-      date: "25 fév.",
-      done: true,
-      scope: { audiences: ["RH"], countries: ["France"] },
+      title: "Point renouvellement",
+      date: "20 août",
+      details: ["Décision contrat N+1 · proposition commerciale en cours"],
+      scope: { audiences: ["RH", "Codir"], countries: ["France"] },
     },
   ],
-  March: [
+  September: [
     {
       type: "qbr",
-      title: "QBR Q1 2025",
-      date: "20 mars",
-      done: true,
+      title: "QBR annuel & cadrage N+1",
+      date: "fin août",
+      details: ["Bilan complet de l'année · co-construction du plan 2026–2027"],
       scope: { audiences: ["Codir", "RH"], countries: ["France"] },
     },
   ],
+  October: [],
+  November: [],
+  December: [],
+};
+
+const events2025: Record<string, PlanEvent[]> = {
+  January: [],
+  February: [],
+  March: [],
   April: [],
-  May: [
-    {
-      type: "atelier",
-      title: "Atelier « Cohésion d'équipe »",
-      date: "14 mai",
-      done: true,
-      details: ["Format présentiel à Paris"],
-      scope: { audiences: ["Managers"], countries: ["France"] },
-    },
-  ],
-  June: [
-    {
-      type: "qbr",
-      title: "QBR Q2 2025",
-      date: "26 juin",
-      done: true,
-      scope: { audiences: ["Codir"], countries: ["France"] },
-    },
-  ],
+  May: [],
+  June: [],
   July: [],
   August: [],
   September: [
     {
-      type: "atelier",
-      title: "Atelier de rentrée — sommeil",
-      date: "18 sept.",
+      type: "kit",
+      title: "Kit lancement plateforme Joy",
+      date: "8 sept.",
       done: true,
+      details: ["Email d'annonce · 2 500 collaborateurs", "Bannières Slack / Teams", "FAQ rapide"],
       scope: { allCompany: true, countries: ["France"] },
     },
     {
-      type: "kit",
-      title: "Kit communication rentrée 2025",
-      date: "1 sept.",
+      type: "onboarding",
+      title: "Kick-off projet",
+      date: "15 sept.",
       done: true,
-      scope: { allCompany: true, countries: ["France"] },
+      details: ["Avec Claire Fontaine · 45 min", "Présentation plateforme & plan d'activation"],
+      scope: { audiences: ["RH", "Codir"], countries: ["France"] },
     },
   ],
   October: [
     {
       type: "atelier",
-      title: "Atelier « Octobre rose »",
+      title: "Atelier « Comprendre Teale »",
       date: "14 oct.",
       done: true,
-      scope: { allCompany: true, countries: ["France"] },
+      details: ["Animé par Pia Hartmann", "38 inscrits · note 4.6/5"],
+      scope: { audiences: ["Collaborateurs", "Managers", "RH"], countries: ["France"] },
     },
   ],
   November: [
     {
       type: "kit",
-      title: "Kit QVCT 2025",
-      date: "12 nov.",
+      title: "Kit bien-être au travail",
+      date: "4 nov.",
       done: true,
+      details: ["Email manager + email collaborateur", "2 visuels Slack/Teams"],
       scope: { allCompany: true, countries: ["France"] },
+    },
+    {
+      type: "atelier",
+      title: "Atelier « Gestion du stress »",
+      date: "20 nov.",
+      done: true,
+      details: ["Animé par Marc Dupont", "34 inscrits · note 4.7/5"],
+      scope: { audiences: ["Collaborateurs"], countries: ["France"] },
+    },
+    {
+      type: "point",
+      title: "Point CSM mensuel",
+      date: "26 nov.",
+      done: true,
+      details: ["Bilan mois 3 · validation thème Q2"],
+      scope: { audiences: ["RH"], countries: ["France"] },
     },
   ],
   December: [
     {
-      type: "qbr",
-      title: "QBR annuel 2025 — bilan",
-      date: "16 déc.",
+      type: "kit",
+      title: "Kit retour vacances & résilience",
+      date: "3 déc.",
       done: true,
-      details: ["Bilan année 1 de partenariat teale"],
-      scope: { audiences: ["Codir", "RH"], countries: ["France"] },
+      details: ["Campagne fin d'année · 3 visuels"],
+      scope: { allCompany: true, countries: ["France"] },
+    },
+    {
+      type: "point",
+      title: "Point CSM mensuel",
+      date: "17 déc.",
+      done: true,
+      details: ["Bilan T1 contrat · NPS 7.4 · engagement 62%"],
+      scope: { audiences: ["RH"], countries: ["France"] },
     },
   ],
 };
@@ -616,34 +504,14 @@ const events2025: Record<string, PlanEvent[]> = {
 const events2027: Record<string, PlanEvent[]> = {
   January: [
     {
-      type: "kit",
-      title: "Kit de communication Q1 2027 — à co-construire",
-      date: "à définir",
-      scope: { allCompany: true, countries: ["France", "Royaume-Uni"] },
-    },
-    {
       type: "point",
-      title: "Kick-off année 3 de partenariat",
-      date: "Mi-janvier",
-      scope: { audiences: ["Codir", "RH"], countries: ["France"] },
-    },
-  ],
-  February: [
-    {
-      type: "atelier",
-      title: "Atelier — thématique à choisir",
-      date: "à définir",
-      scope: { audiences: ["Collaborateurs"], countries: ["France"] },
-    },
-  ],
-  March: [
-    {
-      type: "qbr",
-      title: "QBR Q1 2027",
+      title: "Kick-off contrat N+1 — à cadrer",
       date: "à définir",
       scope: { audiences: ["Codir", "RH"], countries: ["France"] },
     },
   ],
+  February: [],
+  March: [],
   April: [],
   May: [],
   June: [],
@@ -662,16 +530,15 @@ const eventsByYear: Record<Year, Record<string, PlanEvent[]>> = {
 };
 
 const workshopMap: Record<string, string> = {
-  "Atelier « Communication non violente »": "cerveau-emotions-reactions",
-  "Atelier « Charge mentale »": "charge-mentale",
-  "Atelier « Gestion du stress »": "gerer-son-stress",
-  "Atelier de rentrée — gestion du stress": "gerer-son-stress",
-  "Atelier « Manager bienveillant »": "assertivite",
-  "Atelier de rentrée — sommeil": "insomnies-sommeil",
-  "Atelier « Octobre rose »": "maladie-chronique",
-  "Atelier QVCT": "premiers-pas-sante-mentale",
-  "Atelier « Cohésion d'équipe »": "cohesion-equipe",
-  "Atelier « Prévenir les RPS »": "prevenir-rps",
+  "Atelier « Comprendre Teale »":          "premiers-pas-sante-mentale",
+  "Atelier « Gestion du stress »":          "gerer-son-stress",
+  "Atelier « Charge mentale »":             "charge-mentale",
+  "Webinaire managers & santé mentale":     "epuisement-professionnel",
+  "Atelier « Communication CNV »":          "cerveau-emotions-reactions",
+  "Atelier « Leadership bienveillant »":    "assertivite",
+  "Atelier « Manager coach »":              "feedback",
+  "Atelier « Gestion des émotions »":       "cerveau-emotions-reactions",
+  "Atelier au choix — Résilience":          "comprendre-resilience",
 };
 
 type KitRef = {
@@ -681,76 +548,65 @@ type KitRef = {
 };
 
 const kitMap: Record<string, KitRef> = {
-  "Kit de lancement teale — diffusion": { category: "lancement" },
-  "Kit de communication Q2 — préparation": { category: "animation", months: ["April", "May", "June"] },
-  "Kit ressources santé mentale": { category: "topics", topics: ["STRESS MANAGEMENT", "PHYSICAL WELL-BEING AND STRESS"] },
-  "Kit de communication estival": { category: "topics", topics: ["WORK-LIFE BALANCE"] },
-  "Kit de communication rentrée": { category: "animation", months: ["September"] },
-  "Kit communication Octobre rose": { category: "animation", months: ["October"] },
-  "Kit communication QVCT": { category: "animation", months: ["June"] },
-  "Kit de communication Q1 — diffusion": { category: "lancement" },
-  "Kit communication rentrée 2025": { category: "animation", months: ["September"] },
-  "Kit QVCT 2025": { category: "animation", months: ["June"] },
-  "Kit de communication Q1 2027 — à co-construire": { category: "lancement" },
+  "Kit lancement plateforme Joy":            { category: "lancement" },
+  "Kit bien-être au travail":                { category: "topics", topics: ["PHYSICAL WELL-BEING AND STRESS"] },
+  "Kit retour vacances & résilience":        { category: "animation", months: ["December"] },
+  "Kit prévention burnout":                  { category: "topics", topics: ["STRESS MANAGEMENT"] },
+  "Kit bilan annuel collaborateurs":         { category: "lancement" },
 };
 
-type CsmDocument = {
-  id: string;
-  title: string;
-  type: string;
-  size: string;
-  date: string;
-  author: string;
-};
-
-const documents: CsmDocument[] = [
-  {
-    id: "plan-annuel-2026",
-    title: "Plan d'animation annuel 2026",
-    type: "Stratégie",
-    size: "2,4 Mo",
-    date: "15 janvier 2026",
-    author: "Lucie Martin, CSM",
-  },
-  {
-    id: "qbr-q1-2026",
-    title: "Compte-rendu QBR Q1 2026",
-    type: "QBR",
-    size: "1,8 Mo",
-    date: "14 mars 2026",
-    author: "Lucie Martin, CSM",
-  },
-  {
-    id: "strategie-managers",
-    title: "Stratégie de déploiement managers",
-    type: "Stratégie",
-    size: "3,1 Mo",
-    date: "5 février 2026",
-    author: "Lucie Martin, CSM",
-  },
-  {
-    id: "bilan-q1",
-    title: "Bilan trimestriel Q1 — KPI & insights",
-    type: "Bilan",
-    size: "1,2 Mo",
-    date: "28 mars 2026",
-    author: "Lucie Martin, CSM",
-  },
-  {
-    id: "guide-ambassadeurs",
-    title: "Guide d'accompagnement des ambassadeurs",
-    type: "Guide",
-    size: "0,9 Mo",
-    date: "22 avril 2026",
-    author: "Lucie Martin, CSM",
-  },
-];
+type CsmDocument = StoredDocument;
 
 const frMonthAbbr: Record<string, string> = {
   janv: "JAN", fév: "FÉV", mars: "MAR", avr: "AVR",
   mai: "MAI", juin: "JUI", juil: "JUL", août: "AOÛ",
   sept: "SEP", oct: "OCT", nov: "NOV", déc: "DÉC",
 };
+
+// ── Plan store helpers ──────────────────────────────────────────────────────
+
+const QUARTER_FIRST_MONTH: Record<string, string> = {
+  Q1: "January", Q2: "April", Q3: "July", Q4: "October",
+};
+
+const PLAN_EVENT_TYPE_MAP: Record<StoredPlanItemType, EventType> = {
+  atelier: "atelier", kit: "kit", csm: "point", qbr: "qbr", custom: "atelier",
+};
+
+const FR_MONTH_EN: Record<string, string> = {
+  janv: "January", jan: "January", janvier: "January",
+  fév: "February", fev: "February", février: "February",
+  mars: "March",
+  avr: "April", avril: "April",
+  mai: "May",
+  juin: "June",
+  juil: "July", juillet: "July",
+  août: "August", aout: "August",
+  sept: "September", septembre: "September",
+  oct: "October", octobre: "October",
+  nov: "November", novembre: "November",
+  déc: "December", dec: "December", décembre: "December",
+};
+
+function metaToMonthYear(meta: string): { month: string; year: number } | null {
+  const m = meta.match(/(\d+)\s+([a-záàéèêëïîôùûüç]+)\.?\s+(\d{4})/i);
+  if (!m) return null;
+  const en = FR_MONTH_EN[m[2].toLowerCase()];
+  if (!en) return null;
+  return { month: en, year: parseInt(m[3]) };
+}
+
+function metaToDateStr(meta: string): string | undefined {
+  const m = meta.match(/(\d+)\s+([a-záàéèêëïîôùûüç]+\.?)/i);
+  return m ? `${m[1]} ${m[2].endsWith(".") ? m[2] : m[2] + "."}` : undefined;
+}
+
+function metaToTimeStr(meta: string): string | undefined {
+  const m = meta.match(/\b(\d{1,2}:\d{2})\b/);
+  return m ? m[1] : undefined;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 
 function parseDateLabel(dateStr: string): { day: string; mo: string } | null {
   const match = dateStr.match(/^(\d+)/);
@@ -791,20 +647,68 @@ export default function MonPlanningPage() {
     month: string;
   } | null>(null);
   const [urgencies, setUrgencies] = useState<Urgency[]>([]);
+  const [storeState, setStoreState] = useState<StoredPlanState | null>(() => planStore.getState());
+  const [storeDocs, setStoreDocs] = useState<CsmDocument[]>(() => docsStore.getDocs());
+  const [clientLabels, setClientLabels] = useState<TargetLabel[]>(() => targetsStore.getLabels(CLIENT_ID));
+  const [targetFilter, setTargetFilter] = useState<string | null>(null);
 
   useEffect(() => {
     setUrgencies(getUrgencies());
   }, []);
 
+  useEffect(() => {
+    return planStore.subscribe(() => setStoreState(planStore.getState()));
+  }, []);
+
+  useEffect(() => {
+    return docsStore.subscribe(() => setStoreDocs(docsStore.getDocs()));
+  }, []);
+
+  useEffect(() => {
+    return targetsStore.subscribe(() => setClientLabels(targetsStore.getLabels(CLIENT_ID)));
+  }, []);
+
+  // Override quarter themes from CSM plan store when available
+  const displayQuarters = useMemo<Quarter[]>(() => {
+    if (!storeState) return quarters;
+    return quarters.map((q) => ({
+      ...q,
+      theme: storeState.themes[q.id] || q.theme,
+      subtitle: storeState.themes[q.id] ? "" : q.subtitle,
+    }));
+  }, [storeState]);
+
   const activeQuarter =
-    quarters.find((q) => q.id === activeQuarterId) ?? quarters[0];
+    displayQuarters.find((q) => q.id === activeQuarterId) ?? displayQuarters[0];
 
   const yearEvents = useMemo(() => {
-    const base = eventsByYear[activeYear];
     const merged: Record<string, PlanEvent[]> = {};
-    for (const month of allMonths) {
-      merged[month] = base[month] ? [...base[month]] : [];
+
+    // When the CSM has set up a plan, use it as the source of truth for 2026
+    if (storeState && activeYear === TODAY_YEAR) {
+      for (const month of allMonths) merged[month] = [];
+      for (const item of storeState.items) {
+        const parsed = metaToMonthYear(item.meta);
+        const month = (parsed && parsed.year === activeYear)
+          ? parsed.month
+          : QUARTER_FIRST_MONTH[item.quarter];
+        if (!allMonths.includes(month)) continue;
+        merged[month].push({
+          type: PLAN_EVENT_TYPE_MAP[item.type] ?? "atelier",
+          title: item.title,
+          date: metaToDateStr(item.meta),
+          time: metaToTimeStr(item.meta),
+          done: item.done,
+          targets: item.targets,
+        });
+      }
+    } else {
+      const base = eventsByYear[activeYear];
+      for (const month of allMonths) {
+        merged[month] = base[month] ? [...base[month]] : [];
+      }
     }
+
     for (const u of urgencies) {
       const { year, monthName, displayDate } = parseEventDate(u.eventDate);
       if (year !== activeYear) continue;
@@ -812,7 +716,7 @@ export default function MonPlanningPage() {
       merged[monthName].unshift(urgencyToPlanEvent(u, displayDate));
     }
     return merged;
-  }, [activeYear, urgencies]);
+  }, [activeYear, urgencies, storeState]);
 
   const remainingEvents = Object.values(yearEvents)
     .flat()
@@ -880,7 +784,7 @@ export default function MonPlanningPage() {
           {/* Year switcher + quarter tabs */}
           <div className="mb-7 grid items-center gap-6" style={{ gridTemplateColumns: "auto 1fr" }}>
             <YearSwitcher year={activeYear} onChange={switchYear} />
-            <QuarterTabs active={activeQuarterId} year={activeYear} onSelect={setActiveQuarterId} />
+            <QuarterTabs active={activeQuarterId} year={activeYear} onSelect={setActiveQuarterId} quarterList={displayQuarters} />
           </div>
 
           {/* Section header */}
@@ -897,6 +801,25 @@ export default function MonPlanningPage() {
             </div>
           </div>
 
+          {/* Target filter bar */}
+          {clientLabels.length > 0 && (
+            <div className="mb-5 flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setTargetFilter(null)}
+                className={`rounded-full px-3 py-1 text-[11px] font-semibold transition ${targetFilter === null ? "bg-[rgba(94,234,212,0.15)] text-[#5eead4]" : "border border-[rgba(255,255,255,0.1)] text-[#94a8a0] hover:text-[#e8f5ef]"}`}
+              >Toutes les cibles</button>
+              {clientLabels.map((l) => (
+                <button key={l.id}
+                  onClick={() => setTargetFilter(targetFilter === l.id ? null : l.id)}
+                  className="rounded-full px-3 py-1 text-[11px] font-semibold transition"
+                  style={targetFilter === l.id
+                    ? { background: l.color + "33", color: l.color, border: `1px solid ${l.color}66` }
+                    : { border: "1px solid rgba(255,255,255,0.1)", color: "#94a8a0" }}
+                >{l.name}</button>
+              ))}
+            </div>
+          )}
+
           {/* Month columns */}
           <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
             {activeQuarter.months.map((m) => {
@@ -908,9 +831,10 @@ export default function MonPlanningPage() {
                   key={m}
                   month={m}
                   year={activeYear}
-                  events={yearEvents[m] ?? []}
+                  events={(yearEvents[m] ?? []).filter((e) => !targetFilter || (e.targets ?? []).includes(targetFilter))}
                   nextEvent={isNextMonth ? nextEvent : null}
                   onOpen={(event) => setActiveEvent({ event, month: m })}
+                  labels={clientLabels}
                 />
               );
             })}
@@ -931,7 +855,7 @@ export default function MonPlanningPage() {
             </p>
           </header>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {documents.map((d) => (
+            {storeDocs.map((d) => (
               <DocumentCard key={d.id} doc={d} />
             ))}
           </div>
@@ -985,14 +909,16 @@ function QuarterTabs({
   active,
   year,
   onSelect,
+  quarterList,
 }: {
   active: QuarterId;
   year: Year;
   onSelect: (id: QuarterId) => void;
+  quarterList: Quarter[];
 }) {
   return (
     <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
-      {quarters.map((q) => {
+      {quarterList.map((q) => {
         const isActive = q.id === active;
         const status = quarterStatus(q, year);
         const progress = quarterProgress(q, year);
@@ -1104,12 +1030,14 @@ function MonthColumn({
   events,
   nextEvent,
   onOpen,
+  labels = [],
 }: {
   month: string;
   year: Year;
   events: PlanEvent[];
   nextEvent: PlanEvent | null;
   onOpen: (event: PlanEvent) => void;
+  labels?: TargetLabel[];
 }) {
   const status = monthStatus(month, year);
   const doneCount = events.filter((e) => e.done).length;
@@ -1161,6 +1089,7 @@ function MonthColumn({
               event={e}
               isNext={e === nextEvent}
               onOpen={() => onOpen(e)}
+              labels={labels}
             />
           ))}
         </ul>
@@ -1173,10 +1102,12 @@ function EventRow({
   event,
   isNext,
   onOpen,
+  labels = [],
 }: {
   event: PlanEvent;
   isNext: boolean;
   onOpen: () => void;
+  labels?: TargetLabel[];
 }) {
   const cfg = eventTypeConfig[event.type];
   const parsed = event.date ? parseDateLabel(event.date) : null;
@@ -1184,7 +1115,7 @@ function EventRow({
   return (
     <li className="relative">
       {isNext && (
-        <span className="absolute -top-2 right-2.5 z-10 rounded-[4px] bg-[#5eead4] px-[7px] py-[3px] text-[8px] font-bold tracking-[0.5px] text-[#042f2a]">
+        <span className="absolute -top-2 right-2.5 z-10 rounded-[4px] bg-[#5eead4] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] text-[#042f2a]">
           Prochain
         </span>
       )}
@@ -1209,6 +1140,11 @@ function EventRow({
               <div className="mt-[3px] text-[9px] uppercase tracking-[0.8px] text-[#6b7c75]">
                 {parsed.mo}
               </div>
+              {event.time && (
+                <div className="mt-[4px] text-[9px] tabular-nums text-[#5eead4]">
+                  {event.time}
+                </div>
+              )}
             </>
           ) : (
             <div className="text-[13px] text-[#6b7c75]">—</div>
@@ -1230,9 +1166,19 @@ function EventRow({
               </span>
             )}
           </div>
-          <div className={`mb-1.5 text-[12.5px] font-medium leading-snug ${event.done ? "text-[#6b7c75] line-through" : "text-[#e8f5ef]"}`}>
+          <div className={`mb-1.5 text-[13px] font-medium leading-snug ${event.done ? "text-[#6b7c75] line-through" : "text-[#e8f5ef]"}`}>
             {event.title}
           </div>
+          {event.targets && event.targets.length > 0 && labels.length > 0 && (
+            <div className="mb-1.5 flex flex-wrap gap-1">
+              {labels.filter((l) => event.targets!.includes(l.id)).map((l) => (
+                <span key={l.id} className="rounded-[4px] px-[5px] py-[2px] text-[9px] font-semibold"
+                  style={{ background: l.color + "22", color: l.color, border: `1px solid ${l.color}44` }}>
+                  {l.name}
+                </span>
+              ))}
+            </div>
+          )}
           {event.scope && (
             <div className="flex flex-wrap items-center gap-2 text-[10px] text-[#6b7c75]">
               <ScopeInlineSummary scope={event.scope} />
@@ -1730,17 +1676,29 @@ const docTypeStyle: Record<string, string> = {
   Guide: "bg-brand-cream/10 text-brand-cream",
 };
 
+function getFileIcon(mimeType: string): string {
+  if (mimeType.startsWith("image/")) return "🖼";
+  if (mimeType === "application/pdf") return "📄";
+  if (mimeType.includes("spreadsheet") || mimeType.includes("excel")) return "📊";
+  if (mimeType.includes("presentation") || mimeType.includes("powerpoint")) return "📊";
+  if (mimeType.includes("word") || mimeType.includes("document")) return "📝";
+  return "📎";
+}
+
 function DocumentCard({ doc }: { doc: CsmDocument }) {
+  const hasFiles = doc.files && doc.files.length > 0;
+  const cardIcon = hasFiles ? getFileIcon(doc.files![0].mimeType) : "📄";
+
   return (
     <article className="flex flex-col gap-3 rounded-2xl border border-brand-border-dark bg-brand-surface p-5 transition-colors hover:border-brand-green-bright/40">
       <div className="flex items-start gap-3">
         <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[#2d6b62] to-[#163834] text-2xl">
-          📄
+          {cardIcon}
         </span>
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-1.5">
             <span
-              className={`rounded-full px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-[0.12em] ${
+              className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] ${
                 docTypeStyle[doc.type] ?? "bg-brand-cream/10 text-brand-cream"
               }`}
             >
@@ -1749,6 +1707,11 @@ function DocumentCard({ doc }: { doc: CsmDocument }) {
             <span className="text-[10px] text-brand-muted-on-dark">
               · {doc.size}
             </span>
+            {hasFiles && (
+              <span className="rounded-full bg-brand-green-bright/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand-green-bright">
+                {doc.files!.length} fichier{doc.files!.length > 1 ? "s" : ""}
+              </span>
+            )}
           </div>
           <h3 className="text-sm font-medium leading-snug text-brand-cream">
             {doc.title}
@@ -1758,22 +1721,41 @@ function DocumentCard({ doc }: { doc: CsmDocument }) {
           </p>
         </div>
       </div>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          title="Bientôt disponible"
-          className="inline-flex flex-1 cursor-not-allowed items-center justify-center gap-1.5 rounded-full border border-brand-border-dark px-3 py-2 text-[12px] font-medium text-brand-cream opacity-70"
-        >
-          <EyeIcon /> Voir
-        </button>
-        <button
-          type="button"
-          title="Bientôt disponible"
-          className="inline-flex flex-1 cursor-not-allowed items-center justify-center gap-1.5 rounded-full bg-brand-green-bright px-3 py-2 text-[12px] font-semibold text-brand-dark opacity-80"
-        >
-          <DownloadIcon /> Télécharger
-        </button>
-      </div>
+
+      {hasFiles ? (
+        <div className="flex flex-col gap-1.5">
+          {doc.files!.map((f) => (
+            <a
+              key={f.id}
+              href={f.url}
+              download={f.name}
+              className="inline-flex items-center gap-2 rounded-xl border border-brand-border-dark px-3 py-2 text-[12px] font-medium text-brand-cream transition-colors hover:border-brand-green-bright/40 hover:bg-brand-green-bright/5"
+            >
+              <span className="text-[14px]">{getFileIcon(f.mimeType)}</span>
+              <span className="min-w-0 flex-1 truncate">{f.name}</span>
+              <span className="shrink-0 text-[11px] text-brand-muted-on-dark">{f.sizeLabel}</span>
+              <span className="shrink-0 text-brand-green-bright"><DownloadIcon /></span>
+            </a>
+          ))}
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            title="Bientôt disponible"
+            className="inline-flex flex-1 cursor-not-allowed items-center justify-center gap-1.5 rounded-full border border-brand-border-dark px-3 py-2 text-[12px] font-medium text-brand-cream opacity-50"
+          >
+            <EyeIcon /> Voir
+          </button>
+          <button
+            type="button"
+            title="Bientôt disponible"
+            className="inline-flex flex-1 cursor-not-allowed items-center justify-center gap-1.5 rounded-full bg-brand-green-bright px-3 py-2 text-[12px] font-semibold text-brand-dark opacity-50"
+          >
+            <DownloadIcon /> Télécharger
+          </button>
+        </div>
+      )}
     </article>
   );
 }

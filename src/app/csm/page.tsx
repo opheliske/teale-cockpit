@@ -1,51 +1,797 @@
-export default function CsmHomePage() {
+"use client";
+
+import { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { CLIENTS, HOME_ACTIONS, RENEWALS, type Statut, type HomeAction } from "@/lib/clients-data";
+import { clientActionsStore } from "@/lib/client-actions-store";
+import { csmEventsStore, type CsmEvent } from "@/lib/csm-events-store";
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function statutConfig(s: Statut) {
+  switch (s) {
+    case "SAIN": return { dot: "#22c55e", text: "#22c55e", bg: "rgba(34,197,94,0.12)", label: "Sain" };
+    case "VIGILANCE": return { dot: "#f59e0b", text: "#f59e0b", bg: "rgba(245,158,11,0.12)", label: "Vigilance" };
+    case "À RISQUE": return { dot: "#ef4444", text: "#ef4444", bg: "rgba(239,68,68,0.12)", label: "À risque" };
+  }
+}
+
+function consoColor(ratio: number) {
+  if (ratio >= 0.7) return "#22c55e";
+  if (ratio >= 0.35) return "#f59e0b";
+  return "#ef4444";
+}
+
+const FR_MONTHS: Record<string, number> = {
+  janv: 0, fév: 1, mars: 2, avr: 3, mai: 4, juin: 5,
+  juil: 6, août: 7, sept: 8, oct: 9, nov: 10, déc: 11,
+};
+
+const FR_MONTH_NAMES_FULL = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+
+function formatDateFr(isoDate: string): string {
+  if (!isoDate) return "";
+  const [year, month, day] = isoDate.split("-");
+  if (!year || !month || !day) return isoDate;
+  return `${parseInt(day)} ${FR_MONTH_NAMES_FULL[parseInt(month) - 1]} ${year}`;
+}
+
+function parseRenouvDate(s: string): Date {
+  const parts = s.replace(/\./g, "").split(" ");
+  return new Date(parseInt(parts[2]), FR_MONTHS[parts[1]] ?? 0, parseInt(parts[0]));
+}
+
+function daysUntilDate(d: Date): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function renewalColor(days: number) {
+  if (days < 30) return "#ef4444";
+  if (days < 60) return "#f59e0b";
+  if (days < 90) return "#eab308";
+  return "#22c55e";
+}
+
+// ─── Agenda & activity static data ────────────────────────────────────────────
+
+type AgendaEvent = {
+  date: string;
+  weekday: string;
+  time: string;
+  title: string;
+  client: string;
+  clientId: string;
+  clientColor: string;
+  type: "call" | "atelier" | "csm" | "qbr" | "kit";
+};
+
+const AGENDA_EVENTS: AgendaEvent[] = [];
+
+function eventStyle(type: AgendaEvent["type"]) {
+  switch (type) {
+    case "call":    return { icon: "📞", color: "#ef4444", bg: "rgba(239,68,68,0.12)" };
+    case "atelier": return { icon: "🎓", color: "#5eead4", bg: "rgba(94,234,212,0.1)" };
+    case "csm":     return { icon: "💬", color: "#84d4a6", bg: "rgba(94,234,212,0.12)" };
+    case "qbr":     return { icon: "📊", color: "#22c55e", bg: "rgba(34,197,94,0.12)" };
+    case "kit":     return { icon: "📢", color: "#f59e0b", bg: "rgba(245,158,11,0.12)" };
+  }
+}
+
+type RecentActivity = { clientId: string; initials: string; color: string; name: string; ago: string; action: string };
+
+const RECENT_ACTIVITY: RecentActivity[] = [];
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function DonutChart({ pct, color, size = 64 }: { pct: number; color: string; size?: number }) {
+  const r = (size - 10) / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ * (1 - Math.max(0, Math.min(1, pct)));
   return (
-    <div className="px-9 py-8">
-      <div className="mx-auto max-w-[1280px]">
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth="8"
+        strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" />
+    </svg>
+  );
+}
 
-        {/* Header */}
-        <div className="mb-8">
-          <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-[2.5px] text-[#a78bfa]">
-            Espace CSM
-          </p>
-          <h1 className="text-[30px] font-semibold tracking-[-0.4px] text-brand-cream">
-            Vue d&apos;ensemble
-          </h1>
-          <p className="mt-1.5 text-[13px] leading-relaxed text-[#94a8a0]">
-            Bienvenue dans votre espace Customer Success Manager.
-          </p>
-        </div>
-
-        {/* Placeholder sections */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <PlaceholderStat label="Clients actifs" value="—" />
-          <PlaceholderStat label="Ateliers ce mois" value="—" />
-          <PlaceholderStat label="Feedbacks en attente" value="—" />
-        </div>
-
-        <div className="rounded-[14px] border border-dashed border-[rgba(139,92,246,0.2)] bg-[rgba(139,92,246,0.04)] px-8 py-14 text-center">
-          <p className="text-[11px] font-semibold uppercase tracking-[2px] text-[rgba(167,139,250,0.5)]">
-            En construction
-          </p>
-          <p className="mt-3 text-[14px] text-[#94a8a0]">
-            Les modules CSM seront construits ici — portefeuille clients, planning global, reporting.
-          </p>
-        </div>
-
+function ConsoBar({ value, max }: { value: number; max: number }) {
+  const pct = Math.min(value / max, 1);
+  const color = consoColor(pct);
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="h-1 w-full overflow-hidden rounded-full bg-[rgba(255,255,255,0.08)]">
+        <div className="h-full rounded-full transition-all" style={{ width: `${pct * 100}%`, backgroundColor: color }} />
       </div>
+      <span className="text-[11px] tabular-nums text-[rgba(232,245,239,0.6)]">{value} / {max}</span>
     </div>
   );
 }
 
-function PlaceholderStat({ label, value }: { label: string; value: string }) {
+function StatutBadge({ statut }: { statut: Statut }) {
+  const cfg = statutConfig(statut);
   return (
-    <div className="rounded-[13px] border border-[rgba(139,92,246,0.15)] bg-[rgba(139,92,246,0.04)] px-6 py-5">
-      <div className="text-[26px] font-bold tabular-nums leading-none text-[#a78bfa]">
-        {value}
+    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+      style={{ backgroundColor: cfg.bg, color: cfg.text }}>
+      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: cfg.dot }} />
+      {cfg.label}
+    </span>
+  );
+}
+
+function ClientAvatar({ initials, color, size = 32 }: { initials: string; color: string; size?: number }) {
+  return (
+    <div className="flex shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
+      style={{ width: size, height: size, backgroundColor: color + "33", color }}>
+      {initials}
+    </div>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+
+type Filter = "Tous" | "Sains" | "Vigilance" | "Risque" | "Renouvellement";
+const FILTERS: Filter[] = ["Tous", "Sains", "Vigilance", "Risque", "Renouvellement"];
+
+export default function CsmHomePage() {
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<"Portfolio" | "Alertes">("Portfolio");
+  const [filter, setFilter] = useState<Filter>("Tous");
+  const [search, setSearch] = useState("");
+  const [doneIds, setDoneIds] = useState<Set<number>>(
+    () => new Set(HOME_ACTIONS.filter((a) => a.done).map((a) => a.id))
+  );
+  const [actions, setActions] = useState<HomeAction[]>(() => [
+    ...HOME_ACTIONS,
+    ...clientActionsStore.getExtra(),
+  ]);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newText, setNewText] = useState("");
+  const [newEcheance, setNewEcheance] = useState("");
+  const [extraCsmEvents, setExtraCsmEvents] = useState<CsmEvent[]>(() => csmEventsStore.getEvents());
+
+  useEffect(() => {
+    return clientActionsStore.subscribe(() => {
+      setActions((prev) => {
+        const extra = clientActionsStore.getExtra();
+        const existingIds = new Set(prev.map((a) => a.id));
+        const newOnes = extra.filter((a) => !existingIds.has(a.id));
+        return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    return csmEventsStore.subscribe(() => {
+      setExtraCsmEvents([...csmEventsStore.getEvents()]);
+    });
+  }, []);
+
+  // ── KPIs ──
+  const sainCount = CLIENTS.filter((c) => c.statut === "SAIN").length;
+  const vigilanceCount = CLIENTS.filter((c) => c.statut === "VIGILANCE").length;
+  const risqueCount = CLIENTS.filter((c) => c.statut === "À RISQUE").length;
+  const renewalARR = RENEWALS.reduce((s, r) => s + r.arr, 0);
+  const pendingActionsCount = actions.filter((a) => !doneIds.has(a.id)).length;
+  const overdueActionsCount = actions.filter((a) => !!a.overdue && !doneIds.has(a.id)).length;
+  const urgentRenewals = RENEWALS.filter((r) => r.days <= 30);
+
+  const FILTER_LABELS: Record<Filter, string> = {
+    Tous: `Tous (${CLIENTS.length})`,
+    Sains: `Sains (${sainCount})`,
+    Vigilance: `Vigilance (${vigilanceCount})`,
+    Risque: `Risque (${risqueCount})`,
+    Renouvellement: "Renouvellement < 90j",
+  };
+
+  const dateStr = useMemo(() => {
+    const s = new Date().toLocaleDateString("fr-FR", {
+      weekday: "long", day: "numeric", month: "long", year: "numeric",
+    });
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }, []);
+
+  // Top 5 prochains renouvellements (tous clients triés par date)
+  const top5Renewals = useMemo(() =>
+    [...CLIENTS]
+      .map((c) => ({ ...c, daysLeft: daysUntilDate(parseRenouvDate(c.renouvDate)) }))
+      .sort((a, b) => a.daysLeft - b.daysLeft)
+      .slice(0, 5),
+  []);
+
+  const filtered = CLIENTS.filter((c) => {
+    if (!c.name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (filter === "Sains") return c.statut === "SAIN";
+    if (filter === "Vigilance") return c.statut === "VIGILANCE";
+    if (filter === "Risque") return c.statut === "À RISQUE";
+    if (filter === "Renouvellement") return RENEWALS.some((r) => r.name === c.name);
+    return true;
+  });
+
+  const toggleDone = (id: number) => {
+    setDoneIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleAddAction = () => {
+    if (!newText.trim()) return;
+    const newAction: HomeAction = {
+      id: Date.now(),
+      text: newText.trim(),
+      clients: [],
+      echeance: newEcheance ? formatDateFr(newEcheance) : "Sans échéance",
+    };
+    setActions((prev) => [...prev, newAction]);
+    setNewText("");
+    setNewEcheance("");
+    setShowAddModal(false);
+  };
+
+  const alertClients = CLIENTS.filter((c) => c.statut === "À RISQUE" || c.statut === "VIGILANCE");
+  const overdueActionsList = actions.filter((a) => !!a.overdue && !doneIds.has(a.id));
+
+  return (
+    <div className="min-h-screen bg-brand-dark px-7 py-6 text-brand-cream">
+      {/* Header */}
+      <div className="mb-5">
+        <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[2px] text-[#22c55e]">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#22c55e]" />
+          {dateStr}
+        </div>
+        <h1 className="text-[28px] font-bold tracking-[-0.5px] text-brand-cream">Bonjour Lucie 👋</h1>
+        <p className="mt-1 max-w-[640px] text-[13px] leading-relaxed text-[#94a8a0]">
+          Voici l&apos;état de votre portefeuille de {CLIENTS.length} comptes Teale.{" "}
+          {vigilanceCount + risqueCount > 0
+            ? `${vigilanceCount + risqueCount} client${vigilanceCount + risqueCount > 1 ? "s" : ""} demandent votre attention`
+            : "Tous les clients sont en bonne santé"}
+          {urgentRenewals.length > 0
+            ? `, et vous avez ${urgentRenewals.length} renouvellement${urgentRenewals.length > 1 ? "s" : ""} à prioriser ce mois-ci.`
+            : "."}
+        </p>
       </div>
-      <div className="mt-2 text-[10px] font-semibold uppercase tracking-[1px] text-[#94a8a0]">
-        {label}
+
+      {/* Tabs */}
+      <div className="mb-5 flex gap-1 border-b border-[rgba(255,255,255,0.06)] pb-0">
+        {(["Portfolio", "Alertes & risques"] as const).map((tab) => {
+          const key = tab === "Portfolio" ? "Portfolio" : "Alertes";
+          const isActive = activeTab === key;
+          const alertBadge = vigilanceCount + risqueCount + overdueActionsCount;
+          return (
+            <button key={tab} onClick={() => setActiveTab(key as typeof activeTab)}
+              className={`-mb-px rounded-t-md px-4 py-2 text-[13px] font-medium transition-colors ${
+                isActive
+                  ? "border border-b-[#061a16] border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] text-brand-cream"
+                  : "text-[rgba(232,245,239,0.45)] hover:text-[rgba(232,245,239,0.8)]"
+              }`}
+            >
+              {tab}
+              {key === "Alertes" && alertBadge > 0 && (
+                <span className="ml-1.5 rounded-full bg-[rgba(239,68,68,0.2)] px-1.5 py-0.5 text-[10px] font-bold text-[#ef4444]">
+                  {alertBadge}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
+
+      {/* ── Portfolio tab ── */}
+      {activeTab === "Portfolio" && (
+        <>
+          {/* KPI cards */}
+          <div className="mb-6 grid grid-cols-4 gap-3">
+            <div className="rounded-[14px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.03)] p-4">
+              <p className="mb-3 text-[11px] font-semibold text-brand-cream">Santé du portefeuille</p>
+              <div className="mb-2 flex items-end gap-3">
+                <div className="text-center">
+                  <div className="text-[26px] font-bold tabular-nums leading-none text-[#22c55e]">{sainCount}</div>
+                  <div className="mt-1 text-[9px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.4)]">Sains</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-[26px] font-bold tabular-nums leading-none text-[#f59e0b]">{vigilanceCount}</div>
+                  <div className="mt-1 text-[9px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.4)]">Vigilance</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-[26px] font-bold tabular-nums leading-none text-[#ef4444]">{risqueCount}</div>
+                  <div className="mt-1 text-[9px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.4)]">Risque</div>
+                </div>
+              </div>
+              <p className="text-[11px] text-[rgba(232,245,239,0.45)]">{CLIENTS.length} comptes actifs · {risqueCount} à risque de churn</p>
+            </div>
+
+            <div className="rounded-[14px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.03)] p-4">
+              <p className="mb-2 text-[11px] font-semibold text-brand-cream">Renouvellements à venir</p>
+              <div className="flex items-center gap-3">
+                <div className="relative shrink-0">
+                  <DonutChart pct={RENEWALS.length / CLIENTS.length} color="#f59e0b" size={68} />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-[14px] font-bold text-brand-cream">{RENEWALS.length}/{CLIENTS.length}</span>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[11px] text-[rgba(232,245,239,0.55)]">{RENEWALS.length} contrats à fermer d&apos;ici 90 jours sur {CLIENTS.length} comptes</p>
+                  <p className="mt-1.5 text-[12px] font-semibold text-brand-cream">{renewalARR} k€ ARR concerné</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[14px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.03)] p-4">
+              <p className="mb-2 text-[11px] font-semibold text-brand-cream">Actions CSM</p>
+              <div className="mb-1 text-[40px] font-bold tabular-nums leading-none text-brand-cream">{pendingActionsCount}</div>
+              <div className="mb-1 text-[9px] font-semibold uppercase tracking-[1.5px] text-[rgba(232,245,239,0.4)]">À traiter</div>
+              <p className="text-[11px] text-[rgba(232,245,239,0.45)]">Tâches cross-clients en cours</p>
+              {overdueActionsCount > 0 && (
+                <p className="mt-1 text-[11px] font-medium text-[#ef4444]">{overdueActionsCount} en retard</p>
+              )}
+            </div>
+          </div>
+
+          {/* Two-column layout: table + right col */}
+          <div className="grid grid-cols-[1fr_300px] gap-4">
+            {/* Portfolio table */}
+            <div>
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-[16px] font-semibold text-brand-cream">Mon portefeuille</h2>
+                <span className="text-[11px] text-[rgba(232,245,239,0.4)]">{CLIENTS.length} comptes · Année contrat 2025—2026</span>
+              </div>
+              <div className="mb-3 flex gap-1">
+                {FILTERS.map((f) => (
+                  <button key={f} onClick={() => setFilter(f)}
+                    className={`rounded-full px-3 py-1 text-[11px] font-medium transition-colors ${
+                      filter === f ? "bg-[rgba(94,234,212,0.2)] text-[#a8e895]" : "text-[rgba(232,245,239,0.5)] hover:text-[rgba(232,245,239,0.8)]"
+                    }`}>
+                    {FILTER_LABELS[f]}
+                  </button>
+                ))}
+              </div>
+              <div className="mb-3 flex h-8 items-center gap-2 rounded-lg border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] px-3">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-[rgba(232,245,239,0.3)]">
+                  <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+                </svg>
+                <input type="text" placeholder="Rechercher un client..." value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="flex-1 bg-transparent text-[12px] text-brand-cream placeholder-[rgba(232,245,239,0.3)] outline-none" />
+              </div>
+              <div className="overflow-hidden rounded-[12px] border border-[rgba(255,255,255,0.07)]">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)]">
+                      {["Client", "Statut", "Conso ateliers", "Action prioritaire", "Renouvellement"].map((h) => (
+                        <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[1.2px] text-[rgba(232,245,239,0.35)]">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((c, i) => (
+                      <tr key={c.name} onClick={() => router.push(`/csm/clients/${c.id}`)}
+                        className={`cursor-pointer border-b border-[rgba(255,255,255,0.04)] transition-colors hover:bg-[rgba(255,255,255,0.03)] ${i === filtered.length - 1 ? "border-b-0" : ""}`}>
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <ClientAvatar initials={c.initials} color={c.color} size={28} />
+                            <div>
+                              <div className="text-[12px] font-medium text-brand-cream leading-none">{c.name}</div>
+                              <div className="mt-0.5 text-[10px] text-[rgba(232,245,239,0.4)]">
+                                {c.collab.toLocaleString("fr")} collab
+                                {c.tag ? <> · <span className="text-[rgba(94,234,212,0.7)]">{c.tag}</span></> : ""}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5"><StatutBadge statut={c.statut} /></td>
+                        <td className="px-3 py-2.5 w-[100px]"><ConsoBar value={c.consoAteliers[0]} max={c.consoAteliers[1]} /></td>
+                        <td className="px-3 py-2.5">
+                          <div className="text-[11px] text-brand-cream">{c.action}</div>
+                          <div className="text-[10px] text-[rgba(232,245,239,0.4)]">{c.actionDate}</div>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <div className="text-[11px] text-brand-cream">{c.renouvDate}</div>
+                          <div className="text-[10px] font-medium text-[rgba(94,234,212,0.8)]">{c.arr} k€</div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="flex items-center justify-between border-t border-[rgba(255,255,255,0.06)] px-4 py-2.5">
+                  <span className="text-[11px] text-[rgba(232,245,239,0.35)]">
+                    {filtered.length} affichés sur {CLIENTS.length} · trié par alerte décroissante
+                  </span>
+                  <button onClick={() => router.push("/csm/suivi-clients")}
+                    className="text-[11px] font-medium text-[#84d4a6] hover:text-[#a8e895]">
+                    Voir tous les comptes →
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Right column */}
+            <div className="flex flex-col gap-4">
+              {/* Actions CSM */}
+              <div className="rounded-[14px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.02)]">
+                <div className="flex items-center justify-between border-b border-[rgba(255,255,255,0.06)] px-4 py-3">
+                  <h3 className="text-[13px] font-semibold text-brand-cream">Actions CSM</h3>
+                  <span className="text-[11px] text-[rgba(232,245,239,0.4)]">{pendingActionsCount} à traiter</span>
+                </div>
+                <ul className="divide-y divide-[rgba(255,255,255,0.04)]">
+                  {actions.map((a) => {
+                    const isDone = doneIds.has(a.id);
+                    return (
+                      <li key={a.id} className="px-4 py-3">
+                        <div className="flex gap-2.5">
+                          <button onClick={() => toggleDone(a.id)}
+                            className={`mt-0.5 h-3.5 w-3.5 shrink-0 rounded border transition-colors ${
+                              isDone ? "border-[#22c55e] bg-[rgba(34,197,94,0.2)]" : "border-[rgba(255,255,255,0.2)] hover:border-[rgba(255,255,255,0.4)]"
+                            }`}>
+                            {isDone && <svg viewBox="0 0 12 12" fill="none" className="h-full w-full p-0.5"><path d="M2 6l3 3 5-5" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                          </button>
+                          <div className="min-w-0 flex-1">
+                            <p className={`text-[12px] leading-snug ${isDone ? "text-[rgba(232,245,239,0.4)] line-through" : "text-brand-cream"}`}>{a.text}</p>
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                              {a.clients.slice(0, 3).map((cl) => (
+                                <span key={cl.name} className="rounded px-1.5 py-0.5 text-[9px] font-semibold" style={{ backgroundColor: cl.color + "30", color: cl.color }}>{cl.name}</span>
+                              ))}
+                              {a.clients.length > 3 && <span className="rounded bg-[rgba(255,255,255,0.07)] px-1.5 py-0.5 text-[9px] text-[rgba(232,245,239,0.5)]">+{a.clients.length - 3}</span>}
+                              {a.overdue && !isDone && <span className="rounded bg-[rgba(239,68,68,0.15)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.5px] text-[#ef4444]">En retard</span>}
+                            </div>
+                            <p className="mt-1 text-[10px] text-[rgba(232,245,239,0.35)]">{a.echeance}</p>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div className="border-t border-[rgba(255,255,255,0.06)] px-4 py-2.5">
+                  <button onClick={() => setShowAddModal(true)}
+                    className="text-[11px] font-medium text-[rgba(94,234,212,0.7)] hover:text-[#a8e895]">
+                    + Ajouter une action
+                  </button>
+                </div>
+              </div>
+
+              {/* Renouvellements */}
+              <div className="rounded-[14px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.02)]">
+                <div className="flex items-center justify-between border-b border-[rgba(255,255,255,0.06)] px-4 py-3">
+                  <h3 className="text-[13px] font-semibold text-brand-cream">Renouvellements à venir</h3>
+                  <span className="text-[11px] text-[rgba(232,245,239,0.4)]">{RENEWALS.length} en cours · {renewalARR} k€</span>
+                </div>
+                <ul className="divide-y divide-[rgba(255,255,255,0.04)]">
+                  {RENEWALS.map((r) => {
+                    const client = CLIENTS.find((c) => c.name === r.name);
+                    return (
+                      <li key={r.name}
+                        onClick={() => client && router.push(`/csm/clients/${client.id}`)}
+                        className={`flex items-start gap-3 px-4 py-3 transition-colors ${client ? "cursor-pointer hover:bg-[rgba(255,255,255,0.02)]" : ""}`}>
+                        <div className="relative shrink-0">
+                          <DonutChart pct={1 - r.days / 90} color={r.days <= 30 ? "#ef4444" : r.days <= 50 ? "#f59e0b" : "#22c55e"} size={38} />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-[9px] font-bold tabular-nums text-brand-cream">{r.days}j</span>
+                          </div>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[12px] font-semibold text-brand-cream">{r.name}</span>
+                            <span className="text-[11px] font-semibold text-[#84d4a6]">{r.arr} k€</span>
+                          </div>
+                          <p className="mt-0.5 text-[10px] leading-snug text-[rgba(232,245,239,0.4)]">{r.status}</p>
+                          <span className="mt-1 inline-block text-[9px] font-semibold uppercase tracking-[0.5px] text-[rgba(94,234,212,0.6)]">ARR</span>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Bottom row: agenda · top 5 renewals · recent activity ── */}
+          <div className="mt-4 grid grid-cols-[1fr_260px_260px] gap-4">
+
+            {/* Agenda */}
+            {(() => {
+              const dynamicCsm: AgendaEvent[] = extraCsmEvents.map((e) => ({
+                date: e.date,
+                weekday: e.weekday,
+                time: e.time,
+                title: e.title,
+                client: e.clientName,
+                clientId: e.clientId,
+                clientColor: e.clientColor,
+                type: "csm" as const,
+              }));
+              const allEvents = [...AGENDA_EVENTS, ...dynamicCsm];
+              return (
+            <div className="rounded-[14px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.02)]">
+              <div className="flex items-center justify-between border-b border-[rgba(255,255,255,0.06)] px-4 py-3">
+                <h3 className="text-[13px] font-semibold text-brand-cream">Agenda · prochains RDV & ateliers</h3>
+                <span className="text-[11px] text-[rgba(232,245,239,0.4)]">{allEvents.length} événements{dynamicCsm.length > 0 && <span className="ml-1.5 rounded-full bg-[rgba(94,234,212,0.15)] px-1.5 py-0.5 text-[#5eead4]">+{dynamicCsm.length} ajoutés</span>}</span>
+              </div>
+              <ul className="divide-y divide-[rgba(255,255,255,0.04)]">
+                {allEvents.map((ev, i) => {
+                  const st = eventStyle(ev.type);
+                  const isFirst = i === 0;
+                  return (
+                    <li key={i}
+                      onClick={() => router.push(`/csm/clients/${ev.clientId}`)}
+                      className="flex cursor-pointer items-start gap-3 px-4 py-2.5 transition-colors hover:bg-[rgba(255,255,255,0.02)]">
+                      {/* Date badge */}
+                      <div className={`flex w-[42px] shrink-0 flex-col items-center rounded-[8px] py-1.5 ${isFirst ? "bg-[rgba(94,234,212,0.15)]" : "bg-[rgba(255,255,255,0.04)]"}`}>
+                        <span className={`text-[9px] font-semibold uppercase tracking-[0.5px] ${isFirst ? "text-[#a8e895]" : "text-[rgba(232,245,239,0.4)]"}`}>{ev.weekday}</span>
+                        <span className={`text-[13px] font-bold tabular-nums leading-none ${isFirst ? "text-[#a8e895]" : "text-brand-cream"}`}>{ev.date.split(" ")[0]}</span>
+                        <span className={`text-[9px] ${isFirst ? "text-[#84d4a6]" : "text-[rgba(232,245,239,0.35)]"}`}>{ev.date.split(" ")[1]}</span>
+                      </div>
+                      {/* Content */}
+                      <div className="min-w-0 flex-1 pt-0.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-[12px] font-medium leading-snug text-brand-cream">{ev.title}</p>
+                          <span className="mt-0.5 shrink-0 rounded-[4px] px-1.5 py-0.5 text-[9px] font-semibold" style={{ backgroundColor: st.bg, color: st.color }}>
+                            {st.icon}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex items-center gap-1.5">
+                          <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold" style={{ backgroundColor: ev.clientColor + "28", color: ev.clientColor }}>
+                            {ev.client}
+                          </span>
+                          <span className="text-[10px] text-[rgba(232,245,239,0.35)]">{ev.time}</span>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+              );
+            })()}
+
+            {/* Top 5 renouvellements */}
+            <div className="rounded-[14px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.02)]">
+              <div className="border-b border-[rgba(255,255,255,0.06)] px-4 py-3">
+                <h3 className="text-[13px] font-semibold text-brand-cream">Prochains renouvellements</h3>
+                <p className="mt-0.5 text-[10px] text-[rgba(232,245,239,0.4)]">Top 5 · tous clients confondus</p>
+              </div>
+              <ul className="divide-y divide-[rgba(255,255,255,0.04)]">
+                {top5Renewals.map((c, rank) => {
+                  const col = renewalColor(c.daysLeft);
+                  const renewal = RENEWALS.find((r) => r.name === c.name);
+                  return (
+                    <li key={c.id}
+                      onClick={() => router.push(`/csm/clients/${c.id}`)}
+                      className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-[rgba(255,255,255,0.02)]">
+                      {/* Rank */}
+                      <span className="w-4 shrink-0 text-center text-[11px] font-bold text-[rgba(232,245,239,0.25)]">{rank + 1}</span>
+                      <ClientAvatar initials={c.initials} color={c.color} size={28} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[12px] font-semibold text-brand-cream">{c.name}</span>
+                          <span className="text-[11px] font-bold tabular-nums" style={{ color: col }}>{c.daysLeft}j</span>
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-1.5">
+                          <span className="text-[10px] text-[rgba(232,245,239,0.4)]">{c.renouvDate}</span>
+                          <span className="text-[rgba(232,245,239,0.2)]">·</span>
+                          <span className="text-[10px] text-[rgba(94,234,212,0.7)]">{c.arr} k€</span>
+                        </div>
+                        {/* Progress bar showing days urgency */}
+                        <div className="mt-1.5 h-0.5 w-full overflow-hidden rounded-full bg-[rgba(255,255,255,0.06)]">
+                          <div className="h-full rounded-full transition-all"
+                            style={{ width: `${Math.max(4, Math.min(100, (1 - c.daysLeft / 365) * 100))}%`, backgroundColor: col }} />
+                        </div>
+                      </div>
+                      {renewal && (
+                        <StatutBadge statut={c.statut} />
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="border-t border-[rgba(255,255,255,0.06)] px-4 py-2.5">
+                <button onClick={() => setFilter("Renouvellement")}
+                  className="text-[11px] font-medium text-[rgba(94,234,212,0.7)] hover:text-[#a8e895]">
+                  Filtrer par renouvellement →
+                </button>
+              </div>
+            </div>
+
+            {/* Activité récente */}
+            <div className="rounded-[14px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.02)]">
+              <div className="border-b border-[rgba(255,255,255,0.06)] px-4 py-3">
+                <h3 className="text-[13px] font-semibold text-brand-cream">Activité récente</h3>
+                <p className="mt-0.5 text-[10px] text-[rgba(232,245,239,0.4)]">Clients connectés à leur espace</p>
+              </div>
+              <ul className="divide-y divide-[rgba(255,255,255,0.04)]">
+                {RECENT_ACTIVITY.map((a) => (
+                  <li key={a.clientId}
+                    onClick={() => router.push(`/csm/clients/${a.clientId}`)}
+                    className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-[rgba(255,255,255,0.02)]">
+                    <ClientAvatar initials={a.initials} color={a.color} size={28} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[12px] font-semibold text-brand-cream">{a.name}</span>
+                        <span className="shrink-0 text-[10px] text-[rgba(232,245,239,0.35)]">{a.ago}</span>
+                      </div>
+                      <p className="mt-0.5 text-[10px] text-[rgba(232,245,239,0.5)]">{a.action}</p>
+                    </div>
+                    {/* Online dot */}
+                    <div className="relative shrink-0">
+                      <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: a.ago.includes("h") ? "#22c55e" : "rgba(255,255,255,0.2)" }} />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <div className="border-t border-[rgba(255,255,255,0.06)] px-4 py-2.5 text-[10px] text-[rgba(232,245,239,0.3)]">
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#22c55e]" />
+                  Vert = connecté dans les dernières 24h
+                </span>
+              </div>
+            </div>
+
+          </div>
+        </>
+      )}
+
+      {/* ── Alertes & risques tab ── */}
+      {activeTab === "Alertes" && (
+        <div className="space-y-6">
+          <div>
+            <h2 className="mb-3 text-[14px] font-semibold text-brand-cream">
+              Comptes à surveiller
+              <span className="ml-2 rounded-full bg-[rgba(239,68,68,0.15)] px-2 py-0.5 text-[11px] text-[#ef4444]">{alertClients.length}</span>
+            </h2>
+            {alertClients.length === 0 ? (
+              <div className="rounded-[12px] border border-[rgba(255,255,255,0.07)] px-6 py-8 text-center">
+                <p className="text-[13px] text-[rgba(232,245,239,0.45)]">Aucun compte en vigilance ou à risque.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {alertClients.map((c) => {
+                  const renewal = RENEWALS.find((r) => r.name === c.name);
+                  const cfg = statutConfig(c.statut);
+                  return (
+                    <div key={c.id} onClick={() => router.push(`/csm/clients/${c.id}`)}
+                      className="cursor-pointer rounded-[12px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.02)] p-4 transition-colors hover:bg-[rgba(255,255,255,0.04)]"
+                      style={{ borderLeftColor: cfg.dot, borderLeftWidth: 3 }}>
+                      <div className="mb-3 flex items-center gap-2">
+                        <ClientAvatar initials={c.initials} color={c.color} size={32} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[13px] font-semibold text-brand-cream">{c.name}</span>
+                            <StatutBadge statut={c.statut} />
+                          </div>
+                          <div className="mt-0.5 text-[10px] text-[rgba(232,245,239,0.4)]">{c.collab.toLocaleString("fr")} collab</div>
+                        </div>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-[rgba(232,245,239,0.25)]">
+                          <path d="M9 18l6-6-6-6" />
+                        </svg>
+                      </div>
+                      <div className="mb-2">
+                        <p className="mb-1 text-[9px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.35)]">Ateliers</p>
+                        <ConsoBar value={c.consoAteliers[0]} max={c.consoAteliers[1]} />
+                      </div>
+                      {renewal && (
+                        <div className="mb-2 flex items-center gap-1.5 rounded bg-[rgba(239,68,68,0.1)] px-2 py-1">
+                          <span className="text-[10px] text-[#ef4444]">⏰ Renouvellement dans {renewal.days}j · {renewal.arr} k€</span>
+                        </div>
+                      )}
+                      <p className="text-[10px] text-[rgba(232,245,239,0.45)]">
+                        Action : <span className="text-brand-cream">{c.action}</span> · {c.actionDate}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h2 className="mb-3 text-[14px] font-semibold text-brand-cream">
+              Actions en retard
+              <span className="ml-2 rounded-full bg-[rgba(239,68,68,0.15)] px-2 py-0.5 text-[11px] text-[#ef4444]">{overdueActionsList.length}</span>
+            </h2>
+            {overdueActionsList.length === 0 ? (
+              <div className="rounded-[12px] border border-[rgba(255,255,255,0.07)] px-6 py-8 text-center">
+                <p className="text-[13px] text-[rgba(232,245,239,0.45)]">Aucune action en retard.</p>
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-[12px] border border-[rgba(255,255,255,0.07)]">
+                <ul className="divide-y divide-[rgba(255,255,255,0.04)]">
+                  {overdueActionsList.map((a) => (
+                    <li key={a.id} className="flex items-start gap-3 bg-[rgba(255,255,255,0.01)] px-4 py-3">
+                      <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#ef4444]" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[12px] text-brand-cream">{a.text}</p>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          {a.clients.map((cl) => (
+                            <span key={cl.name} className="rounded px-1.5 py-0.5 text-[9px] font-semibold" style={{ backgroundColor: cl.color + "30", color: cl.color }}>{cl.name}</span>
+                          ))}
+                          <span className="rounded bg-[rgba(239,68,68,0.15)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.5px] text-[#ef4444]">En retard</span>
+                        </div>
+                        <p className="mt-1 text-[10px] text-[rgba(232,245,239,0.35)]">{a.echeance}</p>
+                      </div>
+                      <button onClick={() => toggleDone(a.id)}
+                        className="shrink-0 rounded border border-[rgba(255,255,255,0.15)] px-2 py-0.5 text-[10px] text-[rgba(232,245,239,0.5)] transition-colors hover:border-[#22c55e] hover:text-[#22c55e]">
+                        Fait
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          {urgentRenewals.length > 0 && (
+            <div>
+              <h2 className="mb-3 text-[14px] font-semibold text-brand-cream">
+                Renouvellements urgents (&lt; 30j)
+                <span className="ml-2 rounded-full bg-[rgba(239,68,68,0.15)] px-2 py-0.5 text-[11px] text-[#ef4444]">{urgentRenewals.length}</span>
+              </h2>
+              <div className="overflow-hidden rounded-[12px] border border-[rgba(255,255,255,0.07)]">
+                <ul className="divide-y divide-[rgba(255,255,255,0.04)]">
+                  {urgentRenewals.map((r) => {
+                    const client = CLIENTS.find((c) => c.name === r.name);
+                    return (
+                      <li key={r.name} onClick={() => client && router.push(`/csm/clients/${client.id}`)}
+                        className={`flex items-center gap-3 bg-[rgba(255,255,255,0.01)] px-4 py-3 transition-colors ${client ? "cursor-pointer hover:bg-[rgba(255,255,255,0.03)]" : ""}`}>
+                        <div className="relative shrink-0">
+                          <DonutChart pct={1 - r.days / 90} color="#ef4444" size={40} />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-[9px] font-bold text-brand-cream">{r.days}j</span>
+                          </div>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[13px] font-semibold text-brand-cream">{r.name}</span>
+                            <span className="text-[12px] font-semibold text-[#84d4a6]">{r.arr} k€</span>
+                          </div>
+                          <p className="mt-0.5 text-[10px] text-[rgba(232,245,239,0.4)]">{r.status}</p>
+                        </div>
+                        {client && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-[rgba(232,245,239,0.3)]"><path d="M9 18l6-6-6-6" /></svg>}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Add action modal ── */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowAddModal(false)}>
+          <div className="w-full max-w-md rounded-[16px] border border-[rgba(255,255,255,0.1)] bg-[#061a16] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-4 text-[14px] font-semibold text-brand-cream">Nouvelle action CSM</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Action</label>
+                <input autoFocus type="text" value={newText} onChange={(e) => setNewText(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleAddAction()}
+                  placeholder="Décrivez l'action..."
+                  className="w-full rounded-[8px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2 text-[13px] text-brand-cream placeholder-[rgba(232,245,239,0.3)] outline-none focus:border-[rgba(94,234,212,0.5)]" />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Échéance</label>
+                <input type="date" value={newEcheance} onChange={(e) => setNewEcheance(e.target.value)}
+                  style={{ colorScheme: "dark" }}
+                  className="w-full rounded-[8px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2 text-[13px] text-brand-cream outline-none focus:border-[rgba(94,234,212,0.5)]" />
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={() => setShowAddModal(false)}
+                className="rounded-[8px] px-4 py-2 text-[12px] text-[rgba(232,245,239,0.5)] hover:text-brand-cream">
+                Annuler
+              </button>
+              <button onClick={handleAddAction} disabled={!newText.trim()}
+                className="rounded-[8px] bg-[rgba(94,234,212,0.9)] px-4 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-[#5eead4] disabled:opacity-40">
+                Ajouter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

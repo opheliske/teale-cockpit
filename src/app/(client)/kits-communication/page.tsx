@@ -2,18 +2,12 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  animationItems,
-  emailTopicKits,
-  lancementKits,
   type AnimationItem,
   type EmailTopicKit,
   type LancementKit,
 } from "./data";
-import {
-  workshops,
-  themes as workshopThemes,
-  type Workshop,
-} from "@/app/(client)/catalogue-ateliers/data";
+import { useKitsStore } from "@/lib/kits-store";
+import { useWorkshops, themes as workshopThemes, type Workshop } from "@/lib/workshops-store";
 
 const workshopThemeNameById = Object.fromEntries(
   workshopThemes.map((t) => [t.id, t.name])
@@ -187,40 +181,6 @@ const upcomingLetsTalks: UpcomingLetsTalk[] = [
   },
 ];
 
-const themes: Theme[] = [
-  {
-    id: "animation",
-    name: "Temps forts mensuels",
-    icon: "📅",
-    description:
-      "Le calendrier des Let's Talks, playlists et nouveautés à relayer auprès de vos collaborateurs.",
-    count: animationItems.length,
-  },
-  {
-    id: "kits-ateliers",
-    name: "Kits par atelier",
-    icon: "🎓",
-    description:
-      "Pour chaque atelier collectif : email d'invitation, relance et message post-atelier.",
-    count: workshops.length,
-  },
-  {
-    id: "emails",
-    name: "Emails par thématique",
-    icon: "💌",
-    description:
-      "Modèles d'emails de réengagement, classés par thématique de santé mentale.",
-    count: emailTopicKits.length,
-  },
-  {
-    id: "lancement",
-    name: "Kit de lancement",
-    icon: "🚀",
-    description:
-      "Tous les contenus prêts à l'emploi pour l'annonce et l'activation de teale auprès de vos équipes.",
-    count: lancementKits.length,
-  },
-];
 
 function statusStyle(status: string): string {
   if (status.includes("Current")) return "bg-brand-accent/15 text-brand-accent";
@@ -268,12 +228,53 @@ type ActiveCard =
     };
 
 export default function KitsCommunicationPage() {
+  const { lancementKits, animationItems, emailTopicKits } = useKitsStore();
+  const { workshops } = useWorkshops();
+
   const [search, setSearch] = useState("");
   const [activeTheme, setActiveTheme] = useState<ThemeId>("animation");
   const [activeLanguage, setActiveLanguage] = useState<"FR" | "EN">("FR");
   const [activeCard, setActiveCard] = useState<ActiveCard | null>(null);
 
   const lower = search.trim().toLowerCase();
+
+  const themes = useMemo<Theme[]>(
+    () => [
+      {
+        id: "animation",
+        name: "Temps forts mensuels",
+        icon: "📅",
+        description:
+          "Le calendrier des Let's Talks, playlists et nouveautés à relayer auprès de vos collaborateurs.",
+        count: animationItems.length,
+      },
+      {
+        id: "kits-ateliers",
+        name: "Kits par atelier",
+        icon: "🎓",
+        description:
+          "Pour chaque atelier collectif : email d'invitation, relance et message post-atelier.",
+        count: workshops.length,
+      },
+      {
+        id: "emails",
+        name: "Emails par thématique",
+        icon: "💌",
+        description:
+          "Modèles d'emails de réengagement, classés par thématique de santé mentale.",
+        count: emailTopicKits.length,
+      },
+      {
+        id: "lancement",
+        name: "Kit de lancement",
+        icon: "🚀",
+        description:
+          "Tous les contenus prêts à l'emploi pour l'annonce et l'activation de teale auprès de vos équipes.",
+        count: lancementKits.length,
+      },
+    ],
+    [animationItems.length, workshops.length, emailTopicKits.length, lancementKits.length]
+  );
 
   const filteredLancement = useMemo(
     () =>
@@ -285,7 +286,7 @@ export default function KitsCommunicationPage() {
           activeTheme === "lancement" &&
           k.language === activeLanguage
       ),
-    [lower, activeTheme, activeLanguage]
+    [lower, activeTheme, activeLanguage, lancementKits]
   );
 
   const filteredAnimation = useMemo(
@@ -299,7 +300,7 @@ export default function KitsCommunicationPage() {
           activeTheme === "animation" &&
           a.languages.includes(activeLanguage)
       ),
-    [lower, activeTheme, activeLanguage]
+    [lower, activeTheme, activeLanguage, animationItems]
   );
 
   const filteredEmails = useMemo(
@@ -312,7 +313,7 @@ export default function KitsCommunicationPage() {
           activeTheme === "emails" &&
           e.language === activeLanguage
       ),
-    [lower, activeTheme, activeLanguage]
+    [lower, activeTheme, activeLanguage, emailTopicKits]
   );
 
   const filteredWorkshops = useMemo(
@@ -326,7 +327,7 @@ export default function KitsCommunicationPage() {
               (workshopThemeNameById[w.themeId]?.toLowerCase().includes(lower) ??
                 false)
           ),
-    [lower, activeTheme]
+    [lower, activeTheme, workshops]
   );
 
   const totalVisible =
@@ -809,10 +810,10 @@ function CommCoverCard({
       </div>
       <div className="flex flex-1 flex-col bg-brand-surface px-4 pb-4 pt-3">
         <div className="mb-2.5 flex gap-1.5">
-          <span className="rounded-full bg-brand-green-bright/15 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-[0.12em] text-brand-green-bright">
+          <span className="rounded-full bg-brand-green-bright/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-brand-green-bright">
             {item.type === "Let's talk" ? "Let's talk" : "Playlist"}
           </span>
-          <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-[0.12em] text-brand-muted-on-dark">
+          <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-brand-muted-on-dark">
             {langLabel}
           </span>
         </div>
@@ -1098,7 +1099,7 @@ function CommEventRow({
   return (
     <li className="relative">
       {isNext && (
-        <span className="absolute -top-2 right-2.5 z-10 rounded-[4px] bg-[#5eead4] px-[7px] py-[3px] text-[8px] font-bold tracking-[0.5px] text-[#042f2a]">
+        <span className="absolute -top-2 right-2.5 z-10 rounded-[4px] bg-[#5eead4] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] text-[#042f2a]">
           Prochain
         </span>
       )}
@@ -1139,7 +1140,7 @@ function CommEventRow({
             </span>
           </div>
           <div
-            className={`mb-1 text-[12.5px] font-medium leading-snug ${
+            className={`mb-1 text-[13px] font-medium leading-snug ${
               isDone ? "text-[#6b7c75] line-through" : "text-[#e8f5ef]"
             }`}
           >

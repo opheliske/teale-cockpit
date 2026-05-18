@@ -1,12 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { themes, workshops, type Workshop } from "./data";
-
-// --- constants computed once ---
-const totalWorkshops = workshops.length;
-const animatedCount = workshops.filter((w) => w.alreadyAnimated).length;
-const remainingCount = totalWorkshops - animatedCount;
+import { themes, type Workshop } from "./data";
+import { useWorkshops } from "@/lib/workshops-store";
 
 // --- helpers ---
 function workshopHaystack(w: Workshop): string {
@@ -205,6 +201,11 @@ ${workshopsHTML}
 }
 
 export default function CatalogueAteliersPage() {
+  const { workshops } = useWorkshops();
+  const totalWorkshops = workshops.length;
+  const animatedCount = workshops.filter((w) => w.alreadyAnimated).length;
+  const remainingCount = totalWorkshops - animatedCount;
+
   const [search, setSearch] = useState("");
   const [activeThemeId, setActiveThemeId] = useState<string | null>(null);
   const [activeStatus, setActiveStatus] = useState<StatusFilter>("all");
@@ -221,11 +222,11 @@ export default function CatalogueAteliersPage() {
       if (activeDuration !== "all" && w.duration !== activeDuration) return false;
       return matchesSearch(w, search);
     });
-  }, [search, activeThemeId, activeStatus, activeDuration]);
+  }, [workshops, search, activeThemeId, activeStatus, activeDuration]);
 
   const selectedWorkshops = useMemo(
     () => workshops.filter((w) => selectedIds.has(w.id)),
-    [selectedIds]
+    [workshops, selectedIds]
   );
 
   const totalMinutes = selectedWorkshops.reduce(
@@ -266,7 +267,7 @@ export default function CatalogueAteliersPage() {
             <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-[2.5px] text-[#5eead4]">
               Catalogue d&apos;ateliers
             </p>
-            <h1 className="text-[30px] font-semibold tracking-[-0.4px] text-brand-cream">
+            <h1 className="text-[34px] font-semibold tracking-[-0.4px] text-brand-cream">
               Interventions collectives 2026
             </h1>
             <p className="mt-1.5 max-w-[580px] text-[13px] leading-relaxed text-[#94a8a0]">
@@ -319,7 +320,7 @@ export default function CatalogueAteliersPage() {
 
         {/* FILTER ROW: THÈME */}
         <div className="flex flex-wrap items-center gap-2 px-0.5 py-1">
-          <span className="min-w-[60px] text-[9.5px] font-bold uppercase tracking-[1.5px] text-[#6b7c75]">
+          <span className="min-w-[60px] text-[10px] font-bold uppercase tracking-[1.5px] text-[#6b7c75]">
             THÈME
           </span>
           <Chip active={activeThemeId === null} onClick={() => setActiveThemeId(null)} count={totalWorkshops}>
@@ -339,7 +340,7 @@ export default function CatalogueAteliersPage() {
 
         {/* FILTER ROW: STATUT + DURÉE */}
         <div className="mt-2 flex flex-wrap items-center gap-2 px-0.5 py-1">
-          <span className="min-w-[60px] text-[9.5px] font-bold uppercase tracking-[1.5px] text-[#6b7c75]">
+          <span className="min-w-[60px] text-[10px] font-bold uppercase tracking-[1.5px] text-[#6b7c75]">
             STATUT
           </span>
           <Chip active={activeStatus === "all"} onClick={() => setActiveStatus("all")}>
@@ -359,7 +360,7 @@ export default function CatalogueAteliersPage() {
           >
             ○ À planifier
           </Chip>
-          <span className="ml-4 min-w-[60px] text-[9.5px] font-bold uppercase tracking-[1.5px] text-[#6b7c75]">
+          <span className="ml-4 min-w-[60px] text-[10px] font-bold uppercase tracking-[1.5px] text-[#6b7c75]">
             DURÉE
           </span>
           <Chip active={activeDuration === "all"} onClick={() => setActiveDuration("all")}>
@@ -468,7 +469,7 @@ function StatBox({
       >
         {value}
       </div>
-      <div className="mt-[5px] text-[9.5px] uppercase tracking-[1px] text-[#94a8a0]">
+      <div className="mt-[5px] text-[10px] uppercase tracking-[1px] text-[#94a8a0]">
         {label}
       </div>
     </div>
@@ -514,7 +515,7 @@ function Chip({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-[8px] border px-3 py-[7px] text-[11.5px] font-medium transition-all ${
+      className={`inline-flex items-center gap-1.5 rounded-[8px] border px-3 py-[7px] text-[12px] font-medium transition-all ${
         active
           ? "border-[rgba(94,234,212,0.3)] bg-[rgba(94,234,212,0.12)] text-[#5eead4]"
           : "border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] text-[#c1d4cc] hover:border-[rgba(255,255,255,0.1)] hover:bg-[rgba(255,255,255,0.06)]"
@@ -523,7 +524,7 @@ function Chip({
       {children}
       {count !== undefined && (
         <span
-          className={`rounded-[4px] px-[6px] py-[1px] text-[9.5px] font-bold ${
+          className={`rounded-[4px] px-[6px] py-[1px] text-[10px] font-bold ${
             active
               ? "bg-[rgba(94,234,212,0.2)] text-[#5eead4]"
               : "bg-[rgba(255,255,255,0.06)] text-[#94a8a0]"
@@ -569,11 +570,11 @@ function WorkshopCard({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className={`rounded-[4px] px-[6px] py-[2px] text-[8.5px] font-bold tracking-[0.4px] ${tagClass}`}>
+            <span className={`rounded-[4px] px-[6px] py-[2px] text-[9px] font-bold tracking-[0.4px] ${tagClass}`}>
               {tagLabel}
             </span>
             <span
-              className={`rounded-[4px] px-[6px] py-[2px] text-[8.5px] font-semibold ${
+              className={`rounded-[4px] px-[6px] py-[2px] text-[9px] font-semibold ${
                 workshop.alreadyAnimated
                   ? "bg-[rgba(94,234,212,0.12)] text-[#5eead4]"
                   : "bg-[rgba(250,204,21,0.1)] text-[#fde047]"
@@ -586,7 +587,7 @@ function WorkshopCard({
             {workshop.title}
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2 text-[10.5px] text-[#6b7c75]">
+        <div className="flex shrink-0 items-center gap-2 text-[11px] text-[#6b7c75]">
           <span>⏱ {workshop.duration}</span>
           <button type="button" onClick={onOpen} className="font-semibold text-[#5eead4]">
             Aperçu →
@@ -669,7 +670,7 @@ function WorkshopCard({
       </div>
 
       {/* footer */}
-      <div className="flex items-center justify-between border-t border-[rgba(255,255,255,0.04)] pt-2.5 text-[10.5px] text-[#6b7c75]">
+      <div className="flex items-center justify-between border-t border-[rgba(255,255,255,0.04)] pt-2.5 text-[11px] text-[#6b7c75]">
         <span>⏱ {workshop.duration}</span>
         <button type="button" onClick={onOpen} className="font-semibold text-[#5eead4]">
           Aperçu →
@@ -732,10 +733,10 @@ function PlanningBasket({
                   {pickWorkshopEmoji(w)}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[11.5px] font-medium leading-[1.3] text-[#e8f5ef]">
+                  <div className="truncate text-[12px] font-medium leading-[1.3] text-[#e8f5ef]">
                     {w.title}
                   </div>
-                  <div className="mt-[2px] text-[9.5px] text-[#6b7c75]">
+                  <div className="mt-[2px] text-[10px] text-[#6b7c75]">
                     {themeDisplayLabel[w.themeId] ?? w.themeId} · {w.duration}
                   </div>
                 </div>

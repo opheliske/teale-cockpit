@@ -429,7 +429,7 @@ function UrgencyHotline({ onDeclare }: { onDeclare: () => void }) {
           🚨
         </span>
         <div className="min-w-0">
-          <h2 className="text-[15px] font-semibold text-brand-cream">
+          <h2 className="text-[16px] font-semibold text-brand-cream">
             Vous faites face à une situation d&apos;urgence ?
           </h2>
           <p className="mt-0.5 text-[13px] text-brand-muted-on-dark">
@@ -678,7 +678,7 @@ function DeclareUrgencyModal({ onClose }: { onClose: () => void }) {
                     {copied ? "Récap copié" : "Copier le récap"}
                   </button>
                 </div>
-                <pre className="whitespace-pre-wrap rounded-xl border border-brand-border-dark bg-brand-dark/40 p-4 text-[12.5px] leading-relaxed text-brand-cream font-sans">
+                <pre className="whitespace-pre-wrap rounded-xl border border-brand-border-dark bg-brand-dark/40 p-4 text-[13px] leading-relaxed text-brand-cream font-sans">
                   {buildCsmSummary(submitted)}
                 </pre>
               </section>
@@ -743,7 +743,7 @@ function DeclareUrgencyModal({ onClose }: { onClose: () => void }) {
                         type="button"
                         onClick={() => setType(t)}
                         aria-pressed={isActive}
-                        className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-left text-[12.5px] transition-colors ${
+                        className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-left text-[13px] transition-colors ${
                           isActive
                             ? "border-brand-salmon/60 bg-brand-salmon/15 text-brand-cream"
                             : "border-brand-border-dark text-brand-muted-on-dark hover:border-brand-cream/30 hover:text-brand-cream"
@@ -959,7 +959,7 @@ function NextStep({
       </span>
       <div className="min-w-0">
         <div className="text-[13px] font-medium text-brand-cream">{title}</div>
-        <div className="text-[11.5px] text-brand-muted-on-dark">{detail}</div>
+        <div className="text-[12px] text-brand-muted-on-dark">{detail}</div>
       </div>
     </li>
   );
@@ -1012,7 +1012,7 @@ function CommunicationKit() {
           >
             ✉️
           </span>
-          <span className="text-[11.5px] font-bold uppercase tracking-[0.14em] text-brand-salmon">
+          <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-salmon">
             Template — Annonce deuil / événement tragique
           </span>
         </div>
@@ -1020,7 +1020,7 @@ function CommunicationKit() {
           <button
             type="button"
             onClick={handleCopy}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[11.5px] font-medium transition-colors ${
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[12px] font-medium transition-colors ${
               copied
                 ? "border-brand-green-bright/40 bg-brand-green-bright/15 text-brand-green-bright"
                 : "border-brand-border-dark text-brand-cream hover:bg-white/[0.04]"
@@ -1061,7 +1061,7 @@ function CommunicationKit() {
           <a
             href="/ressources-urgence/communication-urgence-collaborateurs.pdf"
             download
-            className="inline-flex items-center gap-1.5 rounded-full border border-brand-teal-bright/40 bg-brand-teal-bright/10 px-3.5 py-1.5 text-[11.5px] font-medium text-brand-teal-bright transition-colors hover:bg-brand-teal-bright/20"
+            className="inline-flex items-center gap-1.5 rounded-full border border-brand-teal-bright/40 bg-brand-teal-bright/10 px-3.5 py-1.5 text-[12px] font-medium text-brand-teal-bright transition-colors hover:bg-brand-teal-bright/20"
           >
             <svg
               width="12"
@@ -1083,7 +1083,7 @@ function CommunicationKit() {
         </div>
       </div>
 
-      <article className="space-y-4 p-6 text-[13.5px] leading-relaxed text-brand-cream">
+      <article className="space-y-4 p-6 text-[14px] leading-relaxed text-brand-cream">
         <p>Chèr(e)s collègues,</p>
         <p>
           C&apos;est avec une profonde tristesse que nous avons appris le décès
@@ -1130,7 +1130,7 @@ function CommunicationKit() {
               </li>
             ))}
           </ul>
-          <p className="mt-3 text-[12.5px] text-brand-muted-on-dark">
+          <p className="mt-3 text-[13px] text-brand-muted-on-dark">
             Vous pouvez aussi vous rendre sur la{" "}
             <span className="text-brand-teal-bright underline decoration-dotted">
               page teale dédiée
@@ -1180,7 +1180,7 @@ function CommunicationKit() {
             ⚠️
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-[12.5px] leading-relaxed text-brand-cream">
+            <p className="text-[13px] leading-relaxed text-brand-cream">
               <strong className="text-brand-salmon">
                 teale n&apos;est pas un service d&apos;urgence.
               </strong>{" "}
@@ -1260,7 +1260,7 @@ function PreparationChecklist() {
         <a
           href="/ressources-urgence/preparer-venue-todo-rh.pdf"
           download
-          className="inline-flex items-center gap-1.5 rounded-full border border-brand-teal-bright/40 bg-brand-teal-bright/10 px-3.5 py-1.5 text-[11.5px] font-medium text-brand-teal-bright transition-colors hover:bg-brand-teal-bright/20"
+          className="inline-flex items-center gap-1.5 rounded-full border border-brand-teal-bright/40 bg-brand-teal-bright/10 px-3.5 py-1.5 text-[12px] font-medium text-brand-teal-bright transition-colors hover:bg-brand-teal-bright/20"
         >
           <svg
             width="12"
@@ -1370,7 +1370,7 @@ function ChecklistGroupBlock({
                   )}
                 </span>
                 <span
-                  className={`text-[12.5px] leading-relaxed ${
+                  className={`text-[13px] leading-relaxed ${
                     isChecked
                       ? "text-brand-muted-on-dark line-through decoration-brand-muted-on-dark/40"
                       : "text-brand-cream"
@@ -1398,7 +1398,7 @@ function ModuleCard({ module: m }: { module: Module }) {
       <div className="flex flex-1 flex-col gap-2 p-5">
         <div className="flex items-center gap-2">
           <span
-            className={`rounded-full px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-[0.14em] ${m.accentClass}`}
+            className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${m.accentClass}`}
           >
             {m.label}
           </span>
@@ -1462,7 +1462,7 @@ function FocusCard({
           </h3>
         </div>
       </div>
-      <p className="text-[12.5px] italic text-brand-muted-on-dark">
+      <p className="text-[13px] italic text-brand-muted-on-dark">
         {subtitle}
       </p>
       <p className="mt-3 text-[13px] leading-relaxed text-brand-cream">
@@ -1511,7 +1511,7 @@ function ResourceCard({ resource: r }: { resource: Resource }) {
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-1.5">
             <span
-              className={`rounded-full px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-[0.14em] ${r.accentClass}`}
+              className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] ${r.accentClass}`}
             >
               {r.tag}
             </span>
@@ -1519,7 +1519,7 @@ function ResourceCard({ resource: r }: { resource: Resource }) {
               PDF · {r.size}
             </span>
           </div>
-          <h3 className="text-[15px] font-medium leading-snug text-brand-cream">
+          <h3 className="text-[14px] font-medium leading-snug text-brand-cream">
             {r.title}
           </h3>
           <p className="mt-1.5 text-[13px] leading-relaxed text-brand-muted-on-dark">

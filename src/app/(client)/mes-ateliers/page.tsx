@@ -175,157 +175,153 @@ const themeNameById = Object.fromEntries(themes.map((t) => [t.id, t.name]));
 
 const scheduled: ScheduledAtelier[] = [
   {
-    id: "atl-jan-cnv",
-    workshopId: "cerveau-emotions-reactions",
-    dateLabel: "Mardi 14 janvier 2026",
-    timeLabel: "10:30 — 11:30",
-    isoDate: "2026-01-14",
+    id: "atl-oct-comprendre",
+    workshopId: "premiers-pas-sante-mentale",
+    dateLabel: "Mardi 14 octobre 2025",
+    timeLabel: "10:00 — 11:00",
+    isoDate: "2025-10-14",
     format: "distanciel",
-    intervenant: { name: "Larissa Kalisch", role: "Psychologue du travail" },
-    audiences: ["Collaborateurs", "Managers"],
-    attendees: 42,
+    intervenant: { name: "Pia Hartmann", role: "Psychologue du travail" },
+    audiences: ["Collaborateurs", "Managers", "RH"],
+    attendees: 38,
     satisfaction: 4.6,
-    participantFeedbacks: 38,
+    participantFeedbacks: 35,
     participantComments: [
-      { rating: 5, text: "L'atelier a vraiment changé ma façon de m'exprimer en réunion. Merci !" },
-      { rating: 5, text: "Beaucoup d'exemples concrets, c'était parfait pour appliquer dès le lendemain." },
-      { rating: 4, text: "Très bonne intervenante, format dynamique et bienveillant." },
-      { rating: 3, text: "Un peu court, j'aurais aimé plus de mises en situation." },
+      { rating: 5, text: "Super découverte de la plateforme, très rassurant de voir tout ce qui est disponible." },
+      { rating: 5, text: "Format clair et bienveillant, ça donne envie d'explorer Teale." },
+      { rating: 4, text: "Bien structuré, j'aurais aimé plus de temps pour les questions." },
+      { rating: 4, text: "Excellente intro, la formatrice est très disponible." },
     ],
-    clientFeedback: { rating: 5, comment: "Excellent atelier, très bien reçu en interne. Les exemples concrets ont vraiment résonné avec nos équipes." },
+    clientFeedback: { rating: 5, comment: "Très bon taux de participation pour un premier atelier. L'équipe RH est rassurée sur l'adoption." },
   },
   {
-    id: "atl-fev-feedback",
-    workshopId: "feedback",
-    dateLabel: "Jeudi 5 février 2026",
+    id: "atl-nov-stress",
+    workshopId: "gerer-son-stress",
+    dateLabel: "Jeudi 20 novembre 2025",
     timeLabel: "14:00 — 15:00",
-    isoDate: "2026-02-05",
-    format: "hybride",
-    location: "Auditorium Paris + Zoom",
-    intervenant: { name: "Bérénice Lefevre", role: "Coach RH certifiée" },
-    audiences: ["Managers", "RH"],
-    attendees: 28,
-    satisfaction: 4.8,
-    participantFeedbacks: 27,
+    isoDate: "2025-11-20",
+    format: "distanciel",
+    intervenant: { name: "Marc Dupont", role: "Psychologue du travail" },
+    audiences: ["Collaborateurs"],
+    attendees: 34,
+    satisfaction: 4.7,
+    participantFeedbacks: 31,
     participantComments: [
-      { rating: 5, text: "Le format hybride était top, on a pu participer même à distance." },
-      { rating: 5, text: "Très utile pour préparer mes 1-1, je recommande à tous les managers." },
-      { rating: 4, text: "Les exemples sur le télétravail sont particulièrement pertinents." },
-      { rating: 5, text: "J'avais peur du sujet, mais l'animatrice rend tout limpide." },
+      { rating: 5, text: "Des outils concrets que j'ai pu appliquer dès le lendemain." },
+      { rating: 5, text: "Marc est très à l'écoute, ambiance bienveillante." },
+      { rating: 4, text: "Un peu court, mais très dense en contenu utile." },
     ],
-    clientFeedback: { rating: 5, comment: "Le format hybride a parfaitement fonctionné, les managers ont apprécié." },
+    clientFeedback: { rating: 5, comment: "34 participants, taux satisfaction 4.7. Parfait pour clôturer ce premier trimestre." },
   },
   {
-    id: "atl-mar-cohesion",
-    workshopId: "cohesion-equipe",
-    dateLabel: "Mercredi 11 mars 2026",
-    timeLabel: "11:00 — 12:00",
-    isoDate: "2026-03-11",
-    format: "presentiel",
-    location: "Salle Élysée, Tour Eiffel",
-    intervenant: { name: "Cécile Pichon", role: "Coach équipe" },
-    audiences: ["Managers"],
-    cancelled: true,
-    cancellationReason: "Annulé suite à un conflit d'agenda côté Codir. Report prévu en septembre.",
-  },
-  {
-    id: "atl-avr-charge",
+    id: "atl-jan-charge",
     workshopId: "charge-mentale",
-    dateLabel: "Mardi 28 avril 2026",
+    dateLabel: "Jeudi 22 janvier 2026",
     timeLabel: "13:00 — 14:00",
-    isoDate: "2026-04-28",
+    isoDate: "2026-01-22",
     format: "distanciel",
     intervenant: { name: "Priscille D'Arexy", role: "Psychologue clinicienne" },
     audiences: ["Collaborateurs", "Managers", "RH"],
-    attendees: 67,
-    satisfaction: 4.7,
-    participantFeedbacks: 59,
+    attendees: 41,
+    satisfaction: 4.8,
+    participantFeedbacks: 38,
     participantComments: [
       { rating: 5, text: "On ressort avec des outils concrets pour alléger sa charge mentale au quotidien." },
       { rating: 5, text: "L'exercice de cartographie de la charge mentale était très éclairant." },
       { rating: 5, text: "Sujet important traité avec beaucoup de bienveillance, merci teale." },
       { rating: 4, text: "J'aurais aimé plus de temps pour les questions à la fin." },
-      { rating: 4, text: "Bon atelier, je vais partager les conseils avec mon équipe." },
     ],
+    clientFeedback: { rating: 5, comment: "41 inscrits, note moyenne 4.8. Claire a partagé le rapport au Codir la semaine suivante." },
   },
   {
-    id: "atl-mai-csm-prep",
-    workshopId: "premiers-pas-sante-mentale",
-    dateLabel: "Jeudi 14 mai 2026",
-    timeLabel: "09:30 — 10:30",
-    isoDate: "2026-05-14",
-    format: "hybride",
-    location: "Salle Atrium + Teams",
-    intervenant: { name: "Lucie Martin", role: "Customer Success Manager" },
-    audiences: ["Codir", "RH"],
-    registrationLink: "https://app.livestorm.co/teale-1/preparation-rentree",
-  },
-  {
-    id: "atl-mai-stress",
-    workshopId: "gerer-son-stress",
-    dateLabel: "Vendredi 22 mai 2026",
+    id: "atl-fev-webinaire",
+    workshopId: "epuisement-professionnel",
+    dateLabel: "Mercredi 18 février 2026",
     timeLabel: "11:00 — 12:00",
-    isoDate: "2026-05-22",
+    isoDate: "2026-02-18",
     format: "distanciel",
-    intervenant: { name: "Marc Dupont", role: "Psychologue du travail" },
-    audiences: ["Collaborateurs"],
-    registrationLink: "https://app.livestorm.co/teale-1/gestion-stress",
+    intervenant: { name: "Lucie Martin", role: "Customer Success Manager" },
+    audiences: ["Managers"],
+    attendees: 52,
+    satisfaction: 4.8,
+    participantFeedbacks: 48,
+    participantComments: [
+      { rating: 5, text: "Enfin un format pensé pour les managers, très actionnable." },
+      { rating: 5, text: "Les témoignages d'autres managers ont été très parlants." },
+      { rating: 4, text: "Très bien, on aurait pu aller encore plus loin sur les signes d'alerte." },
+    ],
+    clientFeedback: { rating: 5, comment: "52 participants — record pour Biocodex. Plusieurs managers ont demandé un suivi individuel." },
   },
   {
-    id: "atl-juin-manager",
-    workshopId: "feedback",
-    dateLabel: "Mardi 10 juin 2026",
+    id: "atl-mar-cnv",
+    workshopId: "cerveau-emotions-reactions",
+    dateLabel: "Jeudi 12 mars 2026",
+    timeLabel: "10:00 — 11:00",
+    isoDate: "2026-03-12",
+    format: "distanciel",
+    intervenant: { name: "Bérénice Lefevre", role: "Coach RH certifiée" },
+    audiences: ["Managers", "Collaborateurs"],
+    attendees: 29,
+    satisfaction: 4.5,
+    participantFeedbacks: 26,
+    participantComments: [
+      { rating: 5, text: "L'atelier a vraiment changé ma façon de communiquer avec mon équipe." },
+      { rating: 5, text: "Beaucoup d'exemples concrets, parfait pour appliquer dès le lendemain." },
+      { rating: 4, text: "Très bonne intervenante, format dynamique." },
+      { rating: 3, text: "Un peu court, j'aurais aimé plus de mises en situation." },
+    ],
+    clientFeedback: { rating: 4, comment: "Bon atelier. Satisfaction légèrement en dessous de la moyenne — à creuser avec Bérénice." },
+  },
+  {
+    id: "atl-avr-leadership",
+    workshopId: "assertivite",
+    dateLabel: "Mardi 28 avril 2026",
     timeLabel: "14:00 — 15:00",
-    isoDate: "2026-06-10",
-    format: "presentiel",
-    location: "Campus La Défense, salle Mont-Blanc",
+    isoDate: "2026-04-28",
+    format: "distanciel",
     intervenant: { name: "Carola Gawehn", role: "Psychologue & coach" },
     audiences: ["Managers"],
-    registrationLink: "https://app.livestorm.co/teale-1/manager-bienveillant",
+    attendees: 33,
+    satisfaction: 4.9,
+    participantFeedbacks: 30,
+    participantComments: [
+      { rating: 5, text: "Le meilleur atelier depuis le début. Des outils directement applicables." },
+      { rating: 5, text: "Carola est brillante, on a tous adoré." },
+      { rating: 5, text: "J'avais des doutes sur l'assertivité, maintenant je comprends tout." },
+      { rating: 4, text: "Excellent, juste un peu trop court." },
+    ],
+    clientFeedback: { rating: 5, comment: "Note 4.9, meilleur score du programme. Claire a demandé à programmer Carola pour l'atelier de rentrée." },
   },
   {
-    id: "atl-juil-handicap",
-    workshopId: "handicap-travail",
-    dateLabel: "Jeudi 9 juillet 2026",
-    timeLabel: "11:00 — 12:00",
-    isoDate: "2026-07-09",
-    format: "distanciel",
-    intervenant: { name: "Adrien Bournas", role: "Psychologue" },
-    audiences: ["Collaborateurs", "RH"],
-    cancelled: true,
-    cancellationReason: "Annulé : reporté à la semaine du handicap (novembre) pour cohérence avec le plan de communication.",
-  },
-  {
-    id: "atl-sept-rentree",
-    workshopId: "muscler-optimisme",
-    dateLabel: "Jeudi 18 septembre 2026",
+    id: "atl-mai-manager",
+    workshopId: "feedback",
+    dateLabel: "Mardi 19 mai 2026",
     timeLabel: "10:00 — 11:00",
-    isoDate: "2026-09-18",
+    isoDate: "2026-05-19",
+    format: "distanciel",
+    intervenant: { name: "Marc Dupont", role: "Psychologue du travail" },
+    audiences: ["Managers"],
+    registrationLink: "https://app.livestorm.co/teale/manager-coach-biocodex",
+  },
+  {
+    id: "atl-juil-emotions",
+    workshopId: "cerveau-emotions-reactions",
+    dateLabel: "Vendredi 17 juillet 2026",
+    timeLabel: "10:00 — 11:00",
+    isoDate: "2026-07-17",
+    format: "distanciel",
+    intervenant: { name: "Larissa Kalisch", role: "Psychologue du travail" },
+    audiences: ["Collaborateurs", "Managers"],
+  },
+  {
+    id: "atl-aout-choix",
+    workshopId: "comprendre-resilience",
+    dateLabel: "Jeudi 27 août 2026",
+    timeLabel: "14:00 — 15:00",
+    isoDate: "2026-08-27",
     format: "distanciel",
     intervenant: { name: "Milija Simlesa", role: "Psychologue & chercheuse" },
     audiences: ["Collaborateurs"],
-  },
-  {
-    id: "atl-oct-rose",
-    workshopId: "maladie-chronique",
-    dateLabel: "Vendredi 16 octobre 2026",
-    timeLabel: "13:00 — 14:00",
-    isoDate: "2026-10-16",
-    format: "hybride",
-    location: "Auditorium Paris + Livestorm",
-    intervenant: { name: "Émilie De Bueil", role: "Psychologue" },
-    audiences: ["Collaborateurs", "RH", "Elus"],
-  },
-  {
-    id: "atl-nov-qvct",
-    workshopId: "prevenir-rps",
-    dateLabel: "Jeudi 20 novembre 2026",
-    timeLabel: "11:00 — 12:00",
-    isoDate: "2026-11-20",
-    format: "presentiel",
-    location: "Campus La Défense, grand auditorium",
-    intervenant: { name: "Adrien Bournas", role: "Psychologue & RPS expert" },
-    audiences: ["RH", "Elus", "Codir"],
   },
 ];
 
@@ -417,7 +413,7 @@ export default function MesAteliersPage() {
         <div className="mb-[22px] flex items-start justify-between gap-6">
           <div>
             <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-[2.5px] text-[#5eead4]">PILOTAGE</p>
-            <h1 className="text-[30px] font-semibold tracking-[-0.4px] text-[#e8f5ef]">Mes ateliers programmés</h1>
+            <h1 className="text-[34px] font-semibold tracking-[-0.4px] text-[#e8f5ef]">Mes ateliers programmés</h1>
             <p className="mt-1.5 max-w-[580px] text-[13px] leading-relaxed text-[#94a8a0]">
               Vos interventions collectives Teale — faits, en cours, à venir.
             </p>
@@ -572,7 +568,7 @@ function StatBox({ value, label, color }: { value: number; label: string; color?
         color === "red"   ? "text-[#fca5a5]" :
         "text-[#e8f5ef]"
       }`}>{value}</div>
-      <div className="mt-[5px] text-[9.5px] uppercase tracking-[1px] text-[#94a8a0]">{label}</div>
+      <div className="mt-[5px] text-[10px] uppercase tracking-[1px] text-[#94a8a0]">{label}</div>
     </div>
   );
 }
@@ -641,7 +637,7 @@ function AlertsRow({
         <div className="flex items-center gap-3.5 rounded-[11px] border border-[rgba(250,204,21,0.18)] bg-[rgba(250,204,21,0.05)] p-[12px_16px]">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[rgba(250,204,21,0.15)] text-[14px]" aria-hidden>⭐</div>
           <div className="min-w-0 flex-1">
-            <div className="text-[12.5px] font-semibold text-[#fde047]">
+            <div className="text-[13px] font-semibold text-[#fde047]">
               {pendingCount} atelier{pendingCount > 1 ? "s attendent" : " attend"} votre retour
             </div>
             <div className="truncate text-[11px] text-[#94a8a0]">
@@ -719,7 +715,7 @@ function TimelineBar({ monthCounts, currentMonthIdx }: { monthCounts: number[]; 
                 count > 0 ? "bg-[rgba(94,234,212,0.04)]" : ""
               }`}
             >
-              <div className={`text-[9.5px] font-semibold tracking-[0.5px] ${isNow ? "text-[#5eead4]" : "text-[#94a8a0]"}`}>
+              <div className={`text-[10px] font-semibold tracking-[0.5px] ${isNow ? "text-[#5eead4]" : "text-[#94a8a0]"}`}>
                 {name}
               </div>
               <div className={`mt-[3px] text-[11px] font-bold tabular-nums ${
@@ -825,7 +821,7 @@ function RowCard({ scheduled: s, clientFeedback, onOpen }: {
             {fmtCfg.emoji} {fmtCfg.label}
           </span>
         </div>
-        <div className={`mb-1 truncate text-[13.5px] font-semibold leading-[1.3] ${status === "annule" ? "text-[#94a8a0] line-through" : "text-[#e8f5ef]"}`}>
+        <div className={`mb-1 truncate text-[14px] font-semibold leading-[1.3] ${status === "annule" ? "text-[#94a8a0] line-through" : "text-[#e8f5ef]"}`}>
           {workshop.title}
         </div>
         <div className="flex items-center gap-[5px] text-[11px] text-[#94a8a0]">
@@ -857,7 +853,7 @@ function RowCard({ scheduled: s, clientFeedback, onOpen }: {
               <span className="text-[11px] tracking-[-1px] text-[#fde047]">★★★★★</span>{" "}
               <span className="font-semibold text-[#e8f5ef]">{s.satisfaction.toFixed(1)}</span>
             </div>
-            <div className="text-[9.5px] text-[#6b7c75]">{s.participantFeedbacks} avis</div>
+            <div className="text-[10px] text-[#6b7c75]">{s.participantFeedbacks} avis</div>
           </>
         ) : <div />}
       </div>
@@ -964,7 +960,7 @@ function AtelierCard({ scheduled: s, clientFeedback, onOpen }: {
       </div>
 
       {/* footer */}
-      <div className="mt-3 flex items-center justify-between border-t border-[rgba(255,255,255,0.04)] pt-2.5 text-[10.5px] text-[#6b7c75]">
+      <div className="mt-3 flex items-center justify-between border-t border-[rgba(255,255,255,0.04)] pt-2.5 text-[11px] text-[#6b7c75]">
         <div>
           {status === "realise" && s.satisfaction !== undefined ? (
             <span className="flex items-center gap-1">

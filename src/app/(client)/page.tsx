@@ -1,20 +1,18 @@
 import Link from "next/link";
 import ActionsCard, { type Action } from "@/components/ActionsCard";
 
-const FIRST_NAME = "Ophélie";
+const FIRST_NAME = "Claire";
 
-const TOTAL_ATELIERS = 12;
-const ATELIERS_USED = 8;
+const TOTAL_ATELIERS = 10;
+const ATELIERS_USED = 6;
 
-const TOTAL_SEANCES_PSY = 200;
-const SEANCES_PSY_USED = 73;
 
 type MilestoneKind = "atelier" | "comm" | "csm" | "bilan" | "contrat";
 
 const actions: Action[] = [
-  { title: "Relire le brief de l'atelier « Charge mentale »", due: "Échéance le 8 mai", overdue: true },
-  { title: "Valider le kit de communication Q3", due: "Échéance le 18 mai" },
-  { title: "Confirmer la date de « Manager bienveillant »", due: "Échéance le 22 mai" },
+  { title: "Préparer le deck QBR H1", due: "Échéance le 2 juin" },
+  { title: "Confirmer l'atelier Q4 avec Lucie", due: "Échéance le 15 juin" },
+  { title: "Relancer sur la conso tokens Pulse", due: "Échéance le 20 juin" },
 ];
 
 const kindConfig: Record<MilestoneKind, { label: string; pillClass: string }> = {
@@ -26,9 +24,9 @@ const kindConfig: Record<MilestoneKind, { label: string; pillClass: string }> = 
 };
 
 const meetings: { day: string; month: string; mo: string; time: string; title: string; detail: string; kind: MilestoneKind; done: boolean }[] = [
-  { day: "15", month: "mai",  mo: "MAI", time: "10:00", title: "Point CSM mensuel",                  detail: "Avec Lucie",     kind: "csm",     done: false },
-  { day: "22", month: "mai",  mo: "MAI", time: "14:00", title: "Atelier « Gestion du stress »",      detail: "Animé par Marc", kind: "atelier", done: false },
-  { day: "05", month: "juin", mo: "JUI", time: "11:00", title: "Brief « Manager bienveillant »",      detail: "Avec Lucie",     kind: "atelier", done: false },
+  { day: "19", month: "mai",  mo: "MAI", time: "10:00", title: "Atelier « Manager coach »",          detail: "Animé par Marc", kind: "atelier", done: false },
+  { day: "20", month: "mai",  mo: "MAI", time: "14:30", title: "Point CSM mensuel",                  detail: "Avec Lucie",     kind: "csm",     done: false },
+  { day: "02", month: "juin", mo: "JUI", time: "10:00", title: "QBR H1 Biocodex",                    detail: "Avec Lucie",     kind: "bilan",   done: false },
 ];
 
 const currentMonthMeetings = meetings.filter((m) => m.month === "mai");
@@ -53,23 +51,17 @@ export default function HomePage() {
             👋
           </span>
         </h1>
-        <p className="mt-1 max-w-2xl text-[15px] leading-relaxed text-brand-muted-on-dark">
+        <p className="mt-1 max-w-2xl text-[px]13 leading-relaxed text-brand-muted-on-dark">
           Voici un aperçu de votre pilotage Teale et de vos prochaines échéances.
         </p>
       </header>
 
-      <section className="mb-3 grid grid-cols-2 gap-3">
+      <section className="mb-3">
         <KpiDonutCard
           label="Ateliers restants"
           remaining={TOTAL_ATELIERS - ATELIERS_USED}
           total={TOTAL_ATELIERS}
           subtitle="À programmer avant le 12 septembre 2026"
-        />
-        <KpiDonutCard
-          label="Séances psy restantes"
-          remaining={TOTAL_SEANCES_PSY - SEANCES_PSY_USED}
-          total={TOTAL_SEANCES_PSY}
-          subtitle="À consommer par vos équipes"
         />
       </section>
 
@@ -214,7 +206,7 @@ function MeetingRow({
   return (
     <li className="relative">
       {isNext && (
-        <span className="absolute -top-2 right-2.5 z-10 rounded-[4px] bg-[#5eead4] px-[7px] py-[3px] text-[8px] font-bold tracking-[0.5px] text-[#042f2a]">
+        <span className="absolute -top-2 right-2.5 z-10 rounded-[4px] bg-[#5eead4] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] text-[#042f2a]">
           Prochain
         </span>
       )}
@@ -258,7 +250,7 @@ function MeetingRow({
             </span>
           </div>
           <div
-            className={`mb-1 text-[12.5px] font-medium leading-snug ${
+            className={`mb-1 text-[13px] font-medium leading-snug ${
               meeting.done ? "text-[#6b7c75] line-through" : "text-[#e8f5ef]"
             }`}
           >
