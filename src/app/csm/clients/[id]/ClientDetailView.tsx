@@ -12,6 +12,7 @@ import { docsStore, type StoredDocument, type StoredDocumentFile } from "@/lib/d
 import { csmEventsStore, parseFrDateWeekday } from "@/lib/csm-events-store";
 import { healthStore, type HealthEntry, type HealthStatut } from "@/lib/health-store";
 import { targetsStore, type TargetLabel, LABEL_COLORS } from "@/lib/targets-store";
+import { commentsStore, type PlanComment } from "@/lib/comments-store";
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -309,6 +310,10 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [editingPlanItem, setEditingPlanItem] = useState<PlanItem | null>(null);
   const [editPlanTitle, setEditPlanTitle] = useState("");
   const [editPlanMeta, setEditPlanMeta] = useState("");
+  const [editPlanImpact, setEditPlanImpact] = useState("");
+  const [planItemComments, setPlanItemComments] = useState<PlanComment[]>([]);
+  const [commentDraft, setCommentDraft] = useState("");
+  const commentBottomRef = useRef<HTMLDivElement>(null);
   const [editPlanType, setEditPlanType] = useState<PlanItemType>("atelier");
   const [editPlanIcon, setEditPlanIcon] = useState("");
   const [editPlanTargets, setEditPlanTargets] = useState<string[]>([]);
@@ -469,7 +474,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     const isDone = (item: PlanItem): boolean => item.done || !!planItems[item.id];
     const toStored = (item: PlanItem, quarter: StoredPlanItem["quarter"]): StoredPlanItem => {
       const e = eff(item);
-      return { id: e.id, quarter, type: e.type, icon: e.icon, title: e.title, meta: e.meta, done: isDone(item), targets: e.targets?.length ? e.targets : (itemTargets[e.id]?.length ? itemTargets[e.id] : undefined) };
+      return { id: e.id, quarter, type: e.type, icon: e.icon, title: e.title, meta: e.meta, done: isDone(item), impact: e.impact || undefined, targets: e.targets?.length ? e.targets : (itemTargets[e.id]?.length ? itemTargets[e.id] : undefined) };
     };
     const qMap: Record<string, StoredPlanItem["quarter"]> = {
       q1: "Q1", q2: "Q2", q3: "Q3", q4: "Q4",
@@ -497,10 +502,25 @@ export default function ClientDetailView({ id }: { id: string }) {
     setEditingPlanItem(eff);
     setEditPlanTitle(eff.title);
     setEditPlanMeta(eff.meta ?? "");
+    setEditPlanImpact(eff.impact ?? "");
     setEditPlanType(eff.type);
     setEditPlanIcon(eff.icon);
     setEditPlanTargets(itemTargets[eff.id] ?? []);
+    setPlanItemComments(commentsStore.getByThread(String(eff.id)));
+    setCommentDraft("");
   };
+
+  useEffect(() => {
+    if (!editingPlanItem) return;
+    const unsub = commentsStore.subscribe(() =>
+      setPlanItemComments(commentsStore.getByThread(String(editingPlanItem.id)))
+    );
+    return unsub;
+  }, [editingPlanItem]);
+
+  useEffect(() => {
+    commentBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [planItemComments]);
 
   const savePlanEdit = () => {
     if (!editingPlanItem || !editPlanTitle.trim()) return;
@@ -511,6 +531,7 @@ export default function ClientDetailView({ id }: { id: string }) {
         ...editingPlanItem,
         title: editPlanTitle.trim(),
         meta: editPlanMeta.trim(),
+        impact: editPlanImpact.trim() || undefined,
         type: editPlanType,
         icon: editPlanIcon || PLAN_ITEM_DEFAULT_ICONS[editPlanType],
       },
@@ -2309,6 +2330,21 @@ export default function ClientDetailView({ id }: { id: string }) {
               />
             </div>
 
+            {/* Impact */}
+            <div>
+              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">
+                Impact attendu
+                <span className="ml-1.5 normal-case font-normal text-[rgba(232,245,239,0.35)]">· visible par le client</span>
+              </label>
+              <textarea
+                value={editPlanImpact}
+                onChange={(e) => setEditPlanImpact(e.target.value)}
+                placeholder="Décrivez l'impact attendu de cette action pour le client…"
+                rows={3}
+                className="w-full resize-none rounded-[9px] border border-[rgba(167,139,250,0.25)] bg-[rgba(167,139,250,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef] placeholder-[rgba(232,245,239,0.3)] outline-none focus:border-[rgba(167,139,250,0.5)]"
+              />
+            </div>
+
             {/* Étiquettes */}
             {clientLabels.length > 0 && (
               <div>
@@ -2336,8 +2372,66 @@ export default function ClientDetailView({ id }: { id: string }) {
             )}
           </div>
 
+          {/* ── Thread client ── */}
+          <div className="mt-2 border-t border-[#1a2c28] pt-4">
+            <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">
+              Messages du client
+            </p>
+            <div className="mb-2.5 flex max-h-[200px] flex-col gap-2 overflow-y-auto pr-1">
+              {planItemComments.length === 0 && (
+                <p className="py-3 text-center text-[11px] italic text-[#6b7c75]">Aucun message pour cette action.</p>
+              )}
+              {planItemComments.map((c) => {
+                const isCsm = c.author === "csm";
+                const d = new Date(c.date);
+                const dateLabel = d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) + " · " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+                return (
+                  <div key={c.id} className={`flex flex-col gap-0.5 ${isCsm ? "items-end" : "items-start"}`}>
+                    <span className="px-1 text-[10px] text-[#6b7c75]">
+                      {isCsm ? "Vous (CSM)" : "Client"} · {dateLabel}
+                    </span>
+                    <div className={`max-w-[85%] rounded-[10px] px-3 py-2 text-[12px] leading-snug ${
+                      isCsm
+                        ? "rounded-br-[3px] bg-[rgba(94,234,212,0.12)] text-[#e8f5ef]"
+                        : "rounded-bl-[3px] bg-[rgba(255,255,255,0.06)] text-[#e8f5ef]"
+                    }`}>
+                      {c.text}
+                    </div>
+                  </div>
+                );
+              })}
+              <div ref={commentBottomRef} />
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={commentDraft}
+                onChange={(e) => setCommentDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey && commentDraft.trim()) {
+                    commentsStore.add(String(editingPlanItem.id), "csm", commentDraft.trim());
+                    setCommentDraft("");
+                  }
+                }}
+                placeholder="Répondre au client…"
+                className="flex-1 rounded-[8px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2 text-[12px] text-[#e8f5ef] placeholder-[rgba(232,245,239,0.3)] outline-none focus:border-[rgba(94,234,212,0.4)]"
+              />
+              <button
+                onClick={() => {
+                  if (!commentDraft.trim()) return;
+                  commentsStore.add(String(editingPlanItem.id), "csm", commentDraft.trim());
+                  setCommentDraft("");
+                }}
+                disabled={!commentDraft.trim()}
+                className="rounded-[8px] bg-[rgba(94,234,212,0.12)] px-3 py-2 text-[12px] font-semibold text-[#5eead4] transition-colors hover:bg-[rgba(94,234,212,0.2)] disabled:opacity-30"
+              >
+                Envoyer
+              </button>
+            </div>
+          </div>
+
           {/* Footer */}
-          <div className="mt-6 flex items-center">
+          <div className="mt-5 flex items-center border-t border-[#1a2c28] pt-4">
             <button
               onClick={() => deletePlanItem(editingPlanItem.id)}
               className="rounded-[9px] border border-[rgba(230,170,153,0.3)] px-3 py-2 text-[12px] font-medium text-[#E6AA99] transition-all hover:bg-[rgba(230,170,153,0.08)]"

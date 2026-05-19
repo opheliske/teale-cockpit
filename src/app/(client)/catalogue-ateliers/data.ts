@@ -14,7 +14,7 @@ export type Workshop = {
   title: string;
   subtitle?: string;
   themeId: string;
-  duration: string;
+  duration?: string;
   objectives: string[];
   programme: ProgrammeStep[];
   targetAudience: string[];

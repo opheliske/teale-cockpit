@@ -8,6 +8,7 @@ export type StoredPlanItem = {
   title: string;
   meta: string;
   done: boolean;
+  impact?: string;
   targets?: string[];
 };
 

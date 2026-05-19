@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { planStore, type StoredPlanState, type StoredPlanItemType } from "@/lib/plan-store";
+import { commentsStore, type PlanComment } from "@/lib/comments-store";
 import { targetsStore, type TargetLabel } from "@/lib/targets-store";
 import { docsStore, type StoredDocument } from "@/lib/docs-store";
 import {
@@ -228,6 +229,9 @@ type PlanEvent = {
   details?: string[];
   scope?: EventScope;
   targets?: string[];
+  impact?: string;
+  itemId?: number;
+  threadId?: string;
 };
 
 function defaultDescription(type: EventType): string {
@@ -700,6 +704,9 @@ export default function MonPlanningPage() {
           time: metaToTimeStr(item.meta),
           done: item.done,
           targets: item.targets,
+          impact: item.impact,
+          itemId: item.id,
+          threadId: String(item.id),
         });
       }
     } else {
@@ -1513,6 +1520,30 @@ function EventModal({
   year: Year;
   onClose: () => void;
 }) {
+  const threadId = event.threadId ?? `${event.type}:${event.title}`;
+  const [comments, setComments] = useState<PlanComment[]>(() =>
+    commentsStore.getByThread(threadId)
+  );
+  const [draft, setDraft] = useState("");
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    return commentsStore.subscribe(() =>
+      setComments(commentsStore.getByThread(threadId))
+    );
+  }, [threadId]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [comments]);
+
+  function sendComment() {
+    const t = draft.trim();
+    if (!t) return;
+    commentsStore.add(threadId, "client", t);
+    setDraft("");
+  }
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -1630,6 +1661,17 @@ function EventModal({
             </p>
           </section>
 
+          {event.impact && (
+            <section>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-accent">
+                Impact attendu
+              </h3>
+              <p className="text-sm leading-relaxed text-brand-cream">
+                {event.impact}
+              </p>
+            </section>
+          )}
+
           {event.type === "atelier" && workshopMap[event.title] && (
             <WorkshopDetail workshopId={workshopMap[event.title]} />
           )}
@@ -1658,6 +1700,63 @@ function EventModal({
             </section>
           )}
         </div>
+
+        {/* ── Thread de commentaires ── */}
+        {(
+          <div className="mt-6 border-t border-brand-border-dark pt-5">
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-brand-teal-bright">
+              Messages avec votre CSM
+            </h3>
+
+            {/* Thread */}
+            <div className="mb-3 flex max-h-[260px] flex-col gap-2 overflow-y-auto pr-1">
+              {comments.length === 0 && (
+                <p className="py-4 text-center text-[12px] text-brand-muted-on-dark">
+                  Aucun message pour le moment. Posez votre première question ci-dessous.
+                </p>
+              )}
+              {comments.map((c) => {
+                const isClient = c.author === "client";
+                const d = new Date(c.date);
+                const dateLabel = d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) + " · " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+                return (
+                  <div key={c.id} className={`flex flex-col gap-0.5 ${isClient ? "items-end" : "items-start"}`}>
+                    <span className="text-[10px] text-brand-muted-on-dark px-1">
+                      {isClient ? "Vous" : "CSM"} · {dateLabel}
+                    </span>
+                    <div className={`max-w-[85%] rounded-[12px] px-3.5 py-2.5 text-[13px] leading-snug ${
+                      isClient
+                        ? "rounded-br-[4px] bg-brand-teal-bright/15 text-brand-cream"
+                        : "rounded-bl-[4px] bg-white/[0.06] text-brand-cream"
+                    }`}>
+                      {c.text}
+                    </div>
+                  </div>
+                );
+              })}
+              <div ref={bottomRef} />
+            </div>
+
+            {/* Input */}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendComment()}
+                placeholder="Écrire un message à votre CSM…"
+                className="flex-1 rounded-[10px] border border-brand-border-dark bg-white/[0.04] px-3.5 py-2.5 text-[13px] text-brand-cream placeholder-brand-muted-on-dark outline-none focus:border-brand-teal-bright/40"
+              />
+              <button
+                onClick={sendComment}
+                disabled={!draft.trim()}
+                className="rounded-[10px] bg-brand-teal-bright/20 px-4 py-2.5 text-[13px] font-semibold text-brand-teal-bright transition-colors hover:bg-brand-teal-bright/30 disabled:opacity-30"
+              >
+                Envoyer
+              </button>
+            </div>
+          </div>
+        )}
 
         <p className="mt-6 border-t border-brand-border-dark pt-4 text-[11px] text-brand-muted-on-dark">
           Vue lecture seule — votre planning est piloté par votre CSM. Pour

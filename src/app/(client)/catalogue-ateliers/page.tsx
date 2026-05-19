@@ -16,18 +16,6 @@ function matchesSearch(w: Workshop, query: string): boolean {
   return workshopHaystack(w).includes(query.toLowerCase());
 }
 
-function parseDurationMinutes(dur: string): number {
-  const m = dur.match(/^(\d+)h(\d*)?$/);
-  if (!m) return 60;
-  return parseInt(m[1]) * 60 + (m[2] ? parseInt(m[2]) : 0);
-}
-
-function formatTotalDuration(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m === 0 ? `${h}h` : `${h}h${m}`;
-}
-
 // --- theme style maps ---
 const themeTagClass: Record<string, string> = {
   prevention:    "bg-[rgba(251,146,60,0.15)] text-[#fdba74]",
@@ -91,8 +79,6 @@ function pickWorkshopEmoji(w: Workshop): string {
   return themeEmoji[w.themeId] ?? "✨";
 }
 
-const ALL_DURATIONS = ["1h", "1h30", "2h"] as const;
-type DurationFilter = "all" | "1h" | "1h30" | "2h";
 type StatusFilter = "all" | "done" | "todo";
 type ViewMode = "grid" | "list";
 
@@ -106,8 +92,6 @@ const themeColorLight: Record<string, string> = {
 
 function exportToPDF(selected: Workshop[]): void {
   const date = new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
-  const totalMin = selected.reduce((s, w) => s + parseDurationMinutes(w.duration), 0);
-  const totalDur = formatTotalDuration(totalMin);
 
   const workshopsHTML = selected.map((w, idx) => {
     const color = themeColorLight[w.themeId] ?? "#475569";
@@ -128,7 +112,6 @@ function exportToPDF(selected: Workshop[]): void {
           <span class="emoji">${emoji}</span>
           <div class="wh-meta">
             <span class="tag" style="background:${color}22;color:${color}">${themeLabel.toUpperCase()}</span>
-            <span class="dur">⏱ ${w.duration}</span>
             ${w.alreadyAnimated ? '<span class="done">✓ Déjà animé</span>' : ""}
           </div>
         </div>
@@ -184,7 +167,6 @@ function exportToPDF(selected: Workshop[]): void {
   </div>
   <div class="summary">
     <strong>${selected.length} atelier${selected.length > 1 ? "s" : ""}</strong><br>
-    Durée totale : <strong>${totalDur}</strong><br>
     Exporté le ${date}
   </div>
 </header>
@@ -209,7 +191,6 @@ export default function CatalogueAteliersPage() {
   const [search, setSearch] = useState("");
   const [activeThemeId, setActiveThemeId] = useState<string | null>(null);
   const [activeStatus, setActiveStatus] = useState<StatusFilter>("all");
-  const [activeDuration, setActiveDuration] = useState<DurationFilter>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [activeWorkshopId, setActiveWorkshopId] = useState<string | null>(null);
@@ -219,19 +200,13 @@ export default function CatalogueAteliersPage() {
       if (activeThemeId && w.themeId !== activeThemeId) return false;
       if (activeStatus === "done" && !w.alreadyAnimated) return false;
       if (activeStatus === "todo" && w.alreadyAnimated) return false;
-      if (activeDuration !== "all" && w.duration !== activeDuration) return false;
       return matchesSearch(w, search);
     });
-  }, [workshops, search, activeThemeId, activeStatus, activeDuration]);
+  }, [workshops, search, activeThemeId, activeStatus]);
 
   const selectedWorkshops = useMemo(
     () => workshops.filter((w) => selectedIds.has(w.id)),
     [workshops, selectedIds]
-  );
-
-  const totalMinutes = selectedWorkshops.reduce(
-    (sum, w) => sum + parseDurationMinutes(w.duration),
-    0
   );
 
   const toggleSelect = (id: string) => {
@@ -247,7 +222,6 @@ export default function CatalogueAteliersPage() {
     setSearch("");
     setActiveThemeId(null);
     setActiveStatus("all");
-    setActiveDuration("all");
   };
 
   const activeWorkshop = activeWorkshopId
@@ -255,7 +229,7 @@ export default function CatalogueAteliersPage() {
     : null;
 
   const noFilters =
-    !search.trim() && !activeThemeId && activeStatus === "all" && activeDuration === "all";
+    !search.trim() && !activeThemeId && activeStatus === "all";
 
   return (
     <div className="px-9 py-8">
@@ -360,21 +334,6 @@ export default function CatalogueAteliersPage() {
           >
             ○ À planifier
           </Chip>
-          <span className="ml-4 min-w-[60px] text-[10px] font-bold uppercase tracking-[1.5px] text-[#6b7c75]">
-            DURÉE
-          </span>
-          <Chip active={activeDuration === "all"} onClick={() => setActiveDuration("all")}>
-            Toutes
-          </Chip>
-          {ALL_DURATIONS.map((d) => (
-            <Chip
-              key={d}
-              active={activeDuration === d}
-              onClick={() => setActiveDuration(activeDuration === d ? "all" : d)}
-            >
-              {d}
-            </Chip>
-          ))}
         </div>
 
         {/* MAIN LAYOUT */}
@@ -392,7 +351,6 @@ export default function CatalogueAteliersPage() {
                   : <>
                       {activeThemeId && ` · ${themeDisplayLabel[activeThemeId] ?? activeThemeId}`}
                       {activeStatus !== "all" && ` · ${activeStatus === "done" ? "Déjà animés" : "À planifier"}`}
-                      {activeDuration !== "all" && ` · ${activeDuration}`}
                       {search.trim() && ` · « ${search.trim()} »`}
                     </>
                 }
@@ -429,7 +387,6 @@ export default function CatalogueAteliersPage() {
           <PlanningBasket
             selected={selectedWorkshops}
             onRemove={toggleSelect}
-            totalMinutes={totalMinutes}
             onExport={() => exportToPDF(selectedWorkshops)}
           />
         </div>
@@ -588,7 +545,6 @@ function WorkshopCard({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2 text-[11px] text-[#6b7c75]">
-          <span>⏱ {workshop.duration}</span>
           <button type="button" onClick={onOpen} className="font-semibold text-[#5eead4]">
             Aperçu →
           </button>
@@ -671,7 +627,6 @@ function WorkshopCard({
 
       {/* footer */}
       <div className="flex items-center justify-between border-t border-[rgba(255,255,255,0.04)] pt-2.5 text-[11px] text-[#6b7c75]">
-        <span>⏱ {workshop.duration}</span>
         <button type="button" onClick={onOpen} className="font-semibold text-[#5eead4]">
           Aperçu →
         </button>
@@ -683,12 +638,10 @@ function WorkshopCard({
 function PlanningBasket({
   selected,
   onRemove,
-  totalMinutes,
   onExport,
 }: {
   selected: Workshop[];
   onRemove: (id: string) => void;
-  totalMinutes: number;
   onExport: () => void;
 }) {
   return (
@@ -737,7 +690,7 @@ function PlanningBasket({
                     {w.title}
                   </div>
                   <div className="mt-[2px] text-[10px] text-[#6b7c75]">
-                    {themeDisplayLabel[w.themeId] ?? w.themeId} · {w.duration}
+                    {themeDisplayLabel[w.themeId] ?? w.themeId}
                   </div>
                 </div>
                 <button
@@ -757,15 +710,7 @@ function PlanningBasket({
       {/* summary + CTA */}
       {selected.length > 0 && (
         <>
-          <div className="mt-[14px] grid grid-cols-2 gap-2.5 rounded-[9px] border border-[rgba(94,234,212,0.12)] bg-[rgba(94,234,212,0.04)] p-3">
-            <div>
-              <div className="text-[18px] font-bold tabular-nums leading-none text-[#5eead4]">
-                {formatTotalDuration(totalMinutes)}
-              </div>
-              <div className="mt-1 text-[9px] uppercase tracking-[0.3px] text-[#94a8a0]">
-                Durée totale
-              </div>
-            </div>
+          <div className="mt-[14px] rounded-[9px] border border-[rgba(94,234,212,0.12)] bg-[rgba(94,234,212,0.04)] p-3">
             <div>
               <div className="text-[18px] font-bold tabular-nums leading-none text-[#5eead4]">
                 {selected.length}
@@ -857,9 +802,6 @@ function WorkshopModal({ workshop, onClose }: { workshop: Workshop; onClose: () 
         <div className="flex flex-wrap items-center gap-2 pr-12">
           <span className={`rounded-[4px] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${tagClass}`}>
             {tagLabel}
-          </span>
-          <span className="rounded-[4px] bg-[rgba(255,255,255,0.06)] px-2.5 py-0.5 text-[10px] uppercase tracking-wider text-[#94a8a0]">
-            {workshop.duration}
           </span>
           {workshop.subtitle && (
             <span className="text-[10px] uppercase tracking-wider text-[#94a8a0]">

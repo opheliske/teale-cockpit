@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { CLIENTS, HOME_ACTIONS, RENEWALS, type Statut, type HomeAction } from "@/lib/clients-data";
+import { CLIENTS, HOME_ACTIONS, RENEWALS, CHURN_NOTICES, type Statut, type HomeAction } from "@/lib/clients-data";
 import { clientActionsStore } from "@/lib/client-actions-store";
 import { csmEventsStore, type CsmEvent } from "@/lib/csm-events-store";
 
@@ -52,6 +52,16 @@ function renewalColor(days: number) {
   if (days < 60) return "#f59e0b";
   if (days < 90) return "#eab308";
   return "#22c55e";
+}
+
+function daysUntilIso(iso: string): number {
+  return daysUntilDate(new Date(iso));
+}
+
+function formatIsoFr(iso: string): string {
+  const d = new Date(iso);
+  const months = ["janv.", "fév.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
 }
 
 // ─── Agenda & activity static data ────────────────────────────────────────────
@@ -138,7 +148,7 @@ const FILTERS: Filter[] = ["Tous", "Sains", "Vigilance", "Risque", "Renouvelleme
 
 export default function CsmHomePage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"Portfolio" | "Alertes">("Portfolio");
+  const [activeTab, setActiveTab] = useState<"Portfolio" | "Activites" | "Alertes">("Portfolio");
   const [filter, setFilter] = useState<Filter>("Tous");
   const [search, setSearch] = useState("");
   const [doneIds, setDoneIds] = useState<Set<number>>(
@@ -258,19 +268,22 @@ export default function CsmHomePage() {
 
       {/* Tabs */}
       <div className="mb-5 flex gap-1 border-b border-[rgba(255,255,255,0.06)] pb-0">
-        {(["Portfolio", "Alertes & risques"] as const).map((tab) => {
-          const key = tab === "Portfolio" ? "Portfolio" : "Alertes";
+        {([
+          { label: "Portfolio",        key: "Portfolio" as const },
+          { label: "Activités et RDV", key: "Activites" as const },
+          { label: "Alertes & risques",key: "Alertes" as const },
+        ]).map(({ label, key }) => {
           const isActive = activeTab === key;
           const alertBadge = vigilanceCount + risqueCount + overdueActionsCount;
           return (
-            <button key={tab} onClick={() => setActiveTab(key as typeof activeTab)}
+            <button key={key} onClick={() => setActiveTab(key)}
               className={`-mb-px rounded-t-md px-4 py-2 text-[13px] font-medium transition-colors ${
                 isActive
                   ? "border border-b-[#061a16] border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] text-brand-cream"
                   : "text-[rgba(232,245,239,0.45)] hover:text-[rgba(232,245,239,0.8)]"
               }`}
             >
-              {tab}
+              {label}
               {key === "Alertes" && alertBadge > 0 && (
                 <span className="ml-1.5 rounded-full bg-[rgba(239,68,68,0.2)] px-1.5 py-0.5 text-[10px] font-bold text-[#ef4444]">
                   {alertBadge}
@@ -453,184 +466,154 @@ export default function CsmHomePage() {
                 </div>
               </div>
 
-              {/* Renouvellements */}
+              {/* Prochaines churn notices */}
+              {(() => {
+                const sorted = [...CHURN_NOTICES]
+                  .map((c) => ({ ...c, days: daysUntilIso(c.churnNotice) }))
+                  .sort((a, b) => a.days - b.days)
+                  .slice(0, 5);
+                return (
+                  <div className="rounded-[14px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.02)]">
+                    <div className="border-b border-[rgba(255,255,255,0.06)] px-4 py-3">
+                      <h3 className="text-[13px] font-semibold text-brand-cream">Prochaines churn notices</h3>
+                      <p className="mt-0.5 text-[10px] text-[rgba(232,245,239,0.4)]">Top 5 · triés par date d&apos;échéance</p>
+                    </div>
+                    <ul className="divide-y divide-[rgba(255,255,255,0.04)]">
+                      {sorted.map((c) => {
+                        const col = renewalColor(c.days);
+                        const cfg = statutConfig(c.statut);
+                        return (
+                          <li key={c.id}
+                            onClick={() => router.push(`/csm/clients/${c.id}`)}
+                            className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-[rgba(255,255,255,0.02)]">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] text-[11px] font-bold"
+                              style={{ backgroundColor: c.color + "30", color: c.color }}>
+                              {c.initials}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="truncate text-[12px] font-semibold text-brand-cream">{c.name}</span>
+                                <span className="shrink-0 text-[11px] font-bold tabular-nums" style={{ color: col }}>{c.days}j</span>
+                              </div>
+                              <div className="mt-0.5 flex items-center gap-1.5">
+                                <span className="text-[10px] text-[rgba(232,245,239,0.4)]">{formatIsoFr(c.churnNotice)}</span>
+                                <span className="text-[rgba(232,245,239,0.2)]">·</span>
+                                <span className="inline-flex items-center gap-1 text-[10px]" style={{ color: cfg.text }}>
+                                  <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: cfg.dot }} />
+                                  {cfg.label}
+                                </span>
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                );
+              })()}
+
+            </div>
+          </div>
+
+        </>
+      )}
+
+      {/* ── Activités et RDV tab ── */}
+      {activeTab === "Activites" && (
+        <div className="grid grid-cols-[1fr_320px] gap-4">
+
+          {/* Agenda */}
+          {(() => {
+            const dynamicCsm: AgendaEvent[] = extraCsmEvents.map((e) => ({
+              date: e.date,
+              weekday: e.weekday,
+              time: e.time,
+              title: e.title,
+              client: e.clientName,
+              clientId: e.clientId,
+              clientColor: e.clientColor,
+              type: "csm" as const,
+            }));
+            const allEvents = [...AGENDA_EVENTS, ...dynamicCsm];
+            return (
               <div className="rounded-[14px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.02)]">
                 <div className="flex items-center justify-between border-b border-[rgba(255,255,255,0.06)] px-4 py-3">
-                  <h3 className="text-[13px] font-semibold text-brand-cream">Renouvellements à venir</h3>
-                  <span className="text-[11px] text-[rgba(232,245,239,0.4)]">{RENEWALS.length} en cours · {renewalARR} k€</span>
+                  <h3 className="text-[13px] font-semibold text-brand-cream">Agenda · prochains RDV &amp; ateliers</h3>
+                  <span className="text-[11px] text-[rgba(232,245,239,0.4)]">{allEvents.length} événements{dynamicCsm.length > 0 && <span className="ml-1.5 rounded-full bg-[rgba(94,234,212,0.15)] px-1.5 py-0.5 text-[#5eead4]">+{dynamicCsm.length} ajoutés</span>}</span>
                 </div>
                 <ul className="divide-y divide-[rgba(255,255,255,0.04)]">
-                  {RENEWALS.map((r) => {
-                    const client = CLIENTS.find((c) => c.name === r.name);
+                  {allEvents.map((ev, i) => {
+                    const st = eventStyle(ev.type);
+                    const isFirst = i === 0;
                     return (
-                      <li key={r.name}
-                        onClick={() => client && router.push(`/csm/clients/${client.id}`)}
-                        className={`flex items-start gap-3 px-4 py-3 transition-colors ${client ? "cursor-pointer hover:bg-[rgba(255,255,255,0.02)]" : ""}`}>
-                        <div className="relative shrink-0">
-                          <DonutChart pct={1 - r.days / 90} color={r.days <= 30 ? "#ef4444" : r.days <= 50 ? "#f59e0b" : "#22c55e"} size={38} />
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <span className="text-[9px] font-bold tabular-nums text-brand-cream">{r.days}j</span>
-                          </div>
+                      <li key={i}
+                        onClick={() => router.push(`/csm/clients/${ev.clientId}`)}
+                        className="flex cursor-pointer items-start gap-3 px-4 py-2.5 transition-colors hover:bg-[rgba(255,255,255,0.02)]">
+                        <div className={`flex w-[42px] shrink-0 flex-col items-center rounded-[8px] py-1.5 ${isFirst ? "bg-[rgba(94,234,212,0.15)]" : "bg-[rgba(255,255,255,0.04)]"}`}>
+                          <span className={`text-[9px] font-semibold uppercase tracking-[0.5px] ${isFirst ? "text-[#a8e895]" : "text-[rgba(232,245,239,0.4)]"}`}>{ev.weekday}</span>
+                          <span className={`text-[13px] font-bold tabular-nums leading-none ${isFirst ? "text-[#a8e895]" : "text-brand-cream"}`}>{ev.date.split(" ")[0]}</span>
+                          <span className={`text-[9px] ${isFirst ? "text-[#84d4a6]" : "text-[rgba(232,245,239,0.35)]"}`}>{ev.date.split(" ")[1]}</span>
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[12px] font-semibold text-brand-cream">{r.name}</span>
-                            <span className="text-[11px] font-semibold text-[#84d4a6]">{r.arr} k€</span>
+                        <div className="min-w-0 flex-1 pt-0.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-[12px] font-medium leading-snug text-brand-cream">{ev.title}</p>
+                            <span className="mt-0.5 shrink-0 rounded-[4px] px-1.5 py-0.5 text-[9px] font-semibold" style={{ backgroundColor: st.bg, color: st.color }}>
+                              {st.icon}
+                            </span>
                           </div>
-                          <p className="mt-0.5 text-[10px] leading-snug text-[rgba(232,245,239,0.4)]">{r.status}</p>
-                          <span className="mt-1 inline-block text-[9px] font-semibold uppercase tracking-[0.5px] text-[rgba(94,234,212,0.6)]">ARR</span>
+                          <div className="mt-1 flex items-center gap-1.5">
+                            <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold" style={{ backgroundColor: ev.clientColor + "28", color: ev.clientColor }}>
+                              {ev.client}
+                            </span>
+                            <span className="text-[10px] text-[rgba(232,245,239,0.35)]">{ev.time}</span>
+                          </div>
                         </div>
                       </li>
                     );
                   })}
+                  {allEvents.length === 0 && (
+                    <li className="px-4 py-8 text-center text-[12px] text-[rgba(232,245,239,0.3)]">Aucun événement planifié.</li>
+                  )}
                 </ul>
               </div>
+            );
+          })()}
+
+          {/* Activité récente */}
+          <div className="rounded-[14px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.02)]">
+            <div className="border-b border-[rgba(255,255,255,0.06)] px-4 py-3">
+              <h3 className="text-[13px] font-semibold text-brand-cream">Activité récente</h3>
+              <p className="mt-0.5 text-[10px] text-[rgba(232,245,239,0.4)]">Clients connectés à leur espace</p>
+            </div>
+            <ul className="divide-y divide-[rgba(255,255,255,0.04)]">
+              {RECENT_ACTIVITY.map((a) => (
+                <li key={a.clientId}
+                  onClick={() => router.push(`/csm/clients/${a.clientId}`)}
+                  className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-[rgba(255,255,255,0.02)]">
+                  <ClientAvatar initials={a.initials} color={a.color} size={28} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[12px] font-semibold text-brand-cream">{a.name}</span>
+                      <span className="shrink-0 text-[10px] text-[rgba(232,245,239,0.35)]">{a.ago}</span>
+                    </div>
+                    <p className="mt-0.5 text-[10px] text-[rgba(232,245,239,0.5)]">{a.action}</p>
+                  </div>
+                  <div className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: a.ago.includes("h") ? "#22c55e" : "rgba(255,255,255,0.2)" }} />
+                </li>
+              ))}
+              {RECENT_ACTIVITY.length === 0 && (
+                <li className="px-4 py-8 text-center text-[12px] text-[rgba(232,245,239,0.3)]">Aucune activité récente.</li>
+              )}
+            </ul>
+            <div className="border-t border-[rgba(255,255,255,0.06)] px-4 py-2.5 text-[10px] text-[rgba(232,245,239,0.3)]">
+              <span className="inline-flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#22c55e]" />
+                Vert = connecté dans les dernières 24h
+              </span>
             </div>
           </div>
 
-          {/* ── Bottom row: agenda · top 5 renewals · recent activity ── */}
-          <div className="mt-4 grid grid-cols-[1fr_260px_260px] gap-4">
-
-            {/* Agenda */}
-            {(() => {
-              const dynamicCsm: AgendaEvent[] = extraCsmEvents.map((e) => ({
-                date: e.date,
-                weekday: e.weekday,
-                time: e.time,
-                title: e.title,
-                client: e.clientName,
-                clientId: e.clientId,
-                clientColor: e.clientColor,
-                type: "csm" as const,
-              }));
-              const allEvents = [...AGENDA_EVENTS, ...dynamicCsm];
-              return (
-            <div className="rounded-[14px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.02)]">
-              <div className="flex items-center justify-between border-b border-[rgba(255,255,255,0.06)] px-4 py-3">
-                <h3 className="text-[13px] font-semibold text-brand-cream">Agenda · prochains RDV & ateliers</h3>
-                <span className="text-[11px] text-[rgba(232,245,239,0.4)]">{allEvents.length} événements{dynamicCsm.length > 0 && <span className="ml-1.5 rounded-full bg-[rgba(94,234,212,0.15)] px-1.5 py-0.5 text-[#5eead4]">+{dynamicCsm.length} ajoutés</span>}</span>
-              </div>
-              <ul className="divide-y divide-[rgba(255,255,255,0.04)]">
-                {allEvents.map((ev, i) => {
-                  const st = eventStyle(ev.type);
-                  const isFirst = i === 0;
-                  return (
-                    <li key={i}
-                      onClick={() => router.push(`/csm/clients/${ev.clientId}`)}
-                      className="flex cursor-pointer items-start gap-3 px-4 py-2.5 transition-colors hover:bg-[rgba(255,255,255,0.02)]">
-                      {/* Date badge */}
-                      <div className={`flex w-[42px] shrink-0 flex-col items-center rounded-[8px] py-1.5 ${isFirst ? "bg-[rgba(94,234,212,0.15)]" : "bg-[rgba(255,255,255,0.04)]"}`}>
-                        <span className={`text-[9px] font-semibold uppercase tracking-[0.5px] ${isFirst ? "text-[#a8e895]" : "text-[rgba(232,245,239,0.4)]"}`}>{ev.weekday}</span>
-                        <span className={`text-[13px] font-bold tabular-nums leading-none ${isFirst ? "text-[#a8e895]" : "text-brand-cream"}`}>{ev.date.split(" ")[0]}</span>
-                        <span className={`text-[9px] ${isFirst ? "text-[#84d4a6]" : "text-[rgba(232,245,239,0.35)]"}`}>{ev.date.split(" ")[1]}</span>
-                      </div>
-                      {/* Content */}
-                      <div className="min-w-0 flex-1 pt-0.5">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-[12px] font-medium leading-snug text-brand-cream">{ev.title}</p>
-                          <span className="mt-0.5 shrink-0 rounded-[4px] px-1.5 py-0.5 text-[9px] font-semibold" style={{ backgroundColor: st.bg, color: st.color }}>
-                            {st.icon}
-                          </span>
-                        </div>
-                        <div className="mt-1 flex items-center gap-1.5">
-                          <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold" style={{ backgroundColor: ev.clientColor + "28", color: ev.clientColor }}>
-                            {ev.client}
-                          </span>
-                          <span className="text-[10px] text-[rgba(232,245,239,0.35)]">{ev.time}</span>
-                        </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-              );
-            })()}
-
-            {/* Top 5 renouvellements */}
-            <div className="rounded-[14px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.02)]">
-              <div className="border-b border-[rgba(255,255,255,0.06)] px-4 py-3">
-                <h3 className="text-[13px] font-semibold text-brand-cream">Prochains renouvellements</h3>
-                <p className="mt-0.5 text-[10px] text-[rgba(232,245,239,0.4)]">Top 5 · tous clients confondus</p>
-              </div>
-              <ul className="divide-y divide-[rgba(255,255,255,0.04)]">
-                {top5Renewals.map((c, rank) => {
-                  const col = renewalColor(c.daysLeft);
-                  const renewal = RENEWALS.find((r) => r.name === c.name);
-                  return (
-                    <li key={c.id}
-                      onClick={() => router.push(`/csm/clients/${c.id}`)}
-                      className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-[rgba(255,255,255,0.02)]">
-                      {/* Rank */}
-                      <span className="w-4 shrink-0 text-center text-[11px] font-bold text-[rgba(232,245,239,0.25)]">{rank + 1}</span>
-                      <ClientAvatar initials={c.initials} color={c.color} size={28} />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[12px] font-semibold text-brand-cream">{c.name}</span>
-                          <span className="text-[11px] font-bold tabular-nums" style={{ color: col }}>{c.daysLeft}j</span>
-                        </div>
-                        <div className="mt-0.5 flex items-center gap-1.5">
-                          <span className="text-[10px] text-[rgba(232,245,239,0.4)]">{c.renouvDate}</span>
-                          <span className="text-[rgba(232,245,239,0.2)]">·</span>
-                          <span className="text-[10px] text-[rgba(94,234,212,0.7)]">{c.arr} k€</span>
-                        </div>
-                        {/* Progress bar showing days urgency */}
-                        <div className="mt-1.5 h-0.5 w-full overflow-hidden rounded-full bg-[rgba(255,255,255,0.06)]">
-                          <div className="h-full rounded-full transition-all"
-                            style={{ width: `${Math.max(4, Math.min(100, (1 - c.daysLeft / 365) * 100))}%`, backgroundColor: col }} />
-                        </div>
-                      </div>
-                      {renewal && (
-                        <StatutBadge statut={c.statut} />
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-              <div className="border-t border-[rgba(255,255,255,0.06)] px-4 py-2.5">
-                <button onClick={() => setFilter("Renouvellement")}
-                  className="text-[11px] font-medium text-[rgba(94,234,212,0.7)] hover:text-[#a8e895]">
-                  Filtrer par renouvellement →
-                </button>
-              </div>
-            </div>
-
-            {/* Activité récente */}
-            <div className="rounded-[14px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.02)]">
-              <div className="border-b border-[rgba(255,255,255,0.06)] px-4 py-3">
-                <h3 className="text-[13px] font-semibold text-brand-cream">Activité récente</h3>
-                <p className="mt-0.5 text-[10px] text-[rgba(232,245,239,0.4)]">Clients connectés à leur espace</p>
-              </div>
-              <ul className="divide-y divide-[rgba(255,255,255,0.04)]">
-                {RECENT_ACTIVITY.map((a) => (
-                  <li key={a.clientId}
-                    onClick={() => router.push(`/csm/clients/${a.clientId}`)}
-                    className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-[rgba(255,255,255,0.02)]">
-                    <ClientAvatar initials={a.initials} color={a.color} size={28} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="text-[12px] font-semibold text-brand-cream">{a.name}</span>
-                        <span className="shrink-0 text-[10px] text-[rgba(232,245,239,0.35)]">{a.ago}</span>
-                      </div>
-                      <p className="mt-0.5 text-[10px] text-[rgba(232,245,239,0.5)]">{a.action}</p>
-                    </div>
-                    {/* Online dot */}
-                    <div className="relative shrink-0">
-                      <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: a.ago.includes("h") ? "#22c55e" : "rgba(255,255,255,0.2)" }} />
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              <div className="border-t border-[rgba(255,255,255,0.06)] px-4 py-2.5 text-[10px] text-[rgba(232,245,239,0.3)]">
-                <span className="inline-flex items-center gap-1">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#22c55e]" />
-                  Vert = connecté dans les dernières 24h
-                </span>
-              </div>
-            </div>
-
-          </div>
-        </>
+        </div>
       )}
 
       {/* ── Alertes & risques tab ── */}

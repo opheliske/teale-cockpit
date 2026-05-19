@@ -80,14 +80,12 @@ function pickEmoji(w: Workshop): string {
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
-type DurationFilter = "all" | "1h" | "1h30" | "2h";
 type StatusFilter = "all" | "done" | "todo";
 
 interface FormState {
   title: string;
   subtitle: string;
   themeId: string;
-  duration: string;
   alreadyAnimated: boolean;
   objectivesText: string;    // one per line
   targetAudienceText: string; // one per line
@@ -98,7 +96,6 @@ const EMPTY_FORM: FormState = {
   title: "",
   subtitle: "",
   themeId: "prevention",
-  duration: "1h",
   alreadyAnimated: false,
   objectivesText: "",
   targetAudienceText: "",
@@ -110,7 +107,6 @@ function workshopToForm(w: Workshop): FormState {
     title: w.title,
     subtitle: w.subtitle ?? "",
     themeId: w.themeId,
-    duration: w.duration,
     alreadyAnimated: w.alreadyAnimated ?? false,
     objectivesText: w.objectives.join("\n"),
     targetAudienceText: w.targetAudience.join("\n"),
@@ -128,7 +124,6 @@ function formToWorkshop(form: FormState, existingId?: string): Workshop {
     title,
     subtitle: form.subtitle.trim() || undefined,
     themeId: form.themeId,
-    duration: form.duration,
     alreadyAnimated: form.alreadyAnimated || undefined,
     objectives: form.objectivesText.split("\n").map((s) => s.trim()).filter(Boolean),
     targetAudience: form.targetAudienceText.split("\n").map((s) => s.trim()).filter(Boolean),
@@ -151,7 +146,6 @@ export default function CsmCataloguePage() {
   const [search, setSearch] = useState("");
   const [activeThemeId, setActiveThemeId] = useState<string | null>(null);
   const [activeStatus, setActiveStatus] = useState<StatusFilter>("all");
-  const [activeDuration, setActiveDuration] = useState<DurationFilter>("all");
 
   // modal state
   const [editingId, setEditingId] = useState<string | "new" | null>(null);
@@ -173,13 +167,12 @@ export default function CsmCataloguePage() {
       if (activeThemeId && w.themeId !== activeThemeId) return false;
       if (activeStatus === "done" && !w.alreadyAnimated) return false;
       if (activeStatus === "todo" && w.alreadyAnimated) return false;
-      if (activeDuration !== "all" && w.duration !== activeDuration) return false;
       if (search.trim() && !workshopHaystack(w).includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [workshops, search, activeThemeId, activeStatus, activeDuration]);
+  }, [workshops, search, activeThemeId, activeStatus]);
 
-  const noFilters = !search.trim() && !activeThemeId && activeStatus === "all" && activeDuration === "all";
+  const noFilters = !search.trim() && !activeThemeId && activeStatus === "all";
   const previewWorkshop = previewId ? workshops.find((w) => w.id === previewId) ?? null : null;
 
   function openNew() {
@@ -295,11 +288,6 @@ export default function CsmCataloguePage() {
           <Chip active={activeStatus === "all"} onClick={() => setActiveStatus("all")}>Tous</Chip>
           <Chip active={activeStatus === "done"} onClick={() => setActiveStatus(activeStatus === "done" ? "all" : "done")} count={animatedCount}>✓ Déjà animé</Chip>
           <Chip active={activeStatus === "todo"} onClick={() => setActiveStatus(activeStatus === "todo" ? "all" : "todo")} count={remainingCount}>○ À planifier</Chip>
-          <span className="ml-4 min-w-[60px] text-[10px] font-bold uppercase tracking-[1.5px] text-[#6b7c75]">DURÉE</span>
-          <Chip active={activeDuration === "all"} onClick={() => setActiveDuration("all")}>Toutes</Chip>
-          {(["1h", "1h30", "2h"] as const).map((d) => (
-            <Chip key={d} active={activeDuration === d} onClick={() => setActiveDuration(activeDuration === d ? "all" : d)}>{d}</Chip>
-          ))}
         </div>
 
         {/* GRID */}
@@ -311,7 +299,7 @@ export default function CsmCataloguePage() {
               </p>
               <button
                 type="button"
-                onClick={() => { setSearch(""); setActiveThemeId(null); setActiveStatus("all"); setActiveDuration("all"); }}
+                onClick={() => { setSearch(""); setActiveThemeId(null); setActiveStatus("all"); }}
                 className="mt-5 rounded-full border border-[rgba(94,234,212,0.4)] px-4 py-1.5 text-xs font-medium text-[#84d4a6] transition-colors hover:bg-[rgba(94,234,212,0.1)]"
               >
                 Réinitialiser les filtres
@@ -463,7 +451,6 @@ function AdminCard({
 
       {/* footer */}
       <div className="flex items-center justify-between border-t border-[rgba(255,255,255,0.04)] pt-2.5 text-[11px] text-[#6b7c75]">
-        <span>⏱ {workshop.duration}</span>
         <span className="text-[11px] text-[#6b7c75]">{workshop.programme.length} étape{workshop.programme.length !== 1 ? "s" : ""}</span>
       </div>
     </div>
@@ -561,7 +548,7 @@ function WorkshopFormModal({
             </div>
           </div>
 
-          {/* Theme + Duration + Animated */}
+          {/* Theme + Animated */}
           <div className="grid grid-cols-[1fr_1fr] gap-3">
             <div>
               <label className={LABEL}>Thème *</label>
@@ -573,18 +560,6 @@ function WorkshopFormModal({
                 {themes.map((t) => (
                   <option key={t.id} value={t.id}>{themeDisplayLabel[t.id] ?? t.name}</option>
                 ))}
-              </select>
-            </div>
-            <div>
-              <label className={LABEL}>Durée *</label>
-              <select
-                className={`${INPUT} [color-scheme:dark]`}
-                value={form.duration}
-                onChange={(e) => setField("duration", e.target.value)}
-              >
-                <option value="1h">1h</option>
-                <option value="1h30">1h30</option>
-                <option value="2h">2h</option>
               </select>
             </div>
             <div className="col-span-2 flex items-center gap-3">
@@ -707,7 +682,6 @@ function PreviewModal({ workshop, onClose }: { workshop: Workshop; onClose: () =
 
         <div className="flex flex-wrap items-center gap-2 pr-12">
           <span className={`rounded-[4px] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${tagClass}`}>{tagLabel}</span>
-          <span className="rounded-[4px] bg-[rgba(255,255,255,0.06)] px-2.5 py-0.5 text-[10px] uppercase tracking-wider text-[#94a8a0]">{workshop.duration}</span>
           {workshop.subtitle && <span className="text-[10px] uppercase tracking-wider text-[#94a8a0]">· {workshop.subtitle}</span>}
           <span className={`ml-auto inline-flex items-center gap-1 rounded-[4px] px-2 py-0.5 text-[10px] font-semibold ${workshop.alreadyAnimated ? "bg-[rgba(94,234,212,0.12)] text-[#5eead4]" : "bg-[rgba(250,204,21,0.1)] text-[#fde047]"}`}>
             {workshop.alreadyAnimated ? "✓ Animé" : "○ À planifier"}

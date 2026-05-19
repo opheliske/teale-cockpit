@@ -44,6 +44,26 @@ export const RENEWALS: RenewalItem[] = [
   { initials: "BX", color: "#0ea5e9", name: "Biocodex", days: 106, arr: 78000, status: "green" },
 ];
 
+export type ChurnNoticeItem = {
+  id: string;
+  initials: string;
+  color: string;
+  name: string;
+  churnNotice: string; // ISO YYYY-MM-DD
+  contractEnd: string; // ISO YYYY-MM-DD
+  arr: number;
+  statut: Statut;
+};
+
+export const CHURN_NOTICES: ChurnNoticeItem[] = [
+  { id: "bx",  initials: "BX", color: "#0ea5e9", name: "Biocodex",         churnNotice: "2026-06-01", contractEnd: "2026-09-01", arr: 78000,  statut: "SAIN" },
+  { id: "mf",  initials: "MF", color: "#8b5cf6", name: "Maif",             churnNotice: "2026-06-10", contractEnd: "2026-09-10", arr: 54000,  statut: "VIGILANCE" },
+  { id: "oc",  initials: "OC", color: "#f59e0b", name: "Orange CSEP",      churnNotice: "2026-06-25", contractEnd: "2026-09-25", arr: 92000,  statut: "SAIN" },
+  { id: "cr",  initials: "CR", color: "#ef4444", name: "Crédit Agricole",  churnNotice: "2026-07-15", contractEnd: "2026-10-15", arr: 120000, statut: "À RISQUE" },
+  { id: "sg",  initials: "SG", color: "#22c55e", name: "Société Générale", churnNotice: "2026-08-01", contractEnd: "2026-11-01", arr: 68000,  statut: "SAIN" },
+  { id: "edf", initials: "EF", color: "#ec4899", name: "EDF",              churnNotice: "2026-08-20", contractEnd: "2026-11-20", arr: 85000,  statut: "VIGILANCE" },
+];
+
 export type HomeAction = {
   id: number;
   text: string;
@@ -105,6 +125,7 @@ export type PlanItem = {
   done: boolean;
   responsable?: string;
   detail?: string;
+  impact?: string;
   files?: PlanItemFile[];
   targets?: string[];
 };

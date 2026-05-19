@@ -1,0 +1,136 @@
+-- Teale Cockpit — Supabase schema
+-- Run this in the Supabase SQL editor to create all tables.
+
+-- ─── Workshops ──────────────────────────────────────────────────────────────
+-- Full Workshop objects stored as JSON (objectives, programme, targetAudience arrays).
+create table if not exists workshops (
+  id           text primary key,
+  title        text not null,
+  subtitle     text,
+  theme_id     text not null,
+  objectives   jsonb not null default '[]',
+  programme    jsonb not null default '[]',
+  target_audience jsonb not null default '[]',
+  already_animated boolean not null default false,
+  created_at   timestamptz not null default now()
+);
+
+-- ─── Kits ────────────────────────────────────────────────────────────────────
+create table if not exists kits_lancement (
+  id       text primary key,
+  title    text not null,
+  step     text not null check (step in ('before', 'dday', 'after')),
+  language text not null check (language in ('FR', 'EN'))
+);
+
+create table if not exists kits_animation (
+  id        text primary key,
+  title     text not null,
+  month     text not null,
+  type      text not null,
+  status    text not null,
+  landing   text,
+  languages jsonb not null default '[]',
+  images_fr jsonb not null default '[]',
+  images_en jsonb not null default '[]',
+  pdf_fr    jsonb not null default '[]',
+  pdf_en    jsonb not null default '[]'
+);
+
+create table if not exists kits_email (
+  id       text primary key,
+  title    text not null,
+  topic    text not null,
+  language text not null check (language in ('FR', 'EN'))
+);
+
+-- ─── Client actions (CSM home to-do list) ────────────────────────────────────
+create table if not exists client_actions (
+  id        bigint primary key generated always as identity,
+  text      text not null,
+  clients   jsonb not null default '[]',  -- [{ name, color }]
+  echeance  text not null,
+  overdue   boolean not null default false,
+  done      boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+-- ─── CSM events (agenda) ─────────────────────────────────────────────────────
+create table if not exists csm_events (
+  id               bigint primary key generated always as identity,
+  client_id        text not null,
+  client_name      text not null,
+  client_initials  text not null,
+  client_color     text not null,
+  title            text not null,
+  date             text not null,   -- French-formatted, e.g. "15 juin 2026"
+  weekday          text not null,   -- e.g. "Lun."
+  time             text not null,   -- e.g. "14:00"
+  responsable      text not null,
+  created_at       timestamptz not null default now()
+);
+
+-- ─── Health entries (per client) ─────────────────────────────────────────────
+create table if not exists health_entries (
+  id         bigint primary key generated always as identity,
+  client_id  text not null,
+  date       text not null,       -- French label, e.g. "25 mars 2026"
+  iso_date   date not null,
+  statut     text not null check (statut in ('SAIN', 'VIGILANCE', 'À RISQUE')),
+  note       text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists health_entries_client_id_idx on health_entries (client_id);
+
+-- ─── Target labels (per client) ──────────────────────────────────────────────
+create table if not exists target_labels (
+  id        text primary key,
+  client_id text not null,
+  name      text not null,
+  color     text not null
+);
+
+create index if not exists target_labels_client_id_idx on target_labels (client_id);
+
+-- ─── Target → plan item assignments ──────────────────────────────────────────
+create table if not exists target_item_assignments (
+  client_id  text not null,
+  item_id    bigint not null,
+  label_id   text not null references target_labels (id) on delete cascade,
+  primary key (client_id, item_id, label_id)
+);
+
+-- ─── Plan state (one row per client) ─────────────────────────────────────────
+create table if not exists plan_state (
+  client_id  text primary key,
+  themes     jsonb not null default '{"Q1":"","Q2":"","Q3":"","Q4":""}',
+  items      jsonb not null default '[]',
+  updated_at timestamptz not null default now()
+);
+
+-- ─── Documents (per client) ──────────────────────────────────────────────────
+create table if not exists documents (
+  id         text not null,
+  client_id  text not null,
+  title      text not null,
+  type       text not null,
+  size       text not null,
+  date       text not null,
+  author     text not null,
+  files      jsonb not null default '[]',
+  primary key (id, client_id)
+);
+
+create index if not exists documents_client_id_idx on documents (client_id);
+
+-- ─── Plan comments (messaging between client and CSM) ────────────────────────
+create table if not exists plan_comments (
+  id         bigint primary key generated always as identity,
+  thread_id  text not null,   -- String(planItemId) or "type:title" for static events
+  author     text not null check (author in ('client', 'csm')),
+  text       text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists plan_comments_thread_id_idx on plan_comments (thread_id);
