@@ -411,7 +411,14 @@ export default function ClientDetailView({ id }: { id: string }) {
   const mainRef = useRef<HTMLDivElement>(null);
 
 
-  useEffect(() => docsStore.subscribe(() => setLocalDocs(docsStore.getDocs())), []);
+  useEffect(() => {
+    planStore.load(id);
+  }, [id]);
+
+  useEffect(() => {
+    docsStore.load(id);
+    return docsStore.subscribe(() => setLocalDocs(docsStore.getDocs()));
+  }, [id]);
 
   // Target labels
   const [clientLabels, setClientLabels] = useState<TargetLabel[]>(() => targetsStore.getLabels(id));
@@ -437,14 +444,17 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [editingAlertOppVal, setEditingAlertOppVal] = useState("");
   const [addingAlertOppSection, setAddingAlertOppSection] = useState<"alert" | "opp" | null>(null);
   const [newAlertOppText, setNewAlertOppText] = useState("");
-  useEffect(() => targetsStore.subscribe(() => {
-    setClientLabels(targetsStore.getLabels(id));
-    setItemTargets((prev) => {
-      const next: Record<number, string[]> = { ...prev };
-      for (const k of Object.keys(next)) next[Number(k)] = targetsStore.getItemTargets(id, Number(k));
-      return next;
+  useEffect(() => {
+    targetsStore.load(id);
+    return targetsStore.subscribe(() => {
+      setClientLabels(targetsStore.getLabels(id));
+      setItemTargets((prev) => {
+        const next: Record<number, string[]> = { ...prev };
+        for (const k of Object.keys(next)) next[Number(k)] = targetsStore.getItemTargets(id, Number(k));
+        return next;
+      });
     });
-  }), [id]);
+  }, [id]);
 
   // Health score history
   const [healthEntries, setHealthEntries] = useState<HealthEntry[]>(() => healthStore.getEntries(id));
@@ -452,7 +462,10 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [healthDate, setHealthDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [healthStatut, setHealthStatut] = useState<HealthStatut>("SAIN");
   const [healthNote, setHealthNote] = useState("");
-  useEffect(() => healthStore.subscribe(() => setHealthEntries(healthStore.getEntries(id))), [id]);
+  useEffect(() => {
+    healthStore.load(id);
+    return healthStore.subscribe(() => setHealthEntries(healthStore.getEntries(id)));
+  }, [id]);
 
   function submitHealthEntry() {
     const dateFr = formatDateFr(healthDate);
@@ -512,8 +525,10 @@ export default function ClientDetailView({ id }: { id: string }) {
 
   useEffect(() => {
     if (!editingPlanItem) return;
+    const threadId = String(editingPlanItem.id);
+    commentsStore.load(threadId);
     const unsub = commentsStore.subscribe(() =>
-      setPlanItemComments(commentsStore.getByThread(String(editingPlanItem.id)))
+      setPlanItemComments(commentsStore.getByThread(threadId))
     );
     return unsub;
   }, [editingPlanItem]);
@@ -563,7 +578,6 @@ export default function ClientDetailView({ id }: { id: string }) {
     const prioAction: PrioAction = { id: newId, title: newActionTitle.trim(), dueLabel, status: newActionStatus };
     setLocalActions((prev) => [...prev, prioAction]);
     clientActionsStore.add({
-      id: newId,
       text: newActionTitle.trim(),
       clients: [{ name: client.name, color: client.color }],
       echeance: dueLabel,
@@ -704,7 +718,6 @@ export default function ClientDetailView({ id }: { id: string }) {
       }]);
       if (addPlanCtx.type === "csm" && client) {
         csmEventsStore.add({
-          id: newId,
           clientId: client.id,
           clientName: client.name,
           clientInitials: client.initials,

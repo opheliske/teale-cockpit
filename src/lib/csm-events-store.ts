@@ -1,3 +1,5 @@
+import { supabase } from "@/lib/supabase";
+
 export type CsmEvent = {
   id: number;
   clientId: string;
@@ -11,17 +13,73 @@ export type CsmEvent = {
   responsable: string;
 };
 
+function fromRow(row: Record<string, unknown>): CsmEvent {
+  return {
+    id: Number(row.id),
+    clientId: row.client_id as string,
+    clientName: row.client_name as string,
+    clientInitials: row.client_initials as string,
+    clientColor: row.client_color as string,
+    title: row.title as string,
+    date: row.date as string,
+    weekday: row.weekday as string,
+    time: row.time as string,
+    responsable: row.responsable as string,
+  };
+}
+
 let _events: CsmEvent[] = [];
+let _loaded = false;
 const _listeners = new Set<() => void>();
+
+async function ensureLoaded() {
+  if (_loaded) return;
+  _loaded = true;
+  const { data } = await supabase
+    .from("csm_events")
+    .select("*")
+    .order("created_at");
+  _events = data ? data.map(fromRow) : [];
+  _listeners.forEach((l) => l());
+}
 
 export const csmEventsStore = {
   getEvents: (): CsmEvent[] => _events,
-  add(event: CsmEvent): void {
-    _events = [..._events, event];
+
+  load: async () => ensureLoaded(),
+
+  add: async (event: Omit<CsmEvent, "id">) => {
+    await ensureLoaded();
+    const { data } = await supabase
+      .from("csm_events")
+      .insert({
+        client_id: event.clientId,
+        client_name: event.clientName,
+        client_initials: event.clientInitials,
+        client_color: event.clientColor,
+        title: event.title,
+        date: event.date,
+        weekday: event.weekday,
+        time: event.time,
+        responsable: event.responsable,
+      })
+      .select()
+      .single();
+    if (data) {
+      _events = [..._events, fromRow(data)];
+      _listeners.forEach((l) => l());
+    }
+  },
+
+  remove: async (id: number) => {
+    await supabase.from("csm_events").delete().eq("id", id);
+    _events = _events.filter((e) => e.id !== id);
     _listeners.forEach((l) => l());
   },
-  subscribe(listener: () => void): () => void {
+
+  subscribe: (listener: () => void): (() => void) => {
     _listeners.add(listener);
+    ensureLoaded();
     return () => _listeners.delete(listener);
   },
 };

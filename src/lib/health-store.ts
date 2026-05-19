@@ -1,3 +1,5 @@
+import { supabase } from "@/lib/supabase";
+
 export type HealthStatut = "SAIN" | "VIGILANCE" | "À RISQUE";
 
 export type HealthEntry = {
@@ -8,18 +10,18 @@ export type HealthEntry = {
   note?: string;
 };
 
+function fromRow(row: Record<string, unknown>): HealthEntry {
+  return {
+    id: Number(row.id),
+    date: row.date as string,
+    isoDate: row.iso_date as string,
+    statut: row.statut as HealthStatut,
+    note: row.note as string | undefined,
+  };
+}
+
 type State = Record<string, HealthEntry[]>;
-
-const seed: State = {
-  bx: [
-    { id: 1, date: "1 sept. 2025",  isoDate: "2025-09-01", statut: "VIGILANCE", note: "Baseline onboarding — adoption démarrant, équipes à embarquer" },
-    { id: 2, date: "17 déc. 2025",  isoDate: "2025-12-17", statut: "VIGILANCE", note: "Fin Q1 — adoption initiale satisfaisante, Joy bien activé" },
-    { id: 3, date: "25 mars 2026",  isoDate: "2026-03-25", statut: "SAIN",      note: "QBR T2 — engagement en nette progression, objectifs atteints" },
-    { id: 4, date: "6 mai 2026",    isoDate: "2026-05-06", statut: "SAIN",      note: "Point CSM mai — bonne dynamique, sous-conso Pulse à surveiller" },
-  ],
-};
-
-let state: State = { ...seed };
+let state: State = {};
 const listeners: (() => void)[] = [];
 
 function notify() {
@@ -30,17 +32,36 @@ export const healthStore = {
   getEntries: (clientId: string): HealthEntry[] =>
     [...(state[clientId] ?? [])].sort((a, b) => a.isoDate.localeCompare(b.isoDate)),
 
-  addEntry: (
-    clientId: string,
-    entry: Omit<HealthEntry, "id">
-  ) => {
-    const existing = state[clientId] ?? [];
-    const id = existing.length > 0 ? Math.max(...existing.map((e) => e.id)) + 1 : 1;
-    state = { ...state, [clientId]: [...existing, { ...entry, id }] };
+  load: async (clientId: string) => {
+    const { data } = await supabase
+      .from("health_entries")
+      .select("*")
+      .eq("client_id", clientId)
+      .order("iso_date");
+    state = { ...state, [clientId]: data ? data.map(fromRow) : [] };
     notify();
   },
 
-  removeEntry: (clientId: string, entryId: number) => {
+  addEntry: async (clientId: string, entry: Omit<HealthEntry, "id">) => {
+    const { data } = await supabase
+      .from("health_entries")
+      .insert({
+        client_id: clientId,
+        date: entry.date,
+        iso_date: entry.isoDate,
+        statut: entry.statut,
+        note: entry.note ?? null,
+      })
+      .select()
+      .single();
+    if (data) {
+      state = { ...state, [clientId]: [...(state[clientId] ?? []), fromRow(data)] };
+      notify();
+    }
+  },
+
+  removeEntry: async (clientId: string, entryId: number) => {
+    await supabase.from("health_entries").delete().eq("id", entryId);
     state = {
       ...state,
       [clientId]: (state[clientId] ?? []).filter((e) => e.id !== entryId),

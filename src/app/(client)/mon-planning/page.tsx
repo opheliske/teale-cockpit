@@ -661,14 +661,17 @@ export default function MonPlanningPage() {
   }, []);
 
   useEffect(() => {
+    planStore.load(CLIENT_ID);
     return planStore.subscribe(() => setStoreState(planStore.getState()));
   }, []);
 
   useEffect(() => {
+    docsStore.load(CLIENT_ID);
     return docsStore.subscribe(() => setStoreDocs(docsStore.getDocs()));
   }, []);
 
   useEffect(() => {
+    targetsStore.load(CLIENT_ID);
     return targetsStore.subscribe(() => setClientLabels(targetsStore.getLabels(CLIENT_ID)));
   }, []);
 
@@ -1528,6 +1531,7 @@ function EventModal({
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    commentsStore.load(threadId);
     return commentsStore.subscribe(() =>
       setComments(commentsStore.getByThread(threadId))
     );

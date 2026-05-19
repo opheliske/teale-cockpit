@@ -121,8 +121,9 @@ export default function ClientSpacePage() {
   const [activeQ, setActiveQ] = useState<Quarter>("q2");
 
   useEffect(() => {
+    docsStore.load(id);
     return docsStore.subscribe(() => setDocs([...docsStore.getDocs()]));
-  }, []);
+  }, [id]);
 
   if (!client || !detail) {
     return (

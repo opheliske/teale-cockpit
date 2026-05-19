@@ -1,10 +1,12 @@
+import { supabase } from "@/lib/supabase";
+
 export type StoredDocumentFile = {
   id: string;
   name: string;
   mimeType: string;
   sizeBytes: number;
   sizeLabel: string;
-  url: string; // blob URL from URL.createObjectURL — valid for the session
+  url: string; // blob URL from URL.createObjectURL — valid for the session only
 };
 
 export type StoredDocument = {
@@ -17,23 +19,71 @@ export type StoredDocument = {
   files?: StoredDocumentFile[];
 };
 
-const DEFAULT_DOCS: StoredDocument[] = [
-  { id: "plan-annuel-2026",    title: "Plan d'animation annuel 2026",             type: "Stratégie", size: "2,4 Mo", date: "15 janvier 2026",  author: "Lucie Martin, CSM" },
-  { id: "qbr-q1-2026",        title: "Compte-rendu QBR Q1 2026",                 type: "QBR",       size: "1,8 Mo", date: "14 mars 2026",      author: "Lucie Martin, CSM" },
-  { id: "strategie-managers",  title: "Stratégie de déploiement managers",        type: "Stratégie", size: "3,1 Mo", date: "5 février 2026",    author: "Lucie Martin, CSM" },
-  { id: "bilan-q1",            title: "Bilan trimestriel Q1 — KPI & insights",   type: "Bilan",     size: "1,2 Mo", date: "28 mars 2026",      author: "Lucie Martin, CSM" },
-  { id: "guide-ambassadeurs",  title: "Guide d'accompagnement des ambassadeurs",  type: "Guide",     size: "0,9 Mo", date: "22 avril 2026",     author: "Lucie Martin, CSM" },
-];
+function fromRow(row: Record<string, unknown>): StoredDocument {
+  return {
+    id: row.id as string,
+    title: row.title as string,
+    type: row.type as string,
+    size: row.size as string,
+    date: row.date as string,
+    author: row.author as string,
+    files: row.files as StoredDocumentFile[] | undefined,
+  };
+}
 
-let _docs: StoredDocument[] = [...DEFAULT_DOCS];
+let _docs: StoredDocument[] = [];
+let _clientId: string | null = null;
 const _listeners = new Set<() => void>();
 
 export const docsStore = {
   getDocs: (): StoredDocument[] => _docs,
+
+  load: async (clientId: string) => {
+    _clientId = clientId;
+    const { data } = await supabase
+      .from("documents")
+      .select("*")
+      .eq("client_id", clientId)
+      .order("date", { ascending: false });
+    _docs = data ? data.map(fromRow) : [];
+    _listeners.forEach((l) => l());
+  },
+
+  addDoc: async (doc: StoredDocument) => {
+    if (!_clientId) return;
+    const { data } = await supabase
+      .from("documents")
+      .insert({
+        id: doc.id,
+        client_id: _clientId,
+        title: doc.title,
+        type: doc.type,
+        size: doc.size,
+        date: doc.date,
+        author: doc.author,
+        files: doc.files ?? [],
+      })
+      .select()
+      .single();
+    if (data) {
+      _docs = [fromRow(data), ..._docs];
+      _listeners.forEach((l) => l());
+    }
+  },
+
+  removeDoc: async (docId: string) => {
+    if (!_clientId) return;
+    await supabase.from("documents").delete().eq("id", docId).eq("client_id", _clientId);
+    _docs = _docs.filter((d) => d.id !== docId);
+    _listeners.forEach((l) => l());
+  },
+
+  // Legacy setter used by existing components (local state only, no DB sync)
   setDocs(docs: StoredDocument[]): void {
     _docs = docs;
     _listeners.forEach((l) => l());
   },
+
   subscribe(listener: () => void): () => void {
     _listeners.add(listener);
     return () => _listeners.delete(listener);

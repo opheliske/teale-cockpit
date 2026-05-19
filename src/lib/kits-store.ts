@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
+import { supabase } from "@/lib/supabase";
 import {
   lancementKits as defaultLancement,
   animationItems as defaultAnimation,
@@ -11,121 +12,115 @@ import {
 
 export type { LancementKit, AnimationItem, EmailTopicKit };
 
-const KEY_LANCEMENT = "teale_lancement_kits";
-const KEY_ANIMATION = "teale_animation_items";
-const KEY_EMAILS = "teale_email_kits";
+function animationFromRow(row: Record<string, unknown>): AnimationItem {
+  return {
+    id: row.id as string,
+    title: row.title as string,
+    month: row.month as string,
+    type: row.type as string,
+    status: row.status as string,
+    landing: row.landing as string | undefined,
+    languages: row.languages as string[],
+    imagesFr: row.images_fr as string[],
+    imagesEn: row.images_en as string[],
+    pdfFr: row.pdf_fr as string[],
+    pdfEn: row.pdf_en as string[],
+  };
+}
+
+function animationToRow(a: AnimationItem) {
+  return {
+    id: a.id,
+    title: a.title,
+    month: a.month,
+    type: a.type,
+    status: a.status,
+    landing: a.landing ?? null,
+    languages: a.languages,
+    images_fr: a.imagesFr,
+    images_en: a.imagesEn,
+    pdf_fr: a.pdfFr,
+    pdf_en: a.pdfEn,
+  };
+}
 
 export function useKitsStore() {
-  const [lancementKits, setLancementKits] = useState<LancementKit[]>(defaultLancement);
-  const [animationItems, setAnimationItems] = useState<AnimationItem[]>(defaultAnimation);
-  const [emailTopicKits, setEmailTopicKits] = useState<EmailTopicKit[]>(defaultEmails);
+  const [lancementKits, setLancementKits] = useState<LancementKit[]>([]);
+  const [animationItems, setAnimationItems] = useState<AnimationItem[]>([]);
+  const [emailTopicKits, setEmailTopicKits] = useState<EmailTopicKit[]>([]);
 
-  // Hydration from localStorage after mount
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(KEY_LANCEMENT);
-      if (stored) setLancementKits(JSON.parse(stored) as LancementKit[]);
-    } catch {}
-    try {
-      const stored = localStorage.getItem(KEY_ANIMATION);
-      if (stored) setAnimationItems(JSON.parse(stored) as AnimationItem[]);
-    } catch {}
-    try {
-      const stored = localStorage.getItem(KEY_EMAILS);
-      if (stored) setEmailTopicKits(JSON.parse(stored) as EmailTopicKit[]);
-    } catch {}
-  }, []);
-
-  // Cross-tab sync
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === KEY_LANCEMENT && e.newValue) {
-        try { setLancementKits(JSON.parse(e.newValue) as LancementKit[]); } catch {}
+    Promise.all([
+      supabase.from("kits_lancement").select("*").order("id"),
+      supabase.from("kits_animation").select("*").order("id"),
+      supabase.from("kits_email").select("*").order("id"),
+    ]).then(async ([lancement, animation, emails]) => {
+      if (lancement.data && lancement.data.length > 0) {
+        setLancementKits(lancement.data as LancementKit[]);
+      } else {
+        await supabase.from("kits_lancement").insert(defaultLancement);
+        setLancementKits(defaultLancement);
       }
-      if (e.key === KEY_ANIMATION && e.newValue) {
-        try { setAnimationItems(JSON.parse(e.newValue) as AnimationItem[]); } catch {}
+
+      if (animation.data && animation.data.length > 0) {
+        setAnimationItems(animation.data.map(animationFromRow));
+      } else {
+        await supabase.from("kits_animation").insert(defaultAnimation.map(animationToRow));
+        setAnimationItems(defaultAnimation);
       }
-      if (e.key === KEY_EMAILS && e.newValue) {
-        try { setEmailTopicKits(JSON.parse(e.newValue) as EmailTopicKit[]); } catch {}
+
+      if (emails.data && emails.data.length > 0) {
+        setEmailTopicKits(emails.data as EmailTopicKit[]);
+      } else {
+        await supabase.from("kits_email").insert(defaultEmails);
+        setEmailTopicKits(defaultEmails);
       }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
-  // LancementKit CRUD
-  const addLancementKit = useCallback((item: LancementKit) => {
-    setLancementKits((prev) => {
-      const n = [...prev, item];
-      try { localStorage.setItem(KEY_LANCEMENT, JSON.stringify(n)); } catch {}
-      return n;
     });
   }, []);
 
-  const updateLancementKit = useCallback((updated: LancementKit) => {
-    setLancementKits((prev) => {
-      const n = prev.map((k) => (k.id === updated.id ? updated : k));
-      try { localStorage.setItem(KEY_LANCEMENT, JSON.stringify(n)); } catch {}
-      return n;
-    });
+  const addLancementKit = useCallback(async (item: LancementKit) => {
+    const { data } = await supabase.from("kits_lancement").insert(item).select().single();
+    if (data) setLancementKits((prev) => [...prev, data as LancementKit]);
   }, []);
 
-  const deleteLancementKit = useCallback((id: string) => {
-    setLancementKits((prev) => {
-      const n = prev.filter((k) => k.id !== id);
-      try { localStorage.setItem(KEY_LANCEMENT, JSON.stringify(n)); } catch {}
-      return n;
-    });
+  const updateLancementKit = useCallback(async (updated: LancementKit) => {
+    const { data } = await supabase.from("kits_lancement").update(updated).eq("id", updated.id).select().single();
+    if (data) setLancementKits((prev) => prev.map((k) => (k.id === updated.id ? data as LancementKit : k)));
   }, []);
 
-  // AnimationItem CRUD
-  const addAnimationItem = useCallback((item: AnimationItem) => {
-    setAnimationItems((prev) => {
-      const n = [...prev, item];
-      try { localStorage.setItem(KEY_ANIMATION, JSON.stringify(n)); } catch {}
-      return n;
-    });
+  const deleteLancementKit = useCallback(async (id: string) => {
+    await supabase.from("kits_lancement").delete().eq("id", id);
+    setLancementKits((prev) => prev.filter((k) => k.id !== id));
   }, []);
 
-  const updateAnimationItem = useCallback((updated: AnimationItem) => {
-    setAnimationItems((prev) => {
-      const n = prev.map((a) => (a.id === updated.id ? updated : a));
-      try { localStorage.setItem(KEY_ANIMATION, JSON.stringify(n)); } catch {}
-      return n;
-    });
+  const addAnimationItem = useCallback(async (item: AnimationItem) => {
+    const { data } = await supabase.from("kits_animation").insert(animationToRow(item)).select().single();
+    if (data) setAnimationItems((prev) => [...prev, animationFromRow(data)]);
   }, []);
 
-  const deleteAnimationItem = useCallback((id: string) => {
-    setAnimationItems((prev) => {
-      const n = prev.filter((a) => a.id !== id);
-      try { localStorage.setItem(KEY_ANIMATION, JSON.stringify(n)); } catch {}
-      return n;
-    });
+  const updateAnimationItem = useCallback(async (updated: AnimationItem) => {
+    const { data } = await supabase.from("kits_animation").update(animationToRow(updated)).eq("id", updated.id).select().single();
+    if (data) setAnimationItems((prev) => prev.map((a) => (a.id === updated.id ? animationFromRow(data) : a)));
   }, []);
 
-  // EmailTopicKit CRUD
-  const addEmailTopicKit = useCallback((item: EmailTopicKit) => {
-    setEmailTopicKits((prev) => {
-      const n = [...prev, item];
-      try { localStorage.setItem(KEY_EMAILS, JSON.stringify(n)); } catch {}
-      return n;
-    });
+  const deleteAnimationItem = useCallback(async (id: string) => {
+    await supabase.from("kits_animation").delete().eq("id", id);
+    setAnimationItems((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
-  const updateEmailTopicKit = useCallback((updated: EmailTopicKit) => {
-    setEmailTopicKits((prev) => {
-      const n = prev.map((e) => (e.id === updated.id ? updated : e));
-      try { localStorage.setItem(KEY_EMAILS, JSON.stringify(n)); } catch {}
-      return n;
-    });
+  const addEmailTopicKit = useCallback(async (item: EmailTopicKit) => {
+    const { data } = await supabase.from("kits_email").insert(item).select().single();
+    if (data) setEmailTopicKits((prev) => [...prev, data as EmailTopicKit]);
   }, []);
 
-  const deleteEmailTopicKit = useCallback((id: string) => {
-    setEmailTopicKits((prev) => {
-      const n = prev.filter((e) => e.id !== id);
-      try { localStorage.setItem(KEY_EMAILS, JSON.stringify(n)); } catch {}
-      return n;
-    });
+  const updateEmailTopicKit = useCallback(async (updated: EmailTopicKit) => {
+    const { data } = await supabase.from("kits_email").update(updated).eq("id", updated.id).select().single();
+    if (data) setEmailTopicKits((prev) => prev.map((e) => (e.id === updated.id ? data as EmailTopicKit : e)));
+  }, []);
+
+  const deleteEmailTopicKit = useCallback(async (id: string) => {
+    await supabase.from("kits_email").delete().eq("id", id);
+    setEmailTopicKits((prev) => prev.filter((e) => e.id !== id));
   }, []);
 
   return {

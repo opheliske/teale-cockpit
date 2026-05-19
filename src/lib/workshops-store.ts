@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
+import { supabase } from "@/lib/supabase";
 import {
   workshops as defaultWorkshops,
   themes,
@@ -11,57 +12,86 @@ import {
 export type { Workshop, Theme, ProgrammeStep };
 export { themes };
 
-export const STORE_KEY = "teale_workshops";
+function fromRow(row: Record<string, unknown>): Workshop {
+  return {
+    id: row.id as string,
+    title: row.title as string,
+    subtitle: row.subtitle as string | undefined,
+    themeId: row.theme_id as string,
+    objectives: row.objectives as string[],
+    programme: row.programme as ProgrammeStep[],
+    targetAudience: row.target_audience as string[],
+    alreadyAnimated: row.already_animated as boolean,
+  };
+}
+
+function toRow(w: Workshop) {
+  return {
+    id: w.id,
+    title: w.title,
+    subtitle: w.subtitle ?? null,
+    theme_id: w.themeId,
+    objectives: w.objectives,
+    programme: w.programme,
+    target_audience: w.targetAudience,
+    already_animated: w.alreadyAnimated ?? false,
+  };
+}
 
 export function useWorkshops() {
-  const [workshops, setWorkshops] = useState<Workshop[]>(defaultWorkshops);
+  const [workshops, setWorkshops] = useState<Workshop[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // After hydration, load from localStorage
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORE_KEY);
-      if (stored) setWorkshops(JSON.parse(stored) as Workshop[]);
-    } catch {}
+    supabase
+      .from("workshops")
+      .select("*")
+      .order("created_at")
+      .then(async ({ data }) => {
+        if (data && data.length > 0) {
+          setWorkshops(data.map(fromRow));
+        } else {
+          const { data: seeded } = await supabase
+            .from("workshops")
+            .insert(defaultWorkshops.map(toRow))
+            .select();
+          setWorkshops(seeded ? seeded.map(fromRow) : defaultWorkshops);
+        }
+        setLoading(false);
+      });
   }, []);
 
-  // Cross-tab sync
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key !== STORE_KEY || !e.newValue) return;
-      try {
-        setWorkshops(JSON.parse(e.newValue) as Workshop[]);
-      } catch {}
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+  const addWorkshop = useCallback(async (w: Workshop) => {
+    const { data } = await supabase.from("workshops").insert(toRow(w)).select().single();
+    if (data) setWorkshops((prev) => [...prev, fromRow(data)]);
   }, []);
 
-  const persist = useCallback((next: Workshop[]) => {
+  const updateWorkshop = useCallback(async (updated: Workshop) => {
+    const { data } = await supabase
+      .from("workshops")
+      .update(toRow(updated))
+      .eq("id", updated.id)
+      .select()
+      .single();
+    if (data) setWorkshops((prev) => prev.map((w) => (w.id === updated.id ? fromRow(data) : w)));
+  }, []);
+
+  const deleteWorkshop = useCallback(async (id: string) => {
+    await supabase.from("workshops").delete().eq("id", id);
+    setWorkshops((prev) => prev.filter((w) => w.id !== id));
+  }, []);
+
+  const resetToDefaults = useCallback(async () => {
+    await supabase.from("workshops").delete().neq("id", "");
+    const { data } = await supabase.from("workshops").insert(defaultWorkshops.map(toRow)).select();
+    setWorkshops(data ? data.map(fromRow) : defaultWorkshops);
+  }, []);
+
+  const persist = useCallback(async (next: Workshop[]) => {
     setWorkshops(next);
-    try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(next));
-    } catch {}
+    await supabase.from("workshops").delete().neq("id", "");
+    await supabase.from("workshops").insert(next.map(toRow));
   }, []);
 
-  const addWorkshop = useCallback(
-    (w: Workshop) => setWorkshops((prev) => { const n = [...prev, w]; try { localStorage.setItem(STORE_KEY, JSON.stringify(n)); } catch {} return n; }),
-    []
-  );
-
-  const updateWorkshop = useCallback(
-    (updated: Workshop) => setWorkshops((prev) => { const n = prev.map((w) => (w.id === updated.id ? updated : w)); try { localStorage.setItem(STORE_KEY, JSON.stringify(n)); } catch {} return n; }),
-    []
-  );
-
-  const deleteWorkshop = useCallback(
-    (id: string) => setWorkshops((prev) => { const n = prev.filter((w) => w.id !== id); try { localStorage.setItem(STORE_KEY, JSON.stringify(n)); } catch {} return n; }),
-    []
-  );
-
-  const resetToDefaults = useCallback(
-    () => { try { localStorage.removeItem(STORE_KEY); } catch {} setWorkshops(defaultWorkshops); },
-    []
-  );
-
-  return { workshops, addWorkshop, updateWorkshop, deleteWorkshop, resetToDefaults, persist };
+  return { workshops, loading, addWorkshop, updateWorkshop, deleteWorkshop, resetToDefaults, persist };
 }
