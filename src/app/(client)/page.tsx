@@ -1,294 +1,291 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import ActionsCard, { type Action } from "@/components/ActionsCard";
+import { impersonationStore } from "@/lib/impersonation-store";
+import { csmClientsStore, type StoredCsmClient } from "@/lib/csm-clients-store";
+import { planStore, type StoredPlanState } from "@/lib/plan-store";
+import { csmEventsStore, type CsmEvent } from "@/lib/csm-events-store";
+import { docsStore, type StoredDocument } from "@/lib/docs-store";
 
-const FIRST_NAME = "";
+// The active client comes from the session context (seeded by ClientGuard /
+// the login flow). All data below is also RLS-scoped to this client server-side.
+const CLIENT_ID = impersonationStore.get()?.clientId ?? "";
 
-const TOTAL_ATELIERS = 0;
-const ATELIERS_USED = 0;
+// ─── Date helpers ─────────────────────────────────────────────────────────────
 
-
-type MilestoneKind = "atelier" | "comm" | "csm" | "bilan" | "contrat";
-
-const actions: Action[] = [];
-
-const kindConfig: Record<MilestoneKind, { label: string; pillClass: string }> = {
-  atelier: { label: "Atelier",    pillClass: "bg-[rgba(168,85,247,0.15)] text-[#c4b5fd]" },
-  comm:    { label: "Kit comm",   pillClass: "bg-[rgba(94,234,212,0.15)] text-[#5eead4]" },
-  csm:     { label: "Point CSM", pillClass: "bg-[rgba(250,204,21,0.15)] text-[#fde047]" },
-  bilan:   { label: "QBR",        pillClass: "bg-[rgba(96,165,250,0.15)] text-[#93c5fd]" },
-  contrat: { label: "Contrat",    pillClass: "bg-[rgba(251,146,60,0.15)] text-[#fdba74]" },
+const FR_MONTHS: Record<string, number> = {
+  janvier: 0, février: 1, fevrier: 1, mars: 2, avril: 3, mai: 4, juin: 5,
+  juillet: 6, août: 7, aout: 7, septembre: 8, octobre: 9, novembre: 10,
+  décembre: 11, decembre: 11,
 };
 
-const meetings: { day: string; month: string; mo: string; time: string; title: string; detail: string; kind: MilestoneKind; done: boolean }[] = [];
+/** Parses a French date like "15 juin 2026" into a Date (or null). */
+function parseFrDate(s: string): Date | null {
+  const p = s.trim().toLowerCase().replace(/\./g, "").split(/\s+/);
+  if (p.length < 3) return null;
+  const d = parseInt(p[0]);
+  const m = FR_MONTHS[p[1]];
+  const y = parseInt(p[2]);
+  if (Number.isNaN(d) || m === undefined || Number.isNaN(y)) return null;
+  return new Date(y, m, d);
+}
 
-const currentMonthMeetings = meetings.filter((m) => m.month === "mai");
+const QUARTER_OF_MONTH = ["Q1", "Q1", "Q1", "Q2", "Q2", "Q2", "Q3", "Q3", "Q3", "Q4", "Q4", "Q4"] as const;
 
-export default function HomePage() {
-  return (
-    <div className="flex h-screen flex-col px-9 py-8">
-      <header className="mb-4">
-        <div className="flex items-center gap-2 text-[11px] uppercase tracking-[2.5px] text-[#94a8a0]">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-accent opacity-60" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-brand-accent" />
-          </span>
-          Mercredi 13 mai 2026
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default function ClientHomePage() {
+  const [company, setCompany] = useState<StoredCsmClient | undefined>(
+    () => csmClientsStore.get(CLIENT_ID),
+  );
+  const [clientsLoaded, setClientsLoaded] = useState(() => csmClientsStore.isLoaded());
+  const [plan, setPlan] = useState<StoredPlanState | null>(() => planStore.getState());
+  const [events, setEvents] = useState<CsmEvent[]>(() => csmEventsStore.getEvents());
+  const [docs, setDocs] = useState<StoredDocument[]>(() => docsStore.getDocs());
+
+  useEffect(() => {
+    const unsubClients = csmClientsStore.subscribe(() => {
+      setCompany(csmClientsStore.get(CLIENT_ID));
+      setClientsLoaded(true);
+    });
+    planStore.load(CLIENT_ID);
+    const unsubPlan = planStore.subscribe(() => setPlan(planStore.getState()));
+    const unsubEvents = csmEventsStore.subscribe(() => setEvents([...csmEventsStore.getEvents()]));
+    docsStore.load(CLIENT_ID);
+    const unsubDocs = docsStore.subscribe(() => setDocs([...docsStore.getDocs()]));
+    return () => {
+      unsubClients();
+      unsubPlan();
+      unsubEvents();
+      unsubDocs();
+    };
+  }, []);
+
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
+  const dateLabel = useMemo(() => {
+    const s = new Date().toLocaleDateString("fr-FR", {
+      weekday: "long", day: "numeric", month: "long", year: "numeric",
+    });
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }, []);
+
+  // Upcoming events for this client, soonest first.
+  const upcoming = useMemo(() => {
+    return events
+      .filter((e) => e.clientId === CLIENT_ID)
+      .map((e) => ({ ...e, when: parseFrDate(e.date) }))
+      .filter((e): e is CsmEvent & { when: Date } =>
+        e.when !== null && e.when.getTime() >= today.getTime())
+      .sort((a, b) => a.when.getTime() - b.when.getTime());
+  }, [events, today]);
+
+  const planItems = plan?.items ?? [];
+  const planDone = planItems.filter((i) => i.done).length;
+  const planPct = planItems.length > 0 ? Math.round((planDone / planItems.length) * 100) : 0;
+
+  const atelierTotal = company?.atelierTotal ?? 0;
+  const ateliersConsommes = planItems.filter((i) => i.type === "atelier" && i.done).length;
+
+  const currentQuarter = QUARTER_OF_MONTH[new Date().getMonth()];
+  const quarterItems = planItems.filter((i) => i.quarter === currentQuarter);
+  const quarterTheme = plan?.themes?.[currentQuarter] ?? "";
+
+  // ── Loading / not-found states ──
+  if (!clientsLoaded) {
+    return (
+      <div className="flex h-full items-center justify-center bg-[#061a16] text-[#94a8a0]">
+        Chargement de votre espace…
+      </div>
+    );
+  }
+  if (!company) {
+    return (
+      <div className="flex h-full items-center justify-center bg-[#061a16] px-6 text-center text-[#94a8a0]">
+        <div>
+          <p className="text-[15px] text-[#e8f5ef]">Espace client introuvable.</p>
+          <p className="mt-1 text-[13px]">Contactez votre CSM Teale.</p>
         </div>
-        <h1 className="mt-2 text-[34px] font-semibold tracking-[-0.5px] text-brand-cream">
-          Bonjour {FIRST_NAME}{" "}
-          <span
-            className="inline-block origin-bottom-right transition-transform duration-300 hover:rotate-12"
-            aria-hidden
-          >
-            👋
-          </span>
-        </h1>
-        <p className="mt-1 max-w-2xl text-[px]13 leading-relaxed text-brand-muted-on-dark">
-          Voici un aperçu de votre pilotage Teale et de vos prochaines échéances.
-        </p>
-      </header>
+      </div>
+    );
+  }
 
-      <section className="mb-3">
-        <KpiDonutCard
-          label="Ateliers restants"
-          remaining={TOTAL_ATELIERS - ATELIERS_USED}
-          total={TOTAL_ATELIERS}
-          subtitle="À programmer avant le 12 septembre 2026"
-        />
-      </section>
+  return (
+    <div className="min-h-full bg-[#061a16] px-9 py-8">
+      <div className="mx-auto max-w-[1100px]">
 
-      <div className="grid min-h-0 flex-1 grid-cols-12 gap-4">
-        <div className="col-span-12 flex min-h-0 flex-col lg:col-span-7">
-          <SectionHeader
-            title="Planning projet en cours"
-            meta="Année contrat 2025 — 2026"
+        {/* ── Header ── */}
+        <header className="mb-7">
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[2.5px] text-[#94a8a0]">
+            <span className="h-2 w-2 rounded-full bg-[#5eead4]" />
+            {dateLabel}
+          </div>
+          <h1 className="mt-2 text-[30px] font-semibold tracking-[-0.5px] text-[#e8f5ef]">
+            Bonjour, {company.name} 👋
+          </h1>
+          <p className="mt-1 text-[13px] text-[#94a8a0]">
+            Aperçu de votre accompagnement Teale.
+          </p>
+        </header>
+
+        {/* ── KPI row ── */}
+        <div className="mb-7 grid grid-cols-4 gap-3">
+          <StatCard
+            label="Ateliers consommés"
+            value={`${ateliersConsommes} / ${atelierTotal}`}
           />
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <CurrentMonthCard />
-          </div>
+          <StatCard label="Avancement du plan" value={`${planPct} %`} />
+          <StatCard
+            label="Prochain rendez-vous"
+            value={upcoming[0]?.date ?? "—"}
+            small
+          />
+          <StatCard
+            label="Collaborateurs"
+            value={company.collab.toLocaleString("fr-FR")}
+          />
         </div>
 
-        <div className="col-span-12 flex min-h-0 flex-col gap-3 lg:col-span-5">
-          <ActionsCard actions={actions} />
-          <MeetingsCard />
+        {/* ── Two columns ── */}
+        <div className="grid grid-cols-12 gap-4">
+
+          {/* Plan */}
+          <section className="col-span-7 rounded-[14px] border border-[#1a3530] bg-[rgba(14,37,32,0.4)] p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-[15px] font-semibold text-[#e8f5ef]">
+                Votre plan annuel — {currentQuarter}
+              </h2>
+              <Link href="/mon-planning" className="text-[12px] text-[#5eead4] hover:underline">
+                Voir tout →
+              </Link>
+            </div>
+            {quarterTheme && (
+              <p className="mb-3 text-[12px] text-[#94a8a0]">{quarterTheme}</p>
+            )}
+            {quarterItems.length === 0 ? (
+              <p className="py-6 text-center text-[13px] text-[#94a8a0]">
+                Rien de planifié pour ce trimestre.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {quarterItems.map((item) => (
+                  <li
+                    key={item.id}
+                    className="flex items-start gap-2.5 rounded-[10px] border border-[#1a3530] bg-[rgba(255,255,255,0.02)] px-3 py-2.5"
+                  >
+                    <span className="mt-0.5 shrink-0 text-sm">{item.icon || "•"}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className={`text-[13px] font-medium leading-snug ${item.done ? "text-[#94a8a0] line-through" : "text-[#e8f5ef]"}`}>
+                        {item.title}
+                      </div>
+                      {item.meta && (
+                        <div className="mt-0.5 text-[11px] text-[#94a8a0]">{item.meta}</div>
+                      )}
+                    </div>
+                    {item.done && (
+                      <span className="mt-0.5 shrink-0 text-[11px] font-bold text-[#a8e895]">✓</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          {/* Right column */}
+          <div className="col-span-5 flex flex-col gap-4">
+
+            {/* Upcoming events */}
+            <section className="rounded-[14px] border border-[#1a3530] bg-[rgba(14,37,32,0.4)] p-5">
+              <h2 className="mb-3 text-[15px] font-semibold text-[#e8f5ef]">
+                Prochains rendez-vous
+              </h2>
+              {upcoming.length === 0 ? (
+                <p className="py-4 text-center text-[13px] text-[#94a8a0]">
+                  Aucun rendez-vous à venir.
+                </p>
+              ) : (
+                <ul className="space-y-2.5">
+                  {upcoming.slice(0, 5).map((e) => (
+                    <li key={e.id} className="flex items-center gap-3">
+                      <div className="w-11 shrink-0 rounded-[8px] bg-[rgba(94,234,212,0.08)] px-1.5 py-1 text-center">
+                        <div className="text-[9px] uppercase tracking-[0.5px] text-[#5eead4]">{e.weekday}</div>
+                        <div className="text-[11px] font-semibold text-[#e8f5ef]">{e.time}</div>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[13px] font-medium text-[#e8f5ef]">{e.title}</div>
+                        <div className="text-[11px] text-[#94a8a0]">{e.date}</div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            {/* Documents */}
+            <section className="rounded-[14px] border border-[#1a3530] bg-[rgba(14,37,32,0.4)] p-5">
+              <h2 className="mb-3 text-[15px] font-semibold text-[#e8f5ef]">
+                Documents partagés
+              </h2>
+              {docs.length === 0 ? (
+                <p className="py-4 text-center text-[13px] text-[#94a8a0]">
+                  Aucun document partagé.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {docs.slice(0, 5).map((doc) => {
+                    const file = doc.files?.[0];
+                    const row = (
+                      <>
+                        <span className="shrink-0 text-sm">📄</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[13px] font-medium text-[#e8f5ef]">{doc.title}</div>
+                          <div className="text-[11px] text-[#94a8a0]">{doc.type} · {doc.date}</div>
+                        </div>
+                      </>
+                    );
+                    return (
+                      <li key={doc.id}>
+                        {file ? (
+                          <a
+                            href={file.url}
+                            download={file.name}
+                            className="flex items-center gap-2.5 rounded-[10px] border border-[#1a3530] bg-[rgba(255,255,255,0.02)] px-3 py-2.5 transition-colors hover:border-[rgba(94,234,212,0.3)]"
+                          >
+                            {row}
+                          </a>
+                        ) : (
+                          <div className="flex items-center gap-2.5 rounded-[10px] border border-[#1a3530] bg-[rgba(255,255,255,0.02)] px-3 py-2.5">
+                            {row}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function KpiDonutCard({
-  label,
-  remaining,
-  total,
-  subtitle,
-}: {
-  label: string;
-  remaining: number;
-  total: number;
-  subtitle: string;
-}) {
+function StatCard({ label, value, small }: { label: string; value: string; small?: boolean }) {
   return (
-    <div className="flex items-center gap-4 rounded-2xl border border-brand-teal-bright/25 bg-gradient-to-br from-brand-teal-bright/[0.10] via-brand-accent/[0.04] to-transparent p-4">
-      <Donut remaining={remaining} total={total} />
-      <div className="min-w-0 flex-1">
-        <h3 className="text-sm font-medium text-brand-cream">{label}</h3>
-        <p className="mt-1 text-[12px] leading-snug text-brand-muted-on-dark">
-          {subtitle}
-        </p>
+    <div className="rounded-[14px] border border-[#1a3530] bg-[rgba(14,37,32,0.4)] px-4 py-3.5">
+      <div className={`font-semibold leading-none text-[#e8f5ef] ${small ? "text-[15px]" : "text-[22px]"}`}>
+        {value}
+      </div>
+      <div className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.8px] text-[#94a8a0]">
+        {label}
       </div>
     </div>
   );
 }
-
-function Donut({ remaining, total }: { remaining: number; total: number }) {
-  const size = 84;
-  const stroke = 9;
-  const radius = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const ratio = total > 0 ? remaining / total : 0;
-  const arcLength = ratio * circumference;
-  return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <svg
-        width={size}
-        height={size}
-        viewBox={`0 0 ${size} ${size}`}
-        className="-rotate-90"
-        aria-hidden
-      >
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="rgba(255, 255, 255, 0.12)"
-          strokeWidth={stroke}
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="var(--green-bright)"
-          strokeWidth={stroke}
-          strokeDasharray={`${arcLength} ${circumference}`}
-          strokeLinecap="round"
-        />
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-sm font-medium text-brand-cream">
-          {remaining} / {total}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function SectionHeader({ title, meta }: { title: string; meta: string }) {
-  return (
-    <header className="mb-2 flex items-baseline justify-between gap-3">
-      <h2 className="text-lg font-medium text-brand-cream">{title}</h2>
-      <span className="text-[13px] text-brand-muted-on-dark">{meta}</span>
-    </header>
-  );
-}
-
-function CurrentMonthCard() {
-  const upcomingCount = currentMonthMeetings.filter((m) => !m.done).length;
-  const nextMeeting = currentMonthMeetings.find((m) => !m.done) ?? null;
-
-  return (
-    <div className="rounded-[13px] border border-[rgba(94,234,212,0.15)] bg-[rgba(94,234,212,0.035)] p-[18px]">
-      <div className="mb-4 flex items-center justify-between border-b border-white/5 pb-3">
-        <div className="flex items-center gap-2.5">
-          <h4 className="text-[12px] font-bold uppercase tracking-[1.8px] text-[#e8f5ef]">
-            Mai
-          </h4>
-          <span className="rounded-[4px] bg-[#5eead4] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] text-[#042f2a]">
-            En cours
-          </span>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-[10px] tracking-[0.5px] text-[#6b7c75]">
-            {upcomingCount > 0 ? `${upcomingCount} à venir` : "—"}
-          </span>
-          <Link href="/mon-planning" className="text-[11px] text-[#5eead4] hover:underline">
-            Voir tout →
-          </Link>
-        </div>
-      </div>
-      <ul className="space-y-0">
-        {currentMonthMeetings.map((m, i) => (
-          <MeetingRow key={i} meeting={m} isNext={m === nextMeeting} />
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function MeetingRow({
-  meeting,
-  isNext,
-}: {
-  meeting: (typeof meetings)[0];
-  isNext: boolean;
-}) {
-  const cfg = kindConfig[meeting.kind];
-  return (
-    <li className="relative">
-      {isNext && (
-        <span className="absolute -top-2 right-2.5 z-10 rounded-[4px] bg-[#5eead4] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] text-[#042f2a]">
-          Prochain
-        </span>
-      )}
-      <div
-        className={`mb-2.5 flex w-full gap-2.5 rounded-[10px] border p-3 ${
-          meeting.done
-            ? "border-transparent opacity-[0.38]"
-            : isNext
-              ? "border-[rgba(94,234,212,0.18)] bg-[rgba(94,234,212,0.05)]"
-              : "border-transparent"
-        }`}
-      >
-        <div className="w-10 shrink-0 pt-0.5 text-center">
-          <div
-            className={`text-[19px] font-bold leading-none tabular-nums ${
-              meeting.done ? "text-[#6b7c75] line-through" : "text-[#e8f5ef]"
-            }`}
-          >
-            {meeting.day}
-          </div>
-          <div className="mt-[3px] text-[9px] uppercase tracking-[0.8px] text-[#6b7c75]">
-            {meeting.mo}
-          </div>
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="mb-1.5 flex items-center gap-1.5">
-            <span
-              className={`rounded-[4px] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] ${cfg.pillClass}`}
-            >
-              {cfg.label.toUpperCase()}
-            </span>
-            <span
-              className={`ml-auto flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-full text-[9px] ${
-                meeting.done
-                  ? "bg-[rgba(94,234,212,0.2)] text-[#5eead4]"
-                  : "border-[1.5px] border-white/15"
-              }`}
-              aria-hidden
-            >
-              {meeting.done ? "✓" : ""}
-            </span>
-          </div>
-          <div
-            className={`mb-1 text-[13px] font-medium leading-snug ${
-              meeting.done ? "text-[#6b7c75] line-through" : "text-[#e8f5ef]"
-            }`}
-          >
-            {meeting.title}
-          </div>
-          <div className="text-[10px] text-[#6b7c75]">
-            {meeting.time} · {meeting.detail}
-          </div>
-        </div>
-      </div>
-    </li>
-  );
-}
-
-function MeetingsCard() {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <SectionHeader
-        title="Prochains rendez-vous"
-        meta={`${meetings.length} planifiés`}
-      />
-      <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-brand-border-dark bg-brand-surface p-3">
-        <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
-          {meetings.map((meeting) => (
-            <li key={meeting.title} className="flex items-center gap-3">
-              <div className="w-10 shrink-0 rounded-lg bg-brand-dark px-1.5 py-1 text-center">
-                <div className="text-base font-medium leading-none text-brand-accent">
-                  {meeting.day}
-                </div>
-                <div className="mt-0.5 text-[9px] uppercase tracking-wider text-brand-muted-on-dark">
-                  {meeting.month}
-                </div>
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm text-brand-cream">
-                  {meeting.title}
-                </div>
-                <div className="mt-0.5 text-[11px] text-brand-muted-on-dark">
-                  {meeting.time} · {meeting.detail}
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </section>
-    </div>
-  );
-}
-
