@@ -43,22 +43,25 @@ export function useWorkshops() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase
-      .from("workshops")
-      .select("*")
-      .order("created_at")
-      .then(async ({ data }) => {
-        if (data && data.length > 0) {
-          setWorkshops(data.map(fromRow));
-        } else {
-          const { data: seeded } = await supabase
-            .from("workshops")
-            .insert(defaultWorkshops.map(toRow))
-            .select();
-          setWorkshops(seeded ? seeded.map(fromRow) : defaultWorkshops);
-        }
-        setLoading(false);
-      });
+    (async () => {
+      // Wait for the session before querying — otherwise the request can go
+      // out unauthenticated and the seed logic would misfire.
+      await supabase.auth.getUser();
+      const { data } = await supabase
+        .from("workshops")
+        .select("*")
+        .order("created_at");
+      if (data && data.length > 0) {
+        setWorkshops(data.map(fromRow));
+      } else {
+        const { data: seeded } = await supabase
+          .from("workshops")
+          .insert(defaultWorkshops.map(toRow))
+          .select();
+        setWorkshops(seeded ? seeded.map(fromRow) : defaultWorkshops);
+      }
+      setLoading(false);
+    })();
   }, []);
 
   const addWorkshop = useCallback(async (w: Workshop) => {
