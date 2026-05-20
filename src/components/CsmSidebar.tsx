@@ -2,11 +2,27 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { csmHomeItem, csmNavSections } from "@/lib/navigation-csm";
+import { useAuth, signOut } from "@/lib/auth";
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  return parts.slice(0, 2).map((p) => p[0]!.toUpperCase()).join("");
+}
 
 export default function CsmSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { profile } = useAuth();
+
+  const displayName = profile?.full_name?.trim() || profile?.email || "—";
+
+  async function handleLogout() {
+    await signOut();
+    router.replace("/login");
+  }
 
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-[rgba(94,234,212,0.15)] bg-brand-dark text-brand-cream">
@@ -82,12 +98,13 @@ export default function CsmSidebar() {
         {/* User + logout */}
         <div className="mb-2 flex items-center gap-2.5 rounded-md px-3 py-2">
           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[rgba(94,234,212,0.15)] text-[10px] font-bold text-[#5eead4]">
-            LM
+            {getInitials(displayName)}
           </div>
           <span className="flex-1 truncate text-[12px] font-medium text-brand-cream">
-            Lucie Martin
+            {displayName}
           </span>
           <button
+            onClick={handleLogout}
             title="Se déconnecter"
             className="shrink-0 text-[rgba(94,234,212,0.45)] transition-colors hover:text-[#ef4444]"
           >

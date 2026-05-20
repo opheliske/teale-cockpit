@@ -2,11 +2,27 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { navSections } from "@/lib/navigation";
+import { useAuth, signOut } from "@/lib/auth";
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  return parts.slice(0, 2).map((p) => p[0]!.toUpperCase()).join("");
+}
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { profile } = useAuth();
+
+  const displayName = profile?.full_name?.trim() || profile?.email || "—";
+
+  async function handleLogout() {
+    await signOut();
+    router.replace("/login");
+  }
 
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-brand-border-dark bg-brand-sidebar text-brand-cream">
@@ -60,6 +76,29 @@ export default function Sidebar() {
           </div>
         ))}
       </nav>
+
+      {/* Footer — connected user + logout */}
+      <div className="border-t border-brand-border-dark p-4">
+        <div className="flex items-center gap-2.5 rounded-md px-3 py-2">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-sidebar-hover text-[10px] font-bold text-brand-accent">
+            {getInitials(displayName)}
+          </div>
+          <span className="flex-1 truncate text-[12px] font-medium text-brand-cream">
+            {displayName}
+          </span>
+          <button
+            onClick={handleLogout}
+            title="Se déconnecter"
+            className="shrink-0 text-brand-muted-on-dark transition-colors hover:text-[#ef4444]"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+          </button>
+        </div>
+      </div>
     </aside>
   );
 }
