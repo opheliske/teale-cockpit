@@ -7,8 +7,6 @@ export type StoredCsmClient = {
   initials: string;
   color: string;
   collab: number;
-  csm: string;
-  csmLabel: string;
   ownerCsmId: string | null;
   statut: "green" | "amber" | "danger";
   formule: ContractFormule;
@@ -28,8 +26,6 @@ type DbRow = {
   initials: string;
   color: string;
   collab: number;
-  csm: string;
-  csm_label: string;
   owner_csm_id: string | null;
   statut: "green" | "amber" | "danger";
   formule: ContractFormule;
@@ -50,8 +46,6 @@ function fromRow(row: DbRow): StoredCsmClient {
     initials: row.initials,
     color: row.color,
     collab: row.collab,
-    csm: row.csm,
-    csmLabel: row.csm_label,
     ownerCsmId: row.owner_csm_id ?? null,
     statut: row.statut,
     formule: row.formule,
@@ -73,8 +67,6 @@ function toRow(c: StoredCsmClient): Omit<DbRow, "created_at"> {
     initials: c.initials,
     color: c.color,
     collab: c.collab,
-    csm: c.csm,
-    csm_label: c.csmLabel,
     owner_csm_id: c.ownerCsmId,
     statut: c.statut,
     formule: c.formule,
@@ -168,7 +160,7 @@ export function toClient(s: StoredCsmClient): Client {
 export function toClientDetail(s: StoredCsmClient): ClientDetail {
   return {
     piloteRH: "",
-    csm: s.csmLabel,
+    csm: "", // CSM name is resolved from owner_csm_id + profiles by the UI
     contrat: "",
     dernierPoint: "",
     contractStart: s.contractStart,

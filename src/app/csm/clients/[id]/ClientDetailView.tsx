@@ -198,7 +198,6 @@ const SECTION_LABELS: Record<Section, string> = {
   documents: "Documents",
 };
 
-const CSM_TEAM = ["Lucie Martin", "Sophie Chen", "Thomas André", "Marie Dupont"];
 
 const STATUT_CONFIG: Record<Statut, { label: string; bg: string; color: string; dot: string }> = {
   "SAIN":      { label: "Sain",      bg: "rgba(168,232,149,0.18)", color: "#a8e895", dot: "#a8e895" },
@@ -385,8 +384,6 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [extraPlanItems, setExtraPlanItems] = useState<Array<PlanItem & { quarter: string }>>([]);
   const [localStatut, setLocalStatut] = useState<Statut>(() => client?.statut ?? "SAIN");
   const [showStatutDropdown, setShowStatutDropdown] = useState(false);
-  const [localCsm, setLocalCsm] = useState(() => detail?.csm ?? "");
-  const [showCsmDropdown, setShowCsmDropdown] = useState(false);
   const { profiles: csmProfiles } = useCsmProfiles();
   const [localDetail, setLocalDetail] = useState<LocalDetail>(() => ({
     collab: client?.collab ?? 0,
@@ -432,7 +429,6 @@ export default function ClientDetailView({ id }: { id: string }) {
     const c = toClient(storedClient);
     const d = toClientDetail(storedClient);
     setLocalStatut(c.statut);
-    setLocalCsm(d.csm);
     setLocalDetail({
       collab: c.collab,
       arr: storedClient.arr ?? 0,
@@ -957,7 +953,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                 <span className="opacity-40">·</span>
                 <span>Formule <strong className="text-[#e8f5ef]">{localDetail.formule}</strong></span>
                 <span className="opacity-40">·</span>
-                <span>CSM <strong className="text-[#e8f5ef]">{localCsm}</strong></span>
+                <span>CSM <strong className="text-[#e8f5ef]">{csmProfiles.find((p) => p.id === localDetail.ownerCsmId)?.full_name ?? "Non assigné"}</strong></span>
                 {localDetail.contractStart && (<><span className="opacity-40">·</span><span>Contrat <strong className="text-[#e8f5ef]">{localDetail.contractStart} → {localDetail.contractEnd}</strong></span></>)}
                 {localDetail.atelierTotal > 0 && (<><span className="opacity-40">·</span><span><strong className="text-[#e8f5ef]">{localDetail.atelierRemaining}</strong> ateliers restants / {localDetail.atelierTotal}</span></>)}
               </p>
@@ -2782,8 +2778,6 @@ export default function ClientDetailView({ id }: { id: string }) {
               onClick={() => {
                 setLocalDetail(editDraft);
                 setShowEditDetails(false);
-                const csmName = csmProfiles.find((p) => p.id === editDraft.ownerCsmId)?.full_name ?? "";
-                setLocalCsm(csmName);
                 if (storedClient) {
                   csmClientsStore.add({
                     ...storedClient,
@@ -2797,7 +2791,6 @@ export default function ClientDetailView({ id }: { id: string }) {
                     churnNotice: editDraft.churnNotice,
                     produits: editDraft.produits,
                     ownerCsmId: editDraft.ownerCsmId,
-                    csmLabel: csmName,
                   });
                 }
               }}

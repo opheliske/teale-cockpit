@@ -120,12 +120,7 @@ async function main() {
 
   // 1. Clients (upsert by id).
   const { error: clientsErr } = await supabase.from("clients").upsert(
-    CLIENTS.map((c) => ({
-      ...c,
-      csm: "",
-      csm_label: "",
-      owner_csm_id: ownerCsmId,
-    })),
+    CLIENTS.map((c) => ({ ...c, owner_csm_id: ownerCsmId })),
   );
   if (clientsErr) {
     console.error("✗ clients:", clientsErr.message);

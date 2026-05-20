@@ -128,8 +128,7 @@ function storedToCard(
 ): CardData {
   const statusLabels: Record<Exclude<StatusKey, "all">, string> = { green: "Sain", amber: "Vigilance", danger: "À risque", blue: "Onboarding", new: "Nouveau" };
   const c = toClient(s);
-  const csmLabel =
-    (s.ownerCsmId && csmNameById.get(s.ownerCsmId)) || s.csmLabel || "Non assigné";
+  const csmLabel = csmNameById.get(s.ownerCsmId ?? "") ?? "Non assigné";
   return {
     id: s.id,
     name: s.name,
@@ -234,8 +233,6 @@ export default function SuiviClientsPage() {
       initials: form.initials || autoInitials(form.name),
       color: form.color,
       collab: Number(form.collab) || 0,
-      csm: "",
-      csmLabel: csmNameById.get(form.csm) ?? "",
       ownerCsmId: form.csm || null,
       statut: form.statut as "green" | "amber" | "danger",
       formule: form.formule,
