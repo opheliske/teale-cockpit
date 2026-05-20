@@ -210,7 +210,7 @@ export default function SuiviClientsPage() {
       arr: 0,
       createdAt: new Date().toISOString().split("T")[0],
     });
-    impersonationStore.set({ clientId: id, clientName: form.name.trim(), color: form.color });
+    impersonationStore.set({ mode: "csm-preview", clientId: id, clientName: form.name.trim(), color: form.color });
     setShowCreate(false);
     router.push(`/csm/clients/${id}`);
   };

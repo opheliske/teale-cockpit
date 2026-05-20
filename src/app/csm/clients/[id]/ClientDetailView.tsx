@@ -960,7 +960,7 @@ export default function ClientDetailView({ id }: { id: string }) {
             <div className="flex shrink-0 items-center gap-2">
               <button
                 onClick={() => {
-                  impersonationStore.set({ clientId: client.id, clientName: client.name, color: client.color });
+                  impersonationStore.set({ mode: "csm-preview", clientId: client.id, clientName: client.name, color: client.color });
                   router.push("/");
                 }}
                 className="inline-flex items-center gap-1.5 rounded-[9px] border border-[rgba(255,255,255,0.12)] px-3 py-1.5 text-[12px] font-medium text-[#94a8a0] transition-all hover:border-[rgba(255,255,255,0.22)] hover:text-[#e8f5ef]"
@@ -2476,7 +2476,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                 onChange={(e) => setCommentDraft(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey && commentDraft.trim()) {
-                    commentsStore.add(String(editingPlanItem.id), "csm", commentDraft.trim());
+                    commentsStore.add(String(editingPlanItem.id), id, "csm", commentDraft.trim());
                     setCommentDraft("");
                   }
                 }}
@@ -2486,7 +2486,7 @@ export default function ClientDetailView({ id }: { id: string }) {
               <button
                 onClick={() => {
                   if (!commentDraft.trim()) return;
-                  commentsStore.add(String(editingPlanItem.id), "csm", commentDraft.trim());
+                  commentsStore.add(String(editingPlanItem.id), id, "csm", commentDraft.trim());
                   setCommentDraft("");
                 }}
                 disabled={!commentDraft.trim()}

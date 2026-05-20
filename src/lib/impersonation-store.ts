@@ -1,4 +1,9 @@
+// Active client context.
+//   mode "self"        → a logged-in client viewing their own space.
+//   mode "csm-preview" → a CSM previewing a client's space (impersonation).
+// The CSM-preview banner only shows for mode "csm-preview".
 type ImpersonationState = {
+  mode: "self" | "csm-preview";
   clientId: string;
   clientName: string;
   color: string;
@@ -10,7 +15,11 @@ const listeners: (() => void)[] = [];
 if (typeof window !== "undefined") {
   try {
     const saved = sessionStorage.getItem("teale_impersonation");
-    if (saved) state = JSON.parse(saved);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Backwards-compat: older entries had no `mode`.
+      state = parsed && !parsed.mode ? { ...parsed, mode: "csm-preview" } : parsed;
+    }
   } catch {}
 }
 

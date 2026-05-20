@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 export type PlanComment = {
   id: number;
   threadId: string;
+  clientId: string;
   author: "client" | "csm";
   text: string;
   date: string; // ISO
@@ -12,6 +13,7 @@ function fromRow(row: Record<string, unknown>): PlanComment {
   return {
     id: Number(row.id),
     threadId: row.thread_id as string,
+    clientId: (row.client_id as string) ?? "",
     author: row.author as "client" | "csm",
     text: row.text as string,
     date: row.created_at as string,
@@ -19,7 +21,7 @@ function fromRow(row: Record<string, unknown>): PlanComment {
 }
 
 let _comments: PlanComment[] = [];
-let _loadedThreads = new Set<string>();
+const _loadedThreads = new Set<string>();
 const _listeners = new Set<() => void>();
 
 function notify() {
@@ -48,10 +50,17 @@ export const commentsStore = {
     }
   },
 
-  add: async (threadId: string, author: "client" | "csm", text: string) => {
+  // clientId scopes the comment to a company so RLS can isolate it: a client
+  // can only insert/read comments for its own company.
+  add: async (
+    threadId: string,
+    clientId: string,
+    author: "client" | "csm",
+    text: string,
+  ) => {
     const { data } = await supabase
       .from("plan_comments")
-      .insert({ thread_id: threadId, author, text })
+      .insert({ thread_id: threadId, client_id: clientId, author, text })
       .select()
       .single();
     if (data) {

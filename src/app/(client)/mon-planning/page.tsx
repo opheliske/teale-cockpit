@@ -1329,7 +1329,7 @@ function EventModal({
   function sendComment() {
     const t = draft.trim();
     if (!t) return;
-    commentsStore.add(threadId, "client", t);
+    commentsStore.add(threadId, CLIENT_ID, "client", t);
     setDraft("");
   }
 
