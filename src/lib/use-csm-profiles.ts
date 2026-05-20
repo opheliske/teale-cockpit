@@ -13,6 +13,18 @@ export function useCsmProfiles() {
   useEffect(() => {
     let active = true;
     (async () => {
+      // Wait for the session before querying — otherwise the request can go
+      // out unauthenticated and RLS returns no rows.
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        if (active) {
+          setProfiles([]);
+          setLoading(false);
+        }
+        return;
+      }
       const { data, error } = await supabase
         .from("profiles")
         .select("id, full_name")
