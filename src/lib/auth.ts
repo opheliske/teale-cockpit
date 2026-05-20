@@ -59,18 +59,36 @@ export function useAuth() {
 }
 
 /**
- * Signs the user out, clears the active client context, and sends them to
- * the login page. Uses a hard navigation so the proxy re-evaluates with the
- * cleared session cookies and no stale client state survives.
+ * Signs the user out and sends them to the login page.
+ *
+ * Made bulletproof on purpose: `supabase.auth.signOut()` can hang (a stuck
+ * internal auth lock), which previously blocked the redirect entirely. So we
+ * cap the call with a timeout AND clear the Supabase auth cookies ourselves,
+ * then do a hard navigation — the proxy then sees no session.
  */
 export async function signOut() {
-  try {
-    // scope "local" clears the local session without a network round-trip,
-    // so the redirect can't hang on a slow/offline revocation request.
-    await supabase.auth.signOut({ scope: "local" });
-  } catch {
-    // Ignore — we still clear the local context and leave the app.
-  }
   impersonationStore.set(null);
-  window.location.href = "/login";
+
+  // Best-effort proper sign-out, but never let it block the redirect.
+  try {
+    await Promise.race([
+      supabase.auth.signOut({ scope: "local" }),
+      new Promise((resolve) => setTimeout(resolve, 1500)),
+    ]);
+  } catch {
+    // Ignore — the cookie clearing below is what actually logs the user out.
+  }
+
+  // Drop the Supabase session cookies directly, so the user is logged out
+  // even if signOut() never finished.
+  if (typeof document !== "undefined") {
+    for (const entry of document.cookie.split(";")) {
+      const name = entry.split("=")[0].trim();
+      if (name.startsWith("sb-")) {
+        document.cookie = `${name}=; path=/; max-age=0`;
+      }
+    }
+  }
+
+  window.location.replace("/login");
 }
