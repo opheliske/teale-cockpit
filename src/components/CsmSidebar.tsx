@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { csmHomeItem, csmNavSections } from "@/lib/navigation-csm";
 import { useAuth, signOut } from "@/lib/auth";
 
@@ -14,15 +14,9 @@ function getInitials(name: string): string {
 
 export default function CsmSidebar() {
   const pathname = usePathname();
-  const router = useRouter();
   const { profile } = useAuth();
 
   const displayName = profile?.full_name?.trim() || profile?.email || "—";
-
-  async function handleLogout() {
-    await signOut();
-    router.replace("/login");
-  }
 
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-[rgba(94,234,212,0.15)] bg-brand-dark text-brand-cream">
@@ -104,7 +98,7 @@ export default function CsmSidebar() {
             {displayName}
           </span>
           <button
-            onClick={handleLogout}
+            onClick={() => signOut()}
             title="Se déconnecter"
             className="shrink-0 text-[rgba(94,234,212,0.45)] transition-colors hover:text-[#ef4444]"
           >

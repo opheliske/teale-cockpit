@@ -58,8 +58,18 @@ export function useAuth() {
   return { profile, loading };
 }
 
-/** Signs the user out and clears the active client context. */
+/**
+ * Signs the user out, clears the active client context, and sends them to
+ * the login page. Uses a hard navigation so the proxy re-evaluates with the
+ * cleared session cookies and no stale client state survives.
+ */
 export async function signOut() {
-  await supabase.auth.signOut();
+  try {
+    await supabase.auth.signOut();
+  } catch {
+    // Ignore — even if the server revocation fails, we still clear the local
+    // session and leave the app.
+  }
   impersonationStore.set(null);
+  window.location.href = "/login";
 }

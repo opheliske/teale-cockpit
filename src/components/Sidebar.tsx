@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { navSections } from "@/lib/navigation";
 import { useAuth, signOut } from "@/lib/auth";
 
@@ -14,15 +14,9 @@ function getInitials(name: string): string {
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const router = useRouter();
   const { profile } = useAuth();
 
   const displayName = profile?.full_name?.trim() || profile?.email || "—";
-
-  async function handleLogout() {
-    await signOut();
-    router.replace("/login");
-  }
 
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-brand-border-dark bg-brand-sidebar text-brand-cream">
@@ -87,7 +81,7 @@ export default function Sidebar() {
             {displayName}
           </span>
           <button
-            onClick={handleLogout}
+            onClick={() => signOut()}
             title="Se déconnecter"
             className="shrink-0 text-brand-muted-on-dark transition-colors hover:text-[#ef4444]"
           >
