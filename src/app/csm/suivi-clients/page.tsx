@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { csmClientsStore, toClient } from "@/lib/csm-clients-store";
 import { impersonationStore } from "@/lib/impersonation-store";
+import { useAuth } from "@/lib/auth";
+import { useCsmProfiles } from "@/lib/use-csm-profiles";
 
 type ContractFormule = "holistique" | "digital + tokens" | "digital only";
 type ProduitTeale = "Joy" | "Dashboard RH" | "Pulse" | "Call d'orientation" | "Ligne d'écoute" | "Assistante sociale";
@@ -46,7 +48,6 @@ function autoInitials(name: string) {
   return name.slice(0, 2).toUpperCase();
 }
 
-type CsmKey = "all" | "lucie" | "adrien" | "marie" | "tom";
 type StatusKey = "all" | "green" | "amber" | "danger" | "blue" | "new";
 type ValColor = "danger" | "amber" | undefined;
 
@@ -56,7 +57,7 @@ interface CardData {
   searchName: string;
   avatarCode: string;
   avatarBg: string;
-  csm: Exclude<CsmKey, "all">;
+  ownerCsmId: string | null;
   csmLabel: string;
   collab: string;
   status: Exclude<StatusKey, "all">;
@@ -73,17 +74,13 @@ interface CardData {
   row2Color?: ValColor;
 }
 
-const CSM_BG: Record<Exclude<CsmKey, "all">, string> = {
-  lucie:  "linear-gradient(135deg,#5eead4,#84d4a6)",
-  adrien: "linear-gradient(135deg,#84d4a6,#a8e895)",
-  marie:  "linear-gradient(135deg,#f4a89a,#fbcfe8)",
-  tom:    "linear-gradient(135deg,#fde047,#a8e895)",
-};
-const CSM_INITIAL: Record<Exclude<CsmKey, "all">, string> = {
-  lucie: "L", adrien: "A", marie: "M", tom: "T",
-};
+const CSM_AVATAR_BG = "linear-gradient(135deg,#5eead4,#84d4a6)";
 
-const CARDS: CardData[] = [];
+function csmInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "—";
+  return parts.slice(0, 2).map((p) => p[0]!.toUpperCase()).join("");
+}
 
 const STATUS_LABELS: Record<Exclude<StatusKey, "all">, string> = {
   green: "Sains",
@@ -91,14 +88,6 @@ const STATUS_LABELS: Record<Exclude<StatusKey, "all">, string> = {
   danger: "À risque",
   blue: "Onboarding",
   new: "Sans suivi",
-};
-
-const STATUS_COUNTS: Record<Exclude<StatusKey, "all">, number> = {
-  green: CARDS.filter((c) => c.status === "green").length,
-  amber: CARDS.filter((c) => c.status === "amber").length,
-  danger: CARDS.filter((c) => c.status === "danger").length,
-  blue: CARDS.filter((c) => c.status === "blue").length,
-  new: CARDS.filter((c) => c.status === "new").length,
 };
 
 const STATUS_TAG_STYLES: Record<Exclude<StatusKey, "all">, { bg: string; border: string; text: string; dot: string }> = {
@@ -122,16 +111,9 @@ const VAL_COLORS: Record<NonNullable<ValColor>, string> = {
   amber:  "#fde047",
 };
 
-const CSM_PILL_COUNTS: Record<Exclude<CsmKey, "all">, number> = {
-  lucie:  CARDS.filter((c) => c.csm === "lucie").length,
-  adrien: CARDS.filter((c) => c.csm === "adrien").length,
-  marie:  CARDS.filter((c) => c.csm === "marie").length,
-  tom:    CARDS.filter((c) => c.csm === "tom").length,
-};
-
 const EMPTY_FORM = {
   name: "", initials: "", color: AVATAR_COLORS[0],
-  collab: "", csm: "lucie" as Exclude<CsmKey, "all">,
+  collab: "", csm: "",
   statut: "new" as Exclude<StatusKey, "all">,
   formule: "digital + tokens" as ContractFormule,
   contractStart: "", contractEnd: "", churnNotice: "",
@@ -140,17 +122,22 @@ const EMPTY_FORM = {
   themeQ1: "", themeQ2: "", themeQ3: "", themeQ4: "",
 };
 
-function storedToCard(s: ReturnType<typeof csmClientsStore.getAll>[number]): CardData {
+function storedToCard(
+  s: ReturnType<typeof csmClientsStore.getAll>[number],
+  csmNameById: Map<string, string>,
+): CardData {
   const statusLabels: Record<Exclude<StatusKey, "all">, string> = { green: "Sain", amber: "Vigilance", danger: "À risque", blue: "Onboarding", new: "Nouveau" };
   const c = toClient(s);
+  const csmLabel =
+    (s.ownerCsmId && csmNameById.get(s.ownerCsmId)) || s.csmLabel || "Non assigné";
   return {
     id: s.id,
     name: s.name,
     searchName: s.name.toLowerCase(),
     avatarCode: s.initials,
     avatarBg: s.color,
-    csm: s.csm as Exclude<CsmKey, "all">,
-    csmLabel: s.csmLabel,
+    ownerCsmId: s.ownerCsmId,
+    csmLabel,
     collab: `${c.collab.toLocaleString("fr")} collab`,
     status: s.statut,
     statusLabel: statusLabels[s.statut] ?? s.statut,
@@ -162,16 +149,63 @@ function storedToCard(s: ReturnType<typeof csmClientsStore.getAll>[number]): Car
 
 export default function SuiviClientsPage() {
   const router = useRouter();
-  const [cards, setCards] = useState<CardData[]>(() => csmClientsStore.getAll().map(storedToCard));
-  const [csmFilter, setCsmFilter] = useState<CsmKey>("all");
+  const { profile } = useAuth();
+  const { profiles: csmProfiles } = useCsmProfiles();
+  const csmNameById = useMemo(
+    () => new Map(csmProfiles.map((p) => [p.id, p.full_name])),
+    [csmProfiles],
+  );
+
+  const [storedClients, setStoredClients] = useState(() => csmClientsStore.getAll());
+  const [csmFilter, setCsmFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<StatusKey>("all");
   const [search, setSearch] = useState("");
 
   useEffect(() => {
     return csmClientsStore.subscribe(() => {
-      setCards(csmClientsStore.getAll().map(storedToCard));
+      setStoredClients([...csmClientsStore.getAll()]);
     });
   }, []);
+
+  const cards = useMemo(
+    () => storedClients.map((s) => storedToCard(s, csmNameById)),
+    [storedClients, csmNameById],
+  );
+
+  // "Now" frozen at mount — keeps the KPI useMemo pure during render.
+  const [now] = useState(() => Date.now());
+
+  // KPIs derived from the real client list.
+  const kpis = useMemo(() => {
+    return {
+      total: storedClients.length,
+      mine: profile ? storedClients.filter((s) => s.ownerCsmId === profile.id).length : 0,
+      green: storedClients.filter((s) => s.statut === "green").length,
+      amber: storedClients.filter((s) => s.statut === "amber").length,
+      danger: storedClients.filter((s) => s.statut === "danger").length,
+      renew90: storedClients.filter((s) => {
+        const t = Date.parse(s.contractEnd);
+        if (Number.isNaN(t)) return false;
+        const days = (t - now) / 86_400_000;
+        return days >= 0 && days <= 90;
+      }).length,
+    };
+  }, [storedClients, profile, now]);
+
+  // Per-CSM and per-status client counts for the filter chips.
+  const csmCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const s of storedClients) {
+      if (s.ownerCsmId) m.set(s.ownerCsmId, (m.get(s.ownerCsmId) ?? 0) + 1);
+    }
+    return m;
+  }, [storedClients]);
+
+  const statusCounts = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const c of cards) m[c.status] = (m[c.status] ?? 0) + 1;
+    return m;
+  }, [cards]);
 
   // Create modal
   const [showCreate, setShowCreate] = useState(false);
@@ -186,7 +220,7 @@ export default function SuiviClientsPage() {
   const toggleProduit = (p: ProduitTeale) =>
     set("produits", form.produits.includes(p) ? form.produits.filter((x) => x !== p) : [...form.produits, p]);
 
-  const openCreate = () => { setForm(EMPTY_FORM); setCreateStep(1); setCreateError(""); setShowCreate(true); };
+  const openCreate = () => { setForm({ ...EMPTY_FORM, csm: profile?.id ?? "" }); setCreateStep(1); setCreateError(""); setShowCreate(true); };
 
   const step1Valid = form.name.trim().length > 0 && form.collab.trim().length > 0;
 
@@ -194,15 +228,15 @@ export default function SuiviClientsPage() {
     setCreateError("");
     setCreating(true);
     const id = slugify(form.name);
-    const csmLabels: Record<Exclude<CsmKey, "all">, string> = { lucie: "Lucie", adrien: "Adrien", marie: "Marie", tom: "Tom" };
     const { error } = await csmClientsStore.add({
       id,
       name: form.name.trim(),
       initials: form.initials || autoInitials(form.name),
       color: form.color,
       collab: Number(form.collab) || 0,
-      csm: form.csm,
-      csmLabel: csmLabels[form.csm],
+      csm: "",
+      csmLabel: csmNameById.get(form.csm) ?? "",
+      ownerCsmId: form.csm || null,
       statut: form.statut as "green" | "amber" | "danger",
       formule: form.formule,
       atelierTotal: Number(form.atelierTotal) || 0,
@@ -225,7 +259,7 @@ export default function SuiviClientsPage() {
   };
 
   const filtered = cards.filter((c) => {
-    const csmMatch = csmFilter === "all" || c.csm === csmFilter;
+    const csmMatch = csmFilter === "all" || c.ownerCsmId === csmFilter;
     const statusMatch = statusFilter === "all" || c.status === statusFilter;
     const searchMatch = !search || c.searchName.includes(search.toLowerCase());
     return csmMatch && statusMatch && searchMatch;
@@ -270,12 +304,12 @@ export default function SuiviClientsPage() {
             style={{ borderBottom: "1px solid #1a2c28" }}
           >
             {[
-              { val: "16", label: "Clients actifs", color: "#ffffff" },
-              { val: "6",  label: "À ta charge",    color: "#ffffff" },
-              { val: "8",  label: "Comptes sains",  color: "#a8e895" },
-              { val: "3",  label: "En vigilance",   color: "#fde047" },
-              { val: "3",  label: "À risque",       color: "#E6AA99" },
-              { val: "4",  label: "Renouv. < 90j",  color: "#ffffff" },
+              { val: String(kpis.total),   label: "Clients actifs", color: "#ffffff" },
+              { val: String(kpis.mine),    label: "À ta charge",    color: "#ffffff" },
+              { val: String(kpis.green),   label: "Comptes sains",  color: "#a8e895" },
+              { val: String(kpis.amber),   label: "En vigilance",   color: "#fde047" },
+              { val: String(kpis.danger),  label: "À risque",       color: "#E6AA99" },
+              { val: String(kpis.renew90), label: "Renouv. < 90j",  color: "#ffffff" },
             ].map(({ val, label, color }) => (
               <div key={label} className="flex flex-col gap-1">
                 <div
@@ -333,22 +367,17 @@ export default function SuiviClientsPage() {
             >
               Tous{" "}
               <span style={{ color: csmFilter === "all" ? "#a8e895" : "#7a8a87", fontSize: 10.5 }}>
-                {CARDS.length}
+                {cards.length}
               </span>
             </button>
 
-            {(["lucie", "adrien", "marie", "tom"] as const).map((csm) => {
-              const labels: Record<typeof csm, string> = {
-                lucie: "Mes clients", adrien: "Adrien", marie: "Marie", tom: "Tom",
-              };
-              const initials: Record<typeof csm, string> = {
-                lucie: "LM", adrien: "AR", marie: "MD", tom: "TB",
-              };
-              const active = csmFilter === csm;
+            {csmProfiles.map((p) => {
+              const active = csmFilter === p.id;
+              const label = p.id === profile?.id ? "Mes clients" : p.full_name;
               return (
                 <button
-                  key={csm}
-                  onClick={() => setCsmFilter(csm)}
+                  key={p.id}
+                  onClick={() => setCsmFilter(p.id)}
                   className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-[7px] text-[13px] font-medium transition-all"
                   style={{
                     background: active ? "#2a1d52" : "transparent",
@@ -358,13 +387,13 @@ export default function SuiviClientsPage() {
                 >
                   <span
                     className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full text-[9px] font-bold"
-                    style={{ background: CSM_BG[csm], color: "#06241d" }}
+                    style={{ background: CSM_AVATAR_BG, color: "#06241d" }}
                   >
-                    {CSM_INITIAL[csm]}
+                    {csmInitials(p.full_name)}
                   </span>
-                  {labels[csm]}{" "}
+                  {label}{" "}
                   <span style={{ color: active ? "#a8e895" : "#7a8a87", fontSize: 10.5 }}>
-                    {CSM_PILL_COUNTS[csm]}
+                    {csmCounts.get(p.id) ?? 0}
                   </span>
                 </button>
               );
@@ -418,7 +447,7 @@ export default function SuiviClientsPage() {
                   className="inline-block h-[7px] w-[7px] rounded-full"
                   style={{ background: STATUS_TAG_STYLES[s].dot }}
                 />
-                {labels[s]} ({STATUS_COUNTS[s]})
+                {labels[s]} ({statusCounts[s] ?? 0})
               </button>
             );
           })}
@@ -529,11 +558,11 @@ export default function SuiviClientsPage() {
                     </div>
                     <div>
                       <label className="mb-1.5 block text-[11px] text-[rgba(232,245,239,0.45)] uppercase tracking-[0.8px] font-semibold">CSM en charge</label>
-                      <select value={form.csm} onChange={(e) => set("csm", e.target.value as typeof form.csm)} className="w-full rounded-[9px] border border-[rgba(255,255,255,0.1)] bg-[#0e2520] px-3 py-2.5 text-[13px] text-[#e8f5ef] outline-none focus:border-[rgba(94,234,212,0.5)]">
-                        <option value="lucie">Lucie</option>
-                        <option value="adrien">Adrien</option>
-                        <option value="marie">Marie</option>
-                        <option value="tom">Tom</option>
+                      <select value={form.csm} onChange={(e) => set("csm", e.target.value)} className="w-full rounded-[9px] border border-[rgba(255,255,255,0.1)] bg-[#0e2520] px-3 py-2.5 text-[13px] text-[#e8f5ef] outline-none focus:border-[rgba(94,234,212,0.5)]">
+                        <option value="">— Non assigné —</option>
+                        {csmProfiles.map((p) => (
+                          <option key={p.id} value={p.id}>{p.full_name}</option>
+                        ))}
                       </select>
                     </div>
                     <div className="col-span-2">
@@ -707,9 +736,9 @@ function ClientCard({ card, onClick }: { card: CardData; onClick: () => void }) 
               <span className="inline-flex items-center gap-1">
                 <span
                   className="flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold"
-                  style={{ background: CSM_BG[card.csm], color: "#06241d" }}
+                  style={{ background: CSM_AVATAR_BG, color: "#06241d" }}
                 >
-                  {CSM_INITIAL[card.csm]}
+                  {csmInitials(card.csmLabel)}
                 </span>
                 {card.csmLabel}
               </span>
@@ -784,9 +813,9 @@ function ClientCard({ card, onClick }: { card: CardData; onClick: () => void }) 
             <span className="inline-flex items-center gap-1">
               <span
                 className="flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold"
-                style={{ background: CSM_BG[card.csm], color: "#06241d" }}
+                style={{ background: CSM_AVATAR_BG, color: "#06241d" }}
               >
-                {CSM_INITIAL[card.csm]}
+                {csmInitials(card.csmLabel)}
               </span>
               {card.csmLabel}
             </span>

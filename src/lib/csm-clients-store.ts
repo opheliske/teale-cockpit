@@ -9,6 +9,7 @@ export type StoredCsmClient = {
   collab: number;
   csm: string;
   csmLabel: string;
+  ownerCsmId: string | null;
   statut: "green" | "amber" | "danger";
   formule: ContractFormule;
   atelierTotal: number;
@@ -29,6 +30,7 @@ type DbRow = {
   collab: number;
   csm: string;
   csm_label: string;
+  owner_csm_id: string | null;
   statut: "green" | "amber" | "danger";
   formule: ContractFormule;
   atelier_total: number;
@@ -50,6 +52,7 @@ function fromRow(row: DbRow): StoredCsmClient {
     collab: row.collab,
     csm: row.csm,
     csmLabel: row.csm_label,
+    ownerCsmId: row.owner_csm_id ?? null,
     statut: row.statut,
     formule: row.formule,
     atelierTotal: row.atelier_total,
@@ -72,6 +75,7 @@ function toRow(c: StoredCsmClient): Omit<DbRow, "created_at"> {
     collab: c.collab,
     csm: c.csm,
     csm_label: c.csmLabel,
+    owner_csm_id: c.ownerCsmId,
     statut: c.statut,
     formule: c.formule,
     atelier_total: c.atelierTotal,
