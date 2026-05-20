@@ -6,6 +6,7 @@ import Link from "next/link";
 import { impersonationStore } from "@/lib/impersonation-store";
 import { CLIENTS, CLIENT_DETAILS, type PlanItem, type PlanItemFile, type PlanItemType, type Note, type PrioAction, type HistoryEvent, type ContractFormule, type ProduitTeale, type Statut } from "@/lib/clients-data";
 import { csmClientsStore, toClient, toClientDetail } from "@/lib/csm-clients-store";
+import { useCsmProfiles } from "@/lib/use-csm-profiles";
 import ClientDetailSkeleton from "./ClientDetailSkeleton";
 import { clientActionsStore } from "@/lib/client-actions-store";
 import { ATELIERS_CATALOG, KITS_CATALOG, ATELIER_CATEGORIES, KIT_CATEGORIES, type AtelierCatalogItem, type KitCatalogItem } from "@/lib/catalog";
@@ -276,6 +277,7 @@ const DOC_TYPE_COLORS: Record<string, string> = {
 type LocalDetail = {
   collab: number;
   arr: number;
+  ownerCsmId: string | null;
   formule: ContractFormule;
   contractStart: string;
   contractEnd: string;
@@ -385,9 +387,11 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [showStatutDropdown, setShowStatutDropdown] = useState(false);
   const [localCsm, setLocalCsm] = useState(() => detail?.csm ?? "");
   const [showCsmDropdown, setShowCsmDropdown] = useState(false);
+  const { profiles: csmProfiles } = useCsmProfiles();
   const [localDetail, setLocalDetail] = useState<LocalDetail>(() => ({
     collab: client?.collab ?? 0,
     arr: storedClient?.arr ?? 0,
+    ownerCsmId: storedClient?.ownerCsmId ?? null,
     formule: detail?.formule ?? "digital + tokens",
     contractStart: detail?.contractStart ?? "",
     contractEnd: detail?.contractEnd ?? "",
@@ -432,6 +436,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     setLocalDetail({
       collab: c.collab,
       arr: storedClient.arr ?? 0,
+      ownerCsmId: storedClient.ownerCsmId ?? null,
       formule: d.formule,
       contractStart: d.contractStart,
       contractEnd: d.contractEnd,
@@ -2620,6 +2625,21 @@ export default function ClientDetailView({ id }: { id: string }) {
           {/* Body */}
           <div className="max-h-[70vh] space-y-6 overflow-y-auto px-6 py-5">
 
+            {/* CSM en charge */}
+            <div>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[1px] text-[#94a8a0]">CSM en charge</p>
+              <select
+                value={editDraft.ownerCsmId ?? ""}
+                onChange={(e) => setEditDraft((d) => d && { ...d, ownerCsmId: e.target.value || null })}
+                className="w-full rounded-[9px] border border-[rgba(255,255,255,0.1)] bg-[#0e2520] px-3 py-2.5 text-[13px] text-[#e8f5ef] outline-none focus:border-[rgba(94,234,212,0.5)]"
+              >
+                <option value="">— Non assigné —</option>
+                {csmProfiles.map((p) => (
+                  <option key={p.id} value={p.id}>{p.full_name}</option>
+                ))}
+              </select>
+            </div>
+
             {/* Formule */}
             <div>
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-[1px] text-[#94a8a0]">Formule</p>
@@ -2762,6 +2782,8 @@ export default function ClientDetailView({ id }: { id: string }) {
               onClick={() => {
                 setLocalDetail(editDraft);
                 setShowEditDetails(false);
+                const csmName = csmProfiles.find((p) => p.id === editDraft.ownerCsmId)?.full_name ?? "";
+                setLocalCsm(csmName);
                 if (storedClient) {
                   csmClientsStore.add({
                     ...storedClient,
@@ -2774,6 +2796,8 @@ export default function ClientDetailView({ id }: { id: string }) {
                     contractEnd: editDraft.contractEnd,
                     churnNotice: editDraft.churnNotice,
                     produits: editDraft.produits,
+                    ownerCsmId: editDraft.ownerCsmId,
+                    csmLabel: csmName,
                   });
                 }
               }}
