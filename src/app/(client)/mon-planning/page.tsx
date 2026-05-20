@@ -16,11 +16,14 @@ import {
 } from "@/lib/urgencies";
 import { workshops } from "@/app/(client)/catalogue-ateliers/data";
 import { lancementKits, animationItems, emailTopicKits } from "@/app/(client)/kits-communication/data";
+import { impersonationStore } from "@/lib/impersonation-store";
+import { buildPlanQuarters } from "@/lib/plan-quarters";
+import { csmClientsStore } from "@/lib/csm-clients-store";
 
 const TODAY_MONTH = "May";
 const TODAY_YEAR = 2026;
 const AVAILABLE_YEARS = [2025, 2026, 2027] as const;
-const CLIENT_ID = "bx";
+const CLIENT_ID = impersonationStore.get()?.clientId ?? "";
 type Year = (typeof AVAILABLE_YEARS)[number];
 
 const allMonths = [
@@ -70,55 +73,24 @@ type QuarterStatus = "past" | "current" | "upcoming";
 
 type Quarter = {
   id: QuarterId;
-  label: string;
   theme: string;
   subtitle: string;
-  months: string[];
+  months: string[]; // English names, for yearEvents lookup
   gradient: string;
   emoji: string;
 };
 
-const quarters: Quarter[] = [
-  {
-    id: "Q1",
-    label: "Q1 2026",
-    theme: "Ateliers & sensibilisation",
-    subtitle: "Charge mentale, webinaire managers et Communication CNV pour ancrer les usages.",
-    months: ["January", "February", "March"],
-    gradient: "from-[#4d6961] to-[#c2bbab]",
-    emoji: "🌱",
-  },
-  {
-    id: "Q2",
-    label: "Q2 2026",
-    theme: "Animation & engagement",
-    subtitle: "Leadership bienveillant, Manager coach et QBR H1 pour mesurer l'impact.",
-    months: ["April", "May", "June"],
-    gradient: "from-[#2d6b62] to-[#4cbfa6]",
-    emoji: "📈",
-  },
-  {
-    id: "Q3",
-    label: "Q3 2026",
-    theme: "Bilan & renouvellement",
-    subtitle: "Finaliser les derniers ateliers et co-construire le plan N+1 avec la direction.",
-    months: ["July", "August", "September"],
-    gradient: "from-[#2a7d4a] to-[#a8e895]",
-    emoji: "📊",
-  },
-  {
-    id: "Q4",
-    label: "Q4 2026",
-    theme: "Post-contrat",
-    subtitle: "Le contrat 2025–2026 se termine en septembre. Le plan 2026–2027 est en cours de cadrage.",
-    months: ["October", "November", "December"],
-    gradient: "from-[#8fb6c7] to-[#2d6b62]",
-    emoji: "🔄",
-  },
-];
+const QUARTER_GRADIENTS: Record<QuarterId, { gradient: string; emoji: string }> = {
+  Q1: { gradient: "from-[#4d6961] to-[#c2bbab]", emoji: "🌱" },
+  Q2: { gradient: "from-[#2d6b62] to-[#4cbfa6]", emoji: "📈" },
+  Q3: { gradient: "from-[#2a7d4a] to-[#a8e895]", emoji: "📊" },
+  Q4: { gradient: "from-[#8fb6c7] to-[#2d6b62]", emoji: "🔄" },
+};
 
-function quarterStatus(q: Quarter, year: number): QuarterStatus {
-  const statuses = q.months.map((m) => monthStatus(m, year));
+function quarterStatus(q: Quarter): QuarterStatus {
+  // Uses the pre-computed status on each PlanQuarterMonth — resolved at render time
+  // from planQuarters which is derived from contractStart
+  const statuses = q.months.map((m) => monthStatus(m, new Date().getFullYear()));
   if (statuses.every((s) => s === "past")) return "past";
   if (statuses.includes("current")) return "current";
   return "upcoming";
@@ -271,152 +243,15 @@ function urgencyToPlanEvent(u: Urgency, displayDate: string): PlanEvent {
 }
 
 const events2026: Record<string, PlanEvent[]> = {
-  January: [
-    {
-      type: "atelier",
-      title: "Atelier « Charge mentale »",
-      date: "22 janv.",
-      done: true,
-      details: ["Animé par Priscille D'Arexy", "41 inscrits · note 4.8/5"],
-      scope: { audiences: ["Collaborateurs", "Managers", "RH"], countries: ["France"] },
-    },
-    {
-      type: "point",
-      title: "Point CSM mensuel",
-      date: "15 janv.",
-      done: true,
-      details: ["Bilan adoption mois 4", "Alerte sous-conso Pulse identifiée"],
-      scope: { audiences: ["RH"], countries: ["France"] },
-    },
-  ],
-  February: [
-    {
-      type: "atelier",
-      title: "Webinaire managers & santé mentale",
-      date: "18 fév.",
-      done: true,
-      details: ["Animé par Lucie Martin", "52 participants · record Biocodex · note 4.8/5"],
-      scope: { audiences: ["Managers"], countries: ["France"] },
-    },
-    {
-      type: "point",
-      title: "Point CSM mensuel",
-      date: "26 fév.",
-      done: true,
-      details: ["Suivi webinaire managers", "Plan relance tokens Pulse"],
-      scope: { audiences: ["RH"], countries: ["France"] },
-    },
-  ],
-  March: [
-    {
-      type: "atelier",
-      title: "Atelier « Communication CNV »",
-      date: "12 mars",
-      done: true,
-      details: ["Animé par Bérénice Lefevre", "29 inscrits · note 4.5/5"],
-      scope: { audiences: ["Managers", "Collaborateurs"], countries: ["France"] },
-    },
-    {
-      type: "qbr",
-      title: "QBR T2 — bilan 6 mois",
-      date: "25 mars",
-      done: true,
-      details: ["NPS 7.4 → 7.8 (+4 pts)", "Engagement +6 pts", "Deck validé par Claire Fontaine"],
-      scope: { audiences: ["Codir", "RH"], countries: ["France"] },
-    },
-  ],
-  April: [
-    {
-      type: "kit",
-      title: "Kit prévention burnout",
-      date: "7 avr.",
-      done: true,
-      details: ["Email managers + email collaborateurs", "3 visuels Slack/Teams"],
-      scope: { allCompany: true, countries: ["France"] },
-    },
-    {
-      type: "atelier",
-      title: "Atelier « Leadership bienveillant »",
-      date: "28 avr.",
-      done: true,
-      details: ["Animé par Carola Gawehn", "33 inscrits · note 4.9/5 — meilleur score"],
-      scope: { audiences: ["Managers"], countries: ["France"] },
-    },
-    {
-      type: "point",
-      title: "Point CSM mensuel",
-      date: "10 avr.",
-      done: true,
-      details: ["Suivi relance Pulse", "Validation thème atelier Q3"],
-      scope: { audiences: ["RH"], countries: ["France"] },
-    },
-  ],
-  May: [
-    {
-      type: "atelier",
-      title: "Atelier « Manager coach »",
-      date: "19 mai",
-      details: ["Animé par Marc Dupont", "Lien inscription à diffuser"],
-      scope: { audiences: ["Managers"], countries: ["France"] },
-    },
-    {
-      type: "point",
-      title: "Point CSM mensuel",
-      date: "20 mai",
-      details: ["Bilan Q2 · Préparation QBR H1"],
-      scope: { audiences: ["RH"], countries: ["France"] },
-    },
-  ],
-  June: [
-    {
-      type: "qbr",
-      title: "QBR H1 Biocodex",
-      date: "2 juin",
-      details: ["Présentation Claire Fontaine + 2 DG", "Deck en cours de préparation (1/4 sections)"],
-      scope: { audiences: ["Codir", "RH"], countries: ["France"] },
-    },
-  ],
-  July: [
-    {
-      type: "atelier",
-      title: "Atelier « Gestion des émotions »",
-      date: "17 juil.",
-      details: ["Animé par Larissa Kalisch"],
-      scope: { audiences: ["Collaborateurs", "Managers"], countries: ["France"] },
-    },
-  ],
-  August: [
-    {
-      type: "atelier",
-      title: "Atelier au choix — Résilience",
-      date: "27 août",
-      details: ["Dernier atelier du contrat · thème validé en juin"],
-      scope: { audiences: ["Collaborateurs"], countries: ["France"] },
-    },
-    {
-      type: "kit",
-      title: "Kit bilan annuel collaborateurs",
-      date: "3 août",
-      details: ["Email bilan + enquête satisfaction plateforme"],
-      scope: { allCompany: true, countries: ["France"] },
-    },
-    {
-      type: "point",
-      title: "Point renouvellement",
-      date: "20 août",
-      details: ["Décision contrat N+1 · proposition commerciale en cours"],
-      scope: { audiences: ["RH", "Codir"], countries: ["France"] },
-    },
-  ],
-  September: [
-    {
-      type: "qbr",
-      title: "QBR annuel & cadrage N+1",
-      date: "fin août",
-      details: ["Bilan complet de l'année · co-construction du plan 2026–2027"],
-      scope: { audiences: ["Codir", "RH"], countries: ["France"] },
-    },
-  ],
+  January: [],
+  February: [],
+  March: [],
+  April: [],
+  May: [],
+  June: [],
+  July: [],
+  August: [],
+  September: [],
   October: [],
   November: [],
   December: [],
@@ -431,89 +266,14 @@ const events2025: Record<string, PlanEvent[]> = {
   June: [],
   July: [],
   August: [],
-  September: [
-    {
-      type: "kit",
-      title: "Kit lancement plateforme Joy",
-      date: "8 sept.",
-      done: true,
-      details: ["Email d'annonce · 2 500 collaborateurs", "Bannières Slack / Teams", "FAQ rapide"],
-      scope: { allCompany: true, countries: ["France"] },
-    },
-    {
-      type: "onboarding",
-      title: "Kick-off projet",
-      date: "15 sept.",
-      done: true,
-      details: ["Avec Claire Fontaine · 45 min", "Présentation plateforme & plan d'activation"],
-      scope: { audiences: ["RH", "Codir"], countries: ["France"] },
-    },
-  ],
-  October: [
-    {
-      type: "atelier",
-      title: "Atelier « Comprendre Teale »",
-      date: "14 oct.",
-      done: true,
-      details: ["Animé par Pia Hartmann", "38 inscrits · note 4.6/5"],
-      scope: { audiences: ["Collaborateurs", "Managers", "RH"], countries: ["France"] },
-    },
-  ],
-  November: [
-    {
-      type: "kit",
-      title: "Kit bien-être au travail",
-      date: "4 nov.",
-      done: true,
-      details: ["Email manager + email collaborateur", "2 visuels Slack/Teams"],
-      scope: { allCompany: true, countries: ["France"] },
-    },
-    {
-      type: "atelier",
-      title: "Atelier « Gestion du stress »",
-      date: "20 nov.",
-      done: true,
-      details: ["Animé par Marc Dupont", "34 inscrits · note 4.7/5"],
-      scope: { audiences: ["Collaborateurs"], countries: ["France"] },
-    },
-    {
-      type: "point",
-      title: "Point CSM mensuel",
-      date: "26 nov.",
-      done: true,
-      details: ["Bilan mois 3 · validation thème Q2"],
-      scope: { audiences: ["RH"], countries: ["France"] },
-    },
-  ],
-  December: [
-    {
-      type: "kit",
-      title: "Kit retour vacances & résilience",
-      date: "3 déc.",
-      done: true,
-      details: ["Campagne fin d'année · 3 visuels"],
-      scope: { allCompany: true, countries: ["France"] },
-    },
-    {
-      type: "point",
-      title: "Point CSM mensuel",
-      date: "17 déc.",
-      done: true,
-      details: ["Bilan T1 contrat · NPS 7.4 · engagement 62%"],
-      scope: { audiences: ["RH"], countries: ["France"] },
-    },
-  ],
+  September: [],
+  October: [],
+  November: [],
+  December: [],
 };
 
 const events2027: Record<string, PlanEvent[]> = {
-  January: [
-    {
-      type: "point",
-      title: "Kick-off contrat N+1 — à cadrer",
-      date: "à définir",
-      scope: { audiences: ["Codir", "RH"], countries: ["France"] },
-    },
-  ],
+  January: [],
   February: [],
   March: [],
   April: [],
@@ -569,9 +329,6 @@ const frMonthAbbr: Record<string, string> = {
 
 // ── Plan store helpers ──────────────────────────────────────────────────────
 
-const QUARTER_FIRST_MONTH: Record<string, string> = {
-  Q1: "January", Q2: "April", Q3: "July", Q4: "October",
-};
 
 const PLAN_EVENT_TYPE_MAP: Record<StoredPlanItemType, EventType> = {
   atelier: "atelier", kit: "kit", csm: "point", qbr: "qbr", custom: "atelier",
@@ -621,30 +378,58 @@ function parseDateLabel(dateStr: string): { day: string; mo: string } | null {
   return { day, mo };
 }
 
-function quarterProgress(q: Quarter, year: number): number {
-  const status = quarterStatus(q, year);
-  if (status === "past") return 100;
-  if (status === "upcoming") return 0;
-  const monthIdx = allMonths.indexOf(TODAY_MONTH);
-  const qStart = allMonths.indexOf(q.months[0]);
-  const qLen = q.months.length;
-  const elapsed = monthIdx - qStart;
-  return Math.round(((elapsed + 0.5) / qLen) * 100);
+function quarterProgress(q: Quarter): number {
+  const statuses = q.months.map((m) => monthStatus(m, new Date().getFullYear()));
+  if (statuses.every((s) => s === "past")) return 100;
+  if (statuses.every((s) => s === "upcoming")) return 0;
+  const past = statuses.filter((s) => s === "past").length;
+  return Math.round(((past + 0.5) / q.months.length) * 100);
 }
 
-function defaultQuarter(year: Year): QuarterId {
-  if (year === TODAY_YEAR) {
-    const cur = quarters.find((q) => quarterStatus(q, year) === "current");
-    if (cur) return cur.id;
-  }
-  if (year > TODAY_YEAR) return "Q1";
+function defaultQuarter(qs: Quarter[]): QuarterId {
+  const cur = qs.find((q) => quarterStatus(q) === "current");
+  if (cur) return cur.id;
+  const upcoming = qs.find((q) => quarterStatus(q) === "upcoming");
+  if (upcoming) return upcoming.id;
   return "Q4";
 }
 
 export default function MonPlanningPage() {
+  const [contractStart, setContractStart] = useState<string>(
+    () => csmClientsStore.get(CLIENT_ID)?.contractStart ?? ""
+  );
+
+  useEffect(() => {
+    return csmClientsStore.subscribe(() => {
+      setContractStart(csmClientsStore.get(CLIENT_ID)?.contractStart ?? "");
+    });
+  }, []);
+
+  const planQuarters = useMemo(() => buildPlanQuarters(contractStart), [contractStart]);
+
+  const quarters: Quarter[] = useMemo(
+    () =>
+      planQuarters.map((pq) => ({
+        id: pq.id,
+        theme: "",
+        subtitle: "",
+        months: pq.months.map((m) => m.en),
+        ...QUARTER_GRADIENTS[pq.id],
+      })),
+    [planQuarters],
+  );
+
+  const quarterFirstMonth = useMemo(
+    () =>
+      Object.fromEntries(planQuarters.map((pq) => [pq.id, pq.months[0].en])) as Record<string, string>,
+    [planQuarters],
+  );
+
   const [activeYear, setActiveYear] = useState<Year>(TODAY_YEAR);
   const [activeQuarterId, setActiveQuarterId] = useState<QuarterId>(
-    defaultQuarter(TODAY_YEAR)
+    () => defaultQuarter(planQuarters.map((pq) => ({
+      id: pq.id, theme: "", subtitle: "", months: pq.months.map((m) => m.en), ...QUARTER_GRADIENTS[pq.id],
+    })))
   );
   const [activeEvent, setActiveEvent] = useState<{
     event: PlanEvent;
@@ -683,7 +468,7 @@ export default function MonPlanningPage() {
       theme: storeState.themes[q.id] || q.theme,
       subtitle: storeState.themes[q.id] ? "" : q.subtitle,
     }));
-  }, [storeState]);
+  }, [storeState, quarters]);
 
   const activeQuarter =
     displayQuarters.find((q) => q.id === activeQuarterId) ?? displayQuarters[0];
@@ -698,7 +483,7 @@ export default function MonPlanningPage() {
         const parsed = metaToMonthYear(item.meta);
         const month = (parsed && parsed.year === activeYear)
           ? parsed.month
-          : QUARTER_FIRST_MONTH[item.quarter];
+          : quarterFirstMonth[item.quarter];
         if (!allMonths.includes(month)) continue;
         merged[month].push({
           type: PLAN_EVENT_TYPE_MAP[item.type] ?? "atelier",
@@ -726,7 +511,7 @@ export default function MonPlanningPage() {
       merged[monthName].unshift(urgencyToPlanEvent(u, displayDate));
     }
     return merged;
-  }, [activeYear, urgencies, storeState]);
+  }, [activeYear, urgencies, storeState, quarterFirstMonth]);
 
   const remainingEvents = Object.values(yearEvents)
     .flat()
@@ -738,7 +523,7 @@ export default function MonPlanningPage() {
 
   const switchYear = (y: Year) => {
     setActiveYear(y);
-    setActiveQuarterId(defaultQuarter(y));
+    setActiveQuarterId(defaultQuarter(quarters));
   };
 
   // First upcoming event across the active quarter
@@ -930,10 +715,10 @@ function QuarterTabs({
     <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
       {quarterList.map((q) => {
         const isActive = q.id === active;
-        const status = quarterStatus(q, year);
-        const progress = quarterProgress(q, year);
+        const status = quarterStatus(q);
+        const progress = quarterProgress(q);
         const monthsAbbr = q.months
-          .map((m) => monthLabel[m].slice(0, 3))
+          .map((m) => monthLabel[m]?.slice(0, 3) ?? m.slice(0, 3))
           .join(" · ");
         return (
           <button
@@ -951,7 +736,7 @@ function QuarterTabs({
           >
             <div className="mb-2 flex items-center justify-between">
               <span className={`flex items-center gap-1.5 text-[11px] font-bold tracking-[1px] ${isActive ? "text-[#5eead4]" : "text-[#94a8a0]"}`}>
-                {q.emoji} {q.id}
+                {q.emoji}
               </span>
               {status === "current" ? (
                 <span className="rounded-[4px] bg-[#5eead4] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] text-[#042f2a]">
@@ -994,8 +779,8 @@ function FocusBar({
   qUpcoming: number;
   qDone: number;
 }) {
-  const status = quarterStatus(quarter, year);
-  const progress = quarterProgress(quarter, year);
+  const status = quarterStatus(quarter);
+  const progress = quarterProgress(quarter);
   return (
     <div className="relative mb-7 overflow-hidden rounded-2xl border border-[rgba(94,234,212,0.22)] px-7 py-5"
       style={{ background: "linear-gradient(135deg, rgba(94,234,212,0.12) 0%, rgba(94,234,212,0.03) 100%)" }}

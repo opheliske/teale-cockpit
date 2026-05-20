@@ -1,19 +1,15 @@
 import Link from "next/link";
 import ActionsCard, { type Action } from "@/components/ActionsCard";
 
-const FIRST_NAME = "Claire";
+const FIRST_NAME = "";
 
-const TOTAL_ATELIERS = 10;
-const ATELIERS_USED = 6;
+const TOTAL_ATELIERS = 0;
+const ATELIERS_USED = 0;
 
 
 type MilestoneKind = "atelier" | "comm" | "csm" | "bilan" | "contrat";
 
-const actions: Action[] = [
-  { title: "Préparer le deck QBR H1", due: "Échéance le 2 juin" },
-  { title: "Confirmer l'atelier Q4 avec Lucie", due: "Échéance le 15 juin" },
-  { title: "Relancer sur la conso tokens Pulse", due: "Échéance le 20 juin" },
-];
+const actions: Action[] = [];
 
 const kindConfig: Record<MilestoneKind, { label: string; pillClass: string }> = {
   atelier: { label: "Atelier",    pillClass: "bg-[rgba(168,85,247,0.15)] text-[#c4b5fd]" },
@@ -23,11 +19,7 @@ const kindConfig: Record<MilestoneKind, { label: string; pillClass: string }> = 
   contrat: { label: "Contrat",    pillClass: "bg-[rgba(251,146,60,0.15)] text-[#fdba74]" },
 };
 
-const meetings: { day: string; month: string; mo: string; time: string; title: string; detail: string; kind: MilestoneKind; done: boolean }[] = [
-  { day: "19", month: "mai",  mo: "MAI", time: "10:00", title: "Atelier « Manager coach »",          detail: "Animé par Marc", kind: "atelier", done: false },
-  { day: "20", month: "mai",  mo: "MAI", time: "14:30", title: "Point CSM mensuel",                  detail: "Avec Lucie",     kind: "csm",     done: false },
-  { day: "02", month: "juin", mo: "JUI", time: "10:00", title: "QBR H1 Biocodex",                    detail: "Avec Lucie",     kind: "bilan",   done: false },
-];
+const meetings: { day: string; month: string; mo: string; time: string; title: string; detail: string; kind: MilestoneKind; done: boolean }[] = [];
 
 const currentMonthMeetings = meetings.filter((m) => m.month === "mai");
 

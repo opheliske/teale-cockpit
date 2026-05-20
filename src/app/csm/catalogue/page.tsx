@@ -80,8 +80,6 @@ function pickEmoji(w: Workshop): string {
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
-type StatusFilter = "all" | "done" | "todo";
-
 interface FormState {
   title: string;
   subtitle: string;
@@ -145,7 +143,6 @@ export default function CsmCataloguePage() {
 
   const [search, setSearch] = useState("");
   const [activeThemeId, setActiveThemeId] = useState<string | null>(null);
-  const [activeStatus, setActiveStatus] = useState<StatusFilter>("all");
 
   // modal state
   const [editingId, setEditingId] = useState<string | "new" | null>(null);
@@ -159,20 +156,16 @@ export default function CsmCataloguePage() {
   const [previewId, setPreviewId] = useState<string | null>(null);
 
   const totalWorkshops = workshops.length;
-  const animatedCount = workshops.filter((w) => w.alreadyAnimated).length;
-  const remainingCount = totalWorkshops - animatedCount;
 
   const filtered = useMemo(() => {
     return workshops.filter((w) => {
       if (activeThemeId && w.themeId !== activeThemeId) return false;
-      if (activeStatus === "done" && !w.alreadyAnimated) return false;
-      if (activeStatus === "todo" && w.alreadyAnimated) return false;
       if (search.trim() && !workshopHaystack(w).includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [workshops, search, activeThemeId, activeStatus]);
+  }, [workshops, search, activeThemeId]);
 
-  const noFilters = !search.trim() && !activeThemeId && activeStatus === "all";
+  const noFilters = !search.trim() && !activeThemeId;
   const previewWorkshop = previewId ? workshops.find((w) => w.id === previewId) ?? null : null;
 
   function openNew() {
@@ -230,8 +223,6 @@ export default function CsmCataloguePage() {
           </div>
           <div className="flex shrink-0 items-center gap-2.5">
             <StatBox value={totalWorkshops} label="Ateliers" />
-            <StatBox value={animatedCount} label="Animés" color="green" />
-            <StatBox value={remainingCount} label="À planifier" color="amber" />
             <button
               type="button"
               onClick={openNew}
@@ -282,14 +273,6 @@ export default function CsmCataloguePage() {
           ))}
         </div>
 
-        {/* FILTER ROW: STATUT + DURÉE */}
-        <div className="mt-2 flex flex-wrap items-center gap-2 px-0.5 py-1">
-          <span className="min-w-[60px] text-[10px] font-bold uppercase tracking-[1.5px] text-[#6b7c75]">STATUT</span>
-          <Chip active={activeStatus === "all"} onClick={() => setActiveStatus("all")}>Tous</Chip>
-          <Chip active={activeStatus === "done"} onClick={() => setActiveStatus(activeStatus === "done" ? "all" : "done")} count={animatedCount}>✓ Déjà animé</Chip>
-          <Chip active={activeStatus === "todo"} onClick={() => setActiveStatus(activeStatus === "todo" ? "all" : "todo")} count={remainingCount}>○ À planifier</Chip>
-        </div>
-
         {/* GRID */}
         <div className="mt-5">
           {filtered.length === 0 ? (
@@ -299,7 +282,7 @@ export default function CsmCataloguePage() {
               </p>
               <button
                 type="button"
-                onClick={() => { setSearch(""); setActiveThemeId(null); setActiveStatus("all"); }}
+                onClick={() => { setSearch(""); setActiveThemeId(null); }}
                 className="mt-5 rounded-full border border-[rgba(94,234,212,0.4)] px-4 py-1.5 text-xs font-medium text-[#84d4a6] transition-colors hover:bg-[rgba(94,234,212,0.1)]"
               >
                 Réinitialiser les filtres
@@ -434,9 +417,6 @@ function AdminCard({
             {workshop.subtitle.toUpperCase()}
           </span>
         )}
-        <span className={`rounded-[4px] px-[7px] py-[3px] text-[9px] font-semibold tracking-[0.3px] ${workshop.alreadyAnimated ? "bg-[rgba(94,234,212,0.12)] text-[#5eead4]" : "bg-[rgba(250,204,21,0.1)] text-[#fde047]"}`}>
-          {workshop.alreadyAnimated ? "✓ Animé" : "○ À planifier"}
-        </span>
       </div>
 
       {/* title */}
@@ -548,32 +528,18 @@ function WorkshopFormModal({
             </div>
           </div>
 
-          {/* Theme + Animated */}
-          <div className="grid grid-cols-[1fr_1fr] gap-3">
-            <div>
-              <label className={LABEL}>Thème *</label>
-              <select
-                className={`${INPUT} [color-scheme:dark]`}
-                value={form.themeId}
-                onChange={(e) => setField("themeId", e.target.value)}
-              >
-                {themes.map((t) => (
-                  <option key={t.id} value={t.id}>{themeDisplayLabel[t.id] ?? t.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="col-span-2 flex items-center gap-3">
-              <input
-                id="animated"
-                type="checkbox"
-                checked={form.alreadyAnimated}
-                onChange={(e) => setField("alreadyAnimated", e.target.checked)}
-                className="h-4 w-4 cursor-pointer rounded accent-[#5eead4]"
-              />
-              <label htmlFor="animated" className="cursor-pointer text-[13px] text-[#c1d4cc]">
-                Cet atelier a déjà été animé
-              </label>
-            </div>
+          {/* Theme */}
+          <div>
+            <label className={LABEL}>Thème *</label>
+            <select
+              className={`${INPUT} [color-scheme:dark]`}
+              value={form.themeId}
+              onChange={(e) => setField("themeId", e.target.value)}
+            >
+              {themes.map((t) => (
+                <option key={t.id} value={t.id}>{themeDisplayLabel[t.id] ?? t.name}</option>
+              ))}
+            </select>
           </div>
 
           {/* Objectives */}
@@ -683,9 +649,6 @@ function PreviewModal({ workshop, onClose }: { workshop: Workshop; onClose: () =
         <div className="flex flex-wrap items-center gap-2 pr-12">
           <span className={`rounded-[4px] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${tagClass}`}>{tagLabel}</span>
           {workshop.subtitle && <span className="text-[10px] uppercase tracking-wider text-[#94a8a0]">· {workshop.subtitle}</span>}
-          <span className={`ml-auto inline-flex items-center gap-1 rounded-[4px] px-2 py-0.5 text-[10px] font-semibold ${workshop.alreadyAnimated ? "bg-[rgba(94,234,212,0.12)] text-[#5eead4]" : "bg-[rgba(250,204,21,0.1)] text-[#fde047]"}`}>
-            {workshop.alreadyAnimated ? "✓ Animé" : "○ À planifier"}
-          </span>
         </div>
 
         <h2 className="mt-3 text-2xl font-medium tracking-tight text-[#e8f5ef]">{workshop.title}</h2>

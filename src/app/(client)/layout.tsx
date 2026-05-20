@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Sidebar from "@/components/Sidebar";
 import ClientImpersonationBanner from "@/components/ClientImpersonationBanner";
+import ClientGuard from "@/components/ClientGuard";
 
 export const metadata: Metadata = {
   title: "Teale — Vue Client",
@@ -13,12 +14,14 @@ export default function ClientLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-screen">
-      <Sidebar />
-      <main className="flex-1 overflow-y-auto">
-        <ClientImpersonationBanner />
-        {children}
-      </main>
-    </div>
+    <ClientGuard>
+      <div className="flex h-screen">
+        <Sidebar />
+        <main className="flex-1 overflow-y-auto">
+          <ClientImpersonationBanner />
+          {children}
+        </main>
+      </div>
+    </ClientGuard>
   );
 }

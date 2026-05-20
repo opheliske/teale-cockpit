@@ -7,6 +7,11 @@ export const LABEL_COLORS = [
   "#fdba74", "#c4b5fd", "#fda4af", "#7dd3fc",
 ];
 
+const DEFAULT_LABELS: Array<{ name: string; color: string }> = [
+  { name: "Managers",       color: "#a8e895" },
+  { name: "Collaborateurs", color: "#93c5fd" },
+];
+
 type LabelsMap = Record<string, TargetLabel[]>;
 type AssignMap = Record<string, Record<number, string[]>>;
 
@@ -34,7 +39,19 @@ export const targetsStore = {
       supabase.from("target_item_assignments").select("*").eq("client_id", clientId),
     ]);
 
-    labels = { ...labels, [clientId]: labelRows ?? [] };
+    if (labelRows && labelRows.length > 0) {
+      labels = { ...labels, [clientId]: labelRows as TargetLabel[] };
+    } else {
+      const seeded: TargetLabel[] = DEFAULT_LABELS.map(({ name, color }, i) => ({
+        id: name.toLowerCase().replace(/\s+/g, "-") + "-" + (Date.now() + i).toString(36),
+        name,
+        color,
+      }));
+      await supabase
+        .from("target_labels")
+        .insert(seeded.map((l) => ({ ...l, client_id: clientId })));
+      labels = { ...labels, [clientId]: seeded };
+    }
 
     const clientAssigns: Record<number, string[]> = {};
     for (const row of assignRows ?? []) {

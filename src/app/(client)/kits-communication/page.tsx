@@ -142,44 +142,7 @@ type UpcomingLetsTalk = {
   url: string;
 };
 
-const upcomingLetsTalks: UpcomingLetsTalk[] = [
-  {
-    id: "lt-ia",
-    title: "L'IA et vous : adopter les bons réflexes",
-    dateLabel: "Jeudi 21 mai 2026 — 11h30 (CEST)",
-    timeUntil: "Dans 8 jours",
-    duration: "Environ 1 heure",
-    language: "FR",
-    url: "https://app.livestorm.co/p/0caf0a67-08b2-42d9-a92a-0f13c90767b1",
-  },
-  {
-    id: "lt-burnout-en",
-    title: "Goodbye Burnout!",
-    dateLabel: "Wednesday 17 June 2026 — 16:30 (CEST)",
-    timeUntil: "In about 1 month",
-    duration: "About 1 hour",
-    language: "EN",
-    url: "https://app.livestorm.co/p/aa4e15e2-3647-432c-bb2c-b741bfa463d6",
-  },
-  {
-    id: "lt-burnout-fr",
-    title: "Burnout : parler du travail peut protéger",
-    dateLabel: "Vendredi 19 juin 2026 — 11h30 (CEST)",
-    timeUntil: "Dans environ 1 mois",
-    duration: "Environ 1 heure",
-    language: "FR",
-    url: "https://app.livestorm.co/p/41f11be5-bf03-453e-8948-ba189b9212a7",
-  },
-  {
-    id: "lt-keep-well",
-    title: "Key steps to keep yourself well",
-    dateLabel: "Thursday 15 October 2026 — 16:30 (CEST)",
-    timeUntil: "In 5 months",
-    duration: "About 1 hour",
-    language: "EN",
-    url: "https://app.livestorm.co/p/9c554bbc-d4d7-4987-b8aa-af32291b47a5",
-  },
-];
+const upcomingLetsTalks: UpcomingLetsTalk[] = [];
 
 
 function statusStyle(status: string): string {

@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { csmClientsStore, toClient } from "@/lib/csm-clients-store";
+import { impersonationStore } from "@/lib/impersonation-store";
 
 type ContractFormule = "holistique" | "digital + tokens" | "digital only";
 type ProduitTeale = "Joy" | "Dashboard RH" | "Pulse" | "Call d'orientation" | "Ligne d'écoute" | "Assistante sociale";
@@ -81,26 +83,7 @@ const CSM_INITIAL: Record<Exclude<CsmKey, "all">, string> = {
   lucie: "L", adrien: "A", marie: "M", tom: "T",
 };
 
-const CARDS: CardData[] = [
-  {
-    id: "bx",
-    name: "Biocodex",
-    searchName: "biocodex",
-    avatarCode: "BX",
-    avatarBg: "#bae6fd",
-    csm: "lucie",
-    csmLabel: "Lucie",
-    collab: "2 500 collab",
-    status: "green",
-    statusLabel: "Sain",
-    isEmpty: false,
-    progress: 75,
-    progressMeta: "18 / 24 jalons · 6 ateliers · 8 kits",
-    prochainVal: "QBR · 2 juin",
-    row1Label: "Prochain",     row1Val: "QBR H1 · 2 juin 2026",
-    row2Label: "Renouvellement", row2Val: "1 sept. 2026 · 78 k€",
-  },
-];
+const CARDS: CardData[] = [];
 
 const STATUS_LABELS: Record<Exclude<StatusKey, "all">, string> = {
   green: "Sains",
@@ -157,12 +140,38 @@ const EMPTY_FORM = {
   themeQ1: "", themeQ2: "", themeQ3: "", themeQ4: "",
 };
 
+function storedToCard(s: ReturnType<typeof csmClientsStore.getAll>[number]): CardData {
+  const statusLabels: Record<Exclude<StatusKey, "all">, string> = { green: "Sain", amber: "Vigilance", danger: "À risque", blue: "Onboarding", new: "Nouveau" };
+  const c = toClient(s);
+  return {
+    id: s.id,
+    name: s.name,
+    searchName: s.name.toLowerCase(),
+    avatarCode: s.initials,
+    avatarBg: s.color,
+    csm: s.csm as Exclude<CsmKey, "all">,
+    csmLabel: s.csmLabel,
+    collab: `${c.collab.toLocaleString("fr")} collab`,
+    status: s.statut,
+    statusLabel: statusLabels[s.statut] ?? s.statut,
+    isEmpty: true,
+    row1Label: "Début contrat", row1Val: s.contractStart || "—",
+    row2Label: "Fin contrat",   row2Val: s.contractEnd   || "—",
+  };
+}
+
 export default function SuiviClientsPage() {
   const router = useRouter();
-  const [cards, setCards] = useState<CardData[]>(CARDS);
+  const [cards, setCards] = useState<CardData[]>(() => csmClientsStore.getAll().map(storedToCard));
   const [csmFilter, setCsmFilter] = useState<CsmKey>("all");
   const [statusFilter, setStatusFilter] = useState<StatusKey>("all");
   const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    return csmClientsStore.subscribe(() => {
+      setCards(csmClientsStore.getAll().map(storedToCard));
+    });
+  }, []);
 
   // Create modal
   const [showCreate, setShowCreate] = useState(false);
@@ -179,26 +188,29 @@ export default function SuiviClientsPage() {
 
   const step1Valid = form.name.trim().length > 0 && form.collab.trim().length > 0;
 
-  const submitCreate = () => {
+  const submitCreate = async () => {
     const id = slugify(form.name);
     const csmLabels: Record<Exclude<CsmKey, "all">, string> = { lucie: "Lucie", adrien: "Adrien", marie: "Marie", tom: "Tom" };
-    const statusLabels: Record<Exclude<StatusKey, "all">, string> = { green: "Sain", amber: "Vigilance", danger: "À risque", blue: "Onboarding", new: "Nouveau" };
-    const newCard: CardData = {
+    await csmClientsStore.add({
       id,
       name: form.name.trim(),
-      searchName: form.name.toLowerCase(),
-      avatarCode: form.initials || autoInitials(form.name),
-      avatarBg: form.color,
+      initials: form.initials || autoInitials(form.name),
+      color: form.color,
+      collab: Number(form.collab) || 0,
       csm: form.csm,
       csmLabel: csmLabels[form.csm],
-      collab: `${Number(form.collab).toLocaleString("fr")} collab`,
-      status: form.statut,
-      statusLabel: statusLabels[form.statut],
-      isEmpty: true,
-      row1Label: "Début contrat",   row1Val: form.contractStart || "—",
-      row2Label: "Fin contrat",     row2Val: form.contractEnd || "—",
-    };
-    setCards((prev) => [newCard, ...prev]);
+      statut: form.statut as "green" | "amber" | "danger",
+      formule: form.formule,
+      atelierTotal: Number(form.atelierTotal) || 0,
+      rdvParCollab: Number(form.rdvParCollab) || 0,
+      contractStart: form.contractStart,
+      contractEnd: form.contractEnd,
+      churnNotice: form.churnNotice,
+      produits: form.produits,
+      arr: 0,
+      createdAt: new Date().toISOString().split("T")[0],
+    });
+    impersonationStore.set({ clientId: id, clientName: form.name.trim(), color: form.color });
     setShowCreate(false);
     router.push(`/csm/clients/${id}`);
   };
@@ -414,11 +426,7 @@ export default function SuiviClientsPage() {
             <ClientCard
               key={card.id}
               card={card}
-              onClick={() => {
-                if (!card.isEmpty) {
-                  router.push(`/csm/clients/${card.id}`);
-                }
-              }}
+              onClick={() => router.push(`/csm/clients/${card.id}`)}
             />
           ))}
 
@@ -502,9 +510,10 @@ export default function SuiviClientsPage() {
                     <div>
                       <label className="mb-1.5 block text-[11px] text-[rgba(232,245,239,0.45)] uppercase tracking-[0.8px] font-semibold">Collaborateurs *</label>
                       <input
-                        type="number" min={1}
+                        type="number" min={1} step={1}
                         value={form.collab}
-                        onChange={(e) => set("collab", e.target.value)}
+                        onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ""); set("collab", v); }}
+                        onKeyDown={(e) => { if (["e", "E", "+", "-", "."].includes(e.key)) e.preventDefault(); }}
                         placeholder="Ex : 800"
                         className="w-full rounded-[9px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef] placeholder-[rgba(232,245,239,0.25)] outline-none focus:border-[rgba(94,234,212,0.5)]"
                       />
@@ -519,10 +528,10 @@ export default function SuiviClientsPage() {
                       </select>
                     </div>
                     <div className="col-span-2">
-                      <label className="mb-2 block text-[11px] text-[rgba(232,245,239,0.45)] uppercase tracking-[0.8px] font-semibold">Statut initial</label>
+                      <label className="mb-2 block text-[11px] text-[rgba(232,245,239,0.45)] uppercase tracking-[0.8px] font-semibold">État de santé</label>
                       <div className="flex flex-wrap gap-2">
-                        {(["new", "blue", "green", "amber", "danger"] as const).map((s) => {
-                          const labels = { new: "Nouveau", blue: "Onboarding", green: "Sain", amber: "Vigilance", danger: "À risque" };
+                        {(["green", "amber", "danger"] as const).map((s) => {
+                          const labels = { green: "Sain", amber: "Vigilance", danger: "À risque" };
                           const active = form.statut === s;
                           return (
                             <button key={s} onClick={() => set("statut", s)}
@@ -553,13 +562,21 @@ export default function SuiviClientsPage() {
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    {([["Ateliers au contrat", "atelierTotal", "Ex : 20"], ["RDV / collaborateur", "rdvParCollab", "Ex : 2"]] as const).map(([label, key, ph]) => (
-                      <div key={key}>
-                        <label className="mb-1.5 block text-[11px] text-[rgba(232,245,239,0.45)] uppercase tracking-[0.8px] font-semibold">{label}</label>
-                        <input type="number" min={0} value={form[key]} onChange={(e) => set(key, e.target.value)} placeholder={ph}
+                    <div>
+                      <label className="mb-1.5 block text-[11px] text-[rgba(232,245,239,0.45)] uppercase tracking-[0.8px] font-semibold">Ateliers au contrat</label>
+                      <input type="number" min={0} value={form.atelierTotal} onChange={(e) => set("atelierTotal", e.target.value)} placeholder="Ex : 20"
+                        className="w-full rounded-[9px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef] placeholder-[rgba(232,245,239,0.25)] outline-none focus:border-[rgba(94,234,212,0.5)]" />
+                    </div>
+                    {form.formule !== "digital only" && (
+                      <div>
+                        <label className="mb-1.5 block text-[11px] text-[rgba(232,245,239,0.45)] uppercase tracking-[0.8px] font-semibold">
+                          {form.formule === "digital + tokens" ? "Nombre de tokens" : "RDV / collaborateur"}
+                        </label>
+                        <input type="number" min={0} value={form.rdvParCollab} onChange={(e) => set("rdvParCollab", e.target.value)}
+                          placeholder={form.formule === "digital + tokens" ? "Ex : 500" : "Ex : 2"}
                           className="w-full rounded-[9px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef] placeholder-[rgba(232,245,239,0.25)] outline-none focus:border-[rgba(94,234,212,0.5)]" />
                       </div>
-                    ))}
+                    )}
                     {(["contractStart", "contractEnd", "churnNotice"] as const).map((key) => (
                       <div key={key}>
                         <label className="mb-1.5 block text-[11px] text-[rgba(232,245,239,0.45)] uppercase tracking-[0.8px] font-semibold">
@@ -646,11 +663,14 @@ function ClientCard({ card, onClick }: { card: CardData; onClick: () => void }) 
   if (card.isEmpty) {
     return (
       <article
-        className="flex cursor-default flex-col gap-3.5 rounded-2xl p-5"
+        onClick={onClick}
+        className="flex cursor-pointer flex-col gap-3.5 rounded-2xl p-5 transition-all duration-150"
         style={{
           background: "transparent",
           border: "1px dashed #243a35",
         }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "#84d4a6"; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "#243a35"; (e.currentTarget as HTMLElement).style.borderStyle = "dashed"; }}
       >
         {/* Head */}
         <div className="flex items-start gap-3">
@@ -701,13 +721,11 @@ function ClientCard({ card, onClick }: { card: CardData; onClick: () => void }) 
           <InfoRow label={card.row2Label} val={card.row2Val} />
         </div>
 
-        {/* Create button */}
-        <button
-          className="flex w-full items-center justify-center gap-1.5 rounded-[10px] px-3.5 py-2.5 text-[13px] font-semibold transition-all"
-          style={{ background: "#5eead4", color: "#ffffff", border: 0 }}
-        >
-          + Créer le suivi projet
-        </button>
+        {/* CTA */}
+        <div className="mt-1.5 flex items-center gap-2">
+          <span className="flex-1 text-[13px] font-medium text-[#84d4a6]">Ouvrir la fiche</span>
+          <span className="text-lg text-[#7a8a87]">→</span>
+        </div>
       </article>
     );
   }

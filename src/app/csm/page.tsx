@@ -2,9 +2,10 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { CLIENTS, HOME_ACTIONS, RENEWALS, CHURN_NOTICES, type Statut, type HomeAction } from "@/lib/clients-data";
+import { CLIENTS, HOME_ACTIONS, RENEWALS, CHURN_NOTICES, type Statut, type HomeAction, type Client } from "@/lib/clients-data";
 import { clientActionsStore } from "@/lib/client-actions-store";
 import { csmEventsStore, type CsmEvent } from "@/lib/csm-events-store";
+import { csmClientsStore, type StoredCsmClient } from "@/lib/csm-clients-store";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -141,6 +142,25 @@ function ClientAvatar({ initials, color, size = 32 }: { initials: string; color:
   );
 }
 
+function storeToClient(s: StoredCsmClient): Client {
+  const statutMap: Record<StoredCsmClient["statut"], Statut> = {
+    green: "SAIN", amber: "VIGILANCE", danger: "À RISQUE",
+  };
+  return {
+    id: s.id,
+    initials: s.initials,
+    color: s.color,
+    name: s.name,
+    collab: s.collab,
+    statut: statutMap[s.statut] ?? "SAIN",
+    consoAteliers: [0, s.atelierTotal || 1],
+    action: "—",
+    actionDate: "",
+    renouvDate: s.contractEnd || "—",
+    arr: s.arr || 0,
+  };
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 type Filter = "Tous" | "Sains" | "Vigilance" | "Risque" | "Renouvellement";
@@ -162,6 +182,13 @@ export default function CsmHomePage() {
   const [newText, setNewText] = useState("");
   const [newEcheance, setNewEcheance] = useState("");
   const [extraCsmEvents, setExtraCsmEvents] = useState<CsmEvent[]>(() => csmEventsStore.getEvents());
+  const [storeClients, setStoreClients] = useState<Client[]>(() => csmClientsStore.getAll().map(storeToClient));
+
+  useEffect(() => {
+    return csmClientsStore.subscribe(() => {
+      setStoreClients(csmClientsStore.getAll().map(storeToClient));
+    });
+  }, []);
 
   useEffect(() => {
     return clientActionsStore.subscribe(() => {
@@ -180,17 +207,19 @@ export default function CsmHomePage() {
     });
   }, []);
 
+  const allClients = useMemo(() => [...CLIENTS, ...storeClients], [storeClients]);
+
   // ── KPIs ──
-  const sainCount = CLIENTS.filter((c) => c.statut === "SAIN").length;
-  const vigilanceCount = CLIENTS.filter((c) => c.statut === "VIGILANCE").length;
-  const risqueCount = CLIENTS.filter((c) => c.statut === "À RISQUE").length;
+  const sainCount = allClients.filter((c) => c.statut === "SAIN").length;
+  const vigilanceCount = allClients.filter((c) => c.statut === "VIGILANCE").length;
+  const risqueCount = allClients.filter((c) => c.statut === "À RISQUE").length;
   const renewalARR = RENEWALS.reduce((s, r) => s + r.arr, 0);
   const pendingActionsCount = actions.filter((a) => !doneIds.has(a.id)).length;
   const overdueActionsCount = actions.filter((a) => !!a.overdue && !doneIds.has(a.id)).length;
   const urgentRenewals = RENEWALS.filter((r) => r.days <= 30);
 
   const FILTER_LABELS: Record<Filter, string> = {
-    Tous: `Tous (${CLIENTS.length})`,
+    Tous: `Tous (${allClients.length})`,
     Sains: `Sains (${sainCount})`,
     Vigilance: `Vigilance (${vigilanceCount})`,
     Risque: `Risque (${risqueCount})`,
@@ -206,13 +235,13 @@ export default function CsmHomePage() {
 
   // Top 5 prochains renouvellements (tous clients triés par date)
   const top5Renewals = useMemo(() =>
-    [...CLIENTS]
+    [...allClients]
       .map((c) => ({ ...c, daysLeft: daysUntilDate(parseRenouvDate(c.renouvDate)) }))
       .sort((a, b) => a.daysLeft - b.daysLeft)
       .slice(0, 5),
-  []);
+  [allClients]);
 
-  const filtered = CLIENTS.filter((c) => {
+  const filtered = allClients.filter((c) => {
     if (!c.name.toLowerCase().includes(search.toLowerCase())) return false;
     if (filter === "Sains") return c.statut === "SAIN";
     if (filter === "Vigilance") return c.statut === "VIGILANCE";
@@ -243,7 +272,7 @@ export default function CsmHomePage() {
     setShowAddModal(false);
   };
 
-  const alertClients = CLIENTS.filter((c) => c.statut === "À RISQUE" || c.statut === "VIGILANCE");
+  const alertClients = allClients.filter((c) => c.statut === "À RISQUE" || c.statut === "VIGILANCE");
   const overdueActionsList = actions.filter((a) => !!a.overdue && !doneIds.has(a.id));
 
   return (
@@ -256,7 +285,7 @@ export default function CsmHomePage() {
         </div>
         <h1 className="text-[28px] font-bold tracking-[-0.5px] text-brand-cream">Bonjour Lucie 👋</h1>
         <p className="mt-1 max-w-[640px] text-[13px] leading-relaxed text-[#94a8a0]">
-          Voici l&apos;état de votre portefeuille de {CLIENTS.length} comptes Teale.{" "}
+          Voici l&apos;état de votre portefeuille de {allClients.length} comptes Teale.{" "}
           {vigilanceCount + risqueCount > 0
             ? `${vigilanceCount + risqueCount} client${vigilanceCount + risqueCount > 1 ? "s" : ""} demandent votre attention`
             : "Tous les clients sont en bonne santé"}
@@ -315,20 +344,20 @@ export default function CsmHomePage() {
                   <div className="mt-1 text-[9px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.4)]">Risque</div>
                 </div>
               </div>
-              <p className="text-[11px] text-[rgba(232,245,239,0.45)]">{CLIENTS.length} comptes actifs · {risqueCount} à risque de churn</p>
+              <p className="text-[11px] text-[rgba(232,245,239,0.45)]">{allClients.length} comptes actifs · {risqueCount} à risque de churn</p>
             </div>
 
             <div className="rounded-[14px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.03)] p-4">
               <p className="mb-2 text-[11px] font-semibold text-brand-cream">Renouvellements à venir</p>
               <div className="flex items-center gap-3">
                 <div className="relative shrink-0">
-                  <DonutChart pct={RENEWALS.length / CLIENTS.length} color="#f59e0b" size={68} />
+                  <DonutChart pct={allClients.length > 0 ? RENEWALS.length / allClients.length : 0} color="#f59e0b" size={68} />
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-[14px] font-bold text-brand-cream">{RENEWALS.length}/{CLIENTS.length}</span>
+                    <span className="text-[14px] font-bold text-brand-cream">{RENEWALS.length}/{allClients.length}</span>
                   </div>
                 </div>
                 <div>
-                  <p className="text-[11px] text-[rgba(232,245,239,0.55)]">{RENEWALS.length} contrats à fermer d&apos;ici 90 jours sur {CLIENTS.length} comptes</p>
+                  <p className="text-[11px] text-[rgba(232,245,239,0.55)]">{RENEWALS.length} contrats à fermer d&apos;ici 90 jours sur {allClients.length} comptes</p>
                   <p className="mt-1.5 text-[12px] font-semibold text-brand-cream">{renewalARR} k€ ARR concerné</p>
                 </div>
               </div>
@@ -351,7 +380,7 @@ export default function CsmHomePage() {
             <div>
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-[16px] font-semibold text-brand-cream">Mon portefeuille</h2>
-                <span className="text-[11px] text-[rgba(232,245,239,0.4)]">{CLIENTS.length} comptes · Année contrat 2025—2026</span>
+                <span className="text-[11px] text-[rgba(232,245,239,0.4)]">{allClients.length} comptes · Année contrat 2025—2026</span>
               </div>
               <div className="mb-3 flex gap-1">
                 {FILTERS.map((f) => (
@@ -412,7 +441,7 @@ export default function CsmHomePage() {
                 </table>
                 <div className="flex items-center justify-between border-t border-[rgba(255,255,255,0.06)] px-4 py-2.5">
                   <span className="text-[11px] text-[rgba(232,245,239,0.35)]">
-                    {filtered.length} affichés sur {CLIENTS.length} · trié par alerte décroissante
+                    {filtered.length} affichés sur {allClients.length} · trié par alerte décroissante
                   </span>
                   <button onClick={() => router.push("/csm/suivi-clients")}
                     className="text-[11px] font-medium text-[#84d4a6] hover:text-[#a8e895]">
@@ -714,7 +743,7 @@ export default function CsmHomePage() {
               <div className="overflow-hidden rounded-[12px] border border-[rgba(255,255,255,0.07)]">
                 <ul className="divide-y divide-[rgba(255,255,255,0.04)]">
                   {urgentRenewals.map((r) => {
-                    const client = CLIENTS.find((c) => c.name === r.name);
+                    const client = allClients.find((c) => c.name === r.name);
                     return (
                       <li key={r.name} onClick={() => client && router.push(`/csm/clients/${client.id}`)}
                         className={`flex items-center gap-3 bg-[rgba(255,255,255,0.01)] px-4 py-3 transition-colors ${client ? "cursor-pointer hover:bg-[rgba(255,255,255,0.03)]" : ""}`}>

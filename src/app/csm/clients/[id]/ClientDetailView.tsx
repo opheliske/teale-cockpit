@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { impersonationStore } from "@/lib/impersonation-store";
 import { CLIENTS, CLIENT_DETAILS, type PlanItem, type PlanItemFile, type PlanItemType, type Note, type PrioAction, type HistoryEvent, type ContractFormule, type ProduitTeale, type Statut } from "@/lib/clients-data";
+import { csmClientsStore, toClient, toClientDetail } from "@/lib/csm-clients-store";
 import { clientActionsStore } from "@/lib/client-actions-store";
 import { ATELIERS_CATALOG, KITS_CATALOG, ATELIER_CATEGORIES, KIT_CATEGORIES, type AtelierCatalogItem, type KitCatalogItem } from "@/lib/catalog";
 import { planStore, type StoredPlanItem } from "@/lib/plan-store";
@@ -13,6 +14,7 @@ import { csmEventsStore, parseFrDateWeekday } from "@/lib/csm-events-store";
 import { healthStore, type HealthEntry, type HealthStatut } from "@/lib/health-store";
 import { targetsStore, type TargetLabel, LABEL_COLORS } from "@/lib/targets-store";
 import { commentsStore, type PlanComment } from "@/lib/comments-store";
+import { buildPlanQuarters } from "@/lib/plan-quarters";
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -225,19 +227,6 @@ function formatFileSize(bytes: number): string {
 
 const FR_MONTH_NAMES = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
 
-const PLAN_Q_MONTHS: Record<"Q1" | "Q2" | "Q3" | "Q4", Array<{ key: string; label: string }>> = {
-  Q1: [{ key: "sept", label: "Septembre" }, { key: "oct",  label: "Octobre"   }, { key: "nov",  label: "Novembre"  }],
-  Q2: [{ key: "déc",  label: "Décembre"  }, { key: "janv", label: "Janvier"   }, { key: "fév",  label: "Février"   }],
-  Q3: [{ key: "avr",  label: "Avril"     }, { key: "mai",  label: "Mai"       }, { key: "juin", label: "Juin"      }],
-  Q4: [{ key: "juil", label: "Juillet"   }, { key: "août", label: "Août"      }, { key: "sept", label: "Septembre" }],
-};
-
-const Q_MONTH_STATUS: Record<"Q1" | "Q2" | "Q3" | "Q4", Record<string, "past" | "current" | "upcoming">> = {
-  Q1: { sept: "past", oct: "past",     nov: "past"     },
-  Q2: { déc:  "past", janv: "past",    fév: "past"     },
-  Q3: { avr:  "past", mai: "current",  juin: "upcoming" },
-  Q4: { juil: "upcoming", août: "upcoming", sept: "upcoming" },
-};
 
 function planItemMonthKey(item: PlanItem, qMonths: Array<{ key: string; label: string }>): string {
   const meta = item.meta ?? "";
@@ -285,6 +274,7 @@ const DOC_TYPE_COLORS: Record<string, string> = {
 
 type LocalDetail = {
   collab: number;
+  arr: number;
   formule: ContractFormule;
   contractStart: string;
   contractEnd: string;
@@ -299,8 +289,20 @@ type LocalDetail = {
 
 export default function ClientDetailView({ id }: { id: string }) {
   const router = useRouter();
-  const client = CLIENTS.find((c) => c.id === id);
-  const detail = CLIENT_DETAILS[id];
+
+  const [storedClient, setStoredClient] = useState(() => csmClientsStore.get(id));
+  const [storeLoading, setStoreLoading] = useState(!csmClientsStore.get(id) && !CLIENTS.find((c) => c.id === id) && !CLIENT_DETAILS[id]);
+
+  useEffect(() => {
+    return csmClientsStore.subscribe(() => {
+      const found = csmClientsStore.get(id);
+      setStoredClient(found);
+      setStoreLoading(false);
+    });
+  }, [id]);
+
+  const client = CLIENTS.find((c) => c.id === id) ?? (storedClient ? toClient(storedClient) : undefined);
+  const detail = CLIENT_DETAILS[id] ?? (storedClient ? toClientDetail(storedClient) : undefined);
 
   const [showHeroExpanded, setShowHeroExpanded] = useState(false);
   const [doneActions, setDoneActions] = useState<Set<number>>(new Set());
@@ -321,7 +323,13 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [planFilter, setPlanFilter] = useState<string>("Tous");
   const [activeSection, setActiveSection] = useState<Section>("big-picture");
   const [planYear, setPlanYear] = useState<"prev" | "current" | "next">("current");
-  const [activePlanQ, setActivePlanQ] = useState<"Q1" | "Q2" | "Q3" | "Q4">("Q2");
+  const [activePlanQ, setActivePlanQ] = useState<"Q1" | "Q2" | "Q3" | "Q4">(() => {
+    const contractStart = storedClient?.contractStart || detail?.contractStart || "";
+    const qs = buildPlanQuarters(contractStart);
+    return qs.find((q) => q.status === "current")?.id
+      ?? qs.find((q) => q.status === "upcoming")?.id
+      ?? "Q1";
+  });
   const [localNotes, setLocalNotes] = useState<Note[]>(() => detail?.notes ?? []);
   const deleteNote = (id: number) => setLocalNotes((prev) => prev.filter((n) => n.id !== id));
   const [noteModal, setNoteModal] = useState<{ mode: "create" | "edit"; noteId?: number } | null>(null);
@@ -348,10 +356,10 @@ export default function ClientDetailView({ id }: { id: string }) {
   };
 
   const [currentThemes, setCurrentThemes] = useState({
-    q1: "🚀 Lancement & onboarding",
-    q2: detail?.planQ2Theme ?? "",
-    q3: detail?.planQ3Theme ?? "",
-    q4: detail?.planQ4Theme ?? "",
+    q1: "🚀 Kickoff et onboarding",
+    q2: "",
+    q3: "",
+    q4: "",
   });
   const [nextThemes, setNextThemes] = useState({ q1: "", q2: "", q3: "", q4: "" });
   const [editingQ, setEditingQ] = useState<string | null>(null);
@@ -377,6 +385,7 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [showCsmDropdown, setShowCsmDropdown] = useState(false);
   const [localDetail, setLocalDetail] = useState<LocalDetail>(() => ({
     collab: client?.collab ?? 0,
+    arr: storedClient?.arr ?? 0,
     formule: detail?.formule ?? "digital + tokens",
     contractStart: detail?.contractStart ?? "",
     contractEnd: detail?.contractEnd ?? "",
@@ -411,8 +420,48 @@ export default function ClientDetailView({ id }: { id: string }) {
   const mainRef = useRef<HTMLDivElement>(null);
 
 
+  // When storedClient loads from Supabase, sync dependent local state
   useEffect(() => {
+    if (!storedClient) return;
+    const c = toClient(storedClient);
+    const d = toClientDetail(storedClient);
+    setLocalStatut(c.statut);
+    setLocalCsm(d.csm);
+    setLocalDetail({
+      collab: c.collab,
+      arr: storedClient.arr ?? 0,
+      formule: d.formule,
+      contractStart: d.contractStart,
+      contractEnd: d.contractEnd,
+      churnNotice: d.churnNotice,
+      dernierPoint: d.dernierPoint,
+      rdvParCollab: d.rdvParCollab,
+      nombreTokens: (d as {nombreTokens?: number}).nombreTokens ?? 0,
+      atelierTotal: d.atelierTotal,
+      atelierRemaining: d.atelierRemaining,
+      produits: d.produits,
+    });
+  }, [storedClient]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [storedPlanItems, setStoredPlanItems] = useState<import("@/lib/plan-store").StoredPlanItem[]>(() => planStore.getState()?.items ?? []);
+  const planThemesLoaded = useRef(false);
+
+  useEffect(() => {
+    planThemesLoaded.current = false;
     planStore.load(id);
+    return planStore.subscribe(() => {
+      const state = planStore.getState();
+      setStoredPlanItems(state?.items ?? []);
+      if (!planThemesLoaded.current && state?.themes) {
+        planThemesLoaded.current = true;
+        setCurrentThemes({
+          q1: state.themes.Q1 || "🚀 Kickoff et onboarding",
+          q2: state.themes.Q2 || "",
+          q3: state.themes.Q3 || "",
+          q4: state.themes.Q4 || "",
+        });
+      }
+    });
   }, [id]);
 
   useEffect(() => {
@@ -747,7 +796,7 @@ export default function ClientDetailView({ id }: { id: string }) {
   if (!client || !detail) {
     return (
       <div className="flex h-full items-center justify-center text-[#94a8a0]">
-        Client introuvable.
+        {storeLoading ? "Chargement…" : "Client introuvable."}
       </div>
     );
   }
@@ -776,6 +825,20 @@ export default function ClientDetailView({ id }: { id: string }) {
     { key: "📊 QBR", count: allPlanItems.filter((i) => i.type === "qbr").length },
     { key: "⚡ Custom", count: allPlanItems.filter((i) => i.type === "custom").length },
   ].filter((o) => o.count > 0);
+
+  // Dynamic quarters based on contract start date
+  const planQuarters = useMemo(
+    () => buildPlanQuarters(localDetail.contractStart),
+    [localDetail.contractStart],
+  );
+  const getPQ = (q: "Q1" | "Q2" | "Q3" | "Q4") => planQuarters.find((pq) => pq.id === q)!;
+
+  const planQAutoSet = useRef(false);
+  useEffect(() => {
+    if (planQAutoSet.current) return;
+    const target = planQuarters.find((q) => q.status === "current") ?? planQuarters.find((q) => q.status === "upcoming");
+    if (target) { setActivePlanQ(target.id); planQAutoSet.current = true; }
+  }, [planQuarters]);
 
   const filterPlanItems = (items: PlanItem[]) => {
     const active = items.filter((i) => !deletedPlanIds.has(i.id)).map(getEffective);
@@ -975,6 +1038,10 @@ export default function ClientDetailView({ id }: { id: string }) {
                   </div>
                 )}
                 <div className="flex flex-col gap-1">
+                  <dt className="text-[10px] font-semibold uppercase tracking-[1.1px] text-[#94a8a0]">ARR</dt>
+                  <dd className="m-0 text-[13px] font-medium text-[#e8f5ef]">{localDetail.arr > 0 ? `${localDetail.arr.toLocaleString("fr")} €` : "—"}</dd>
+                </div>
+                <div className="flex flex-col gap-1">
                   <dt className="text-[10px] font-semibold uppercase tracking-[1.1px] text-[#94a8a0]">Ateliers consommés</dt>
                   <dd className="m-0 text-[13px] font-medium text-[#e8f5ef]">{localDetail.atelierTotal - localDetail.atelierRemaining} / {localDetail.atelierTotal}</dd>
                 </div>
@@ -1027,65 +1094,45 @@ export default function ClientDetailView({ id }: { id: string }) {
             <h2 className="text-[20px] font-medium tracking-[-0.3px] text-[#e8f5ef]">Big picture</h2>
             <p className="mt-1 text-[13px] text-[#94a8a0]">Indicateurs clés du compte avec tendance sur 6 mois.</p>
           </header>
-          <div className="grid grid-cols-4 gap-3.5">
-
-            {/* Contrat — Option C: Ring + renewal window */}
-            <article className="flex flex-col gap-3 rounded-[18px] border border-[#1a3530] bg-[#0e2520] p-[20px] transition-colors hover:border-[rgba(94,234,212,0.22)]">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-[1.1px] text-[#94a8a0]">Contrat sécurisé</span>
-                <span className="inline-flex items-center gap-1 rounded-[6px] bg-[rgba(168,232,149,0.12)] px-[7px] py-0.5 text-[11px] font-semibold text-[#a8e895]">Sur le rythme</span>
-              </div>
-
-              <div className="mt-1 flex items-center gap-4">
-                <svg width="88" height="88" viewBox="0 0 100 100" className="shrink-0">
-                  <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="9" />
-                  <circle
-                    cx="50" cy="50" r="42" fill="none"
-                    stroke="#a8e895" strokeWidth="9" strokeLinecap="round"
-                    style={{ transform: "rotate(-90deg)", transformOrigin: "center" }}
-                    strokeDasharray={`${Math.round(detail.bigPicture.contrat.progress / 100 * 264)} 264`}
-                  />
-                </svg>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[24px] font-semibold leading-none tracking-[-0.5px] text-[#e8f5ef]">
-                    {detail.bigPicture.contrat.progress}%<small className="ml-1.5 text-[12px] font-normal tracking-normal text-[#94a8a0]">livré</small>
-                  </div>
-                  <div className="mt-1 text-[14px] font-semibold text-[#e8f5ef]">{detail.bigPicture.contrat.arr} <span className="text-[12px] font-normal text-[#94a8a0]">ARR</span></div>
-                  <div className="text-[12px] text-[#94a8a0]">de valeur délivrée</div>
-                </div>
-              </div>
-
-              <div className="text-[12px] text-[#94a8a0]">{detail.bigPicture.contrat.range}</div>
-
-              <div className="mt-auto flex items-center gap-2.5 rounded-[10px] border border-[rgba(167,139,250,0.20)] bg-[rgba(167,139,250,0.08)] p-[10px_12px]">
-                <span className="shrink-0 text-[16px]">🤝</span>
-                <div className="text-[12px] leading-[1.4] text-[#e8f5ef]">
-                  <strong className="text-[#a78bfa]">Fenêtre de renouvellement</strong><br />
-                  {detail.bigPicture.contrat.days <= 90
-                    ? <span>Ouverte · clore dans <strong className="text-[#a78bfa]">{detail.bigPicture.contrat.days}j</strong></span>
-                    : <span>S&apos;ouvre dans <strong className="text-[#a78bfa]">{detail.bigPicture.contrat.days - 90}j</strong> · {Math.ceil(detail.bigPicture.contrat.days / 30)} mois pour conclure</span>
-                  }
-                </div>
-              </div>
-            </article>
+          <div className="grid grid-cols-3 gap-3.5">
 
             {/* Avancement — Option A: Stacked composition bar */}
             <article className="flex flex-col gap-2.5 rounded-[18px] border border-[rgba(168,232,149,0.20)] bg-gradient-to-br from-[rgba(168,232,149,0.05)] to-[#0e2520] p-[20px] transition-colors hover:border-[rgba(94,234,212,0.22)]">
               {(() => {
-                const av = detail.bigPicture.avancement;
-                const atelierN = parseInt(av.detail.match(/(\d+)\s*atelier/i)?.[1] ?? "0");
-                const kitN = parseInt(av.detail.match(/(\d+)\s*kit/i)?.[1] ?? "0");
-                const csmN = parseInt(av.detail.match(/(\d+)\s*point/i)?.[1] ?? "0");
-                const notDone = av.total - av.done;
-                const atelierPct = Math.round((atelierN / av.total) * 100);
-                const kitPct = Math.round((kitN / av.total) * 100);
-                const csmPct = Math.round((csmN / av.total) * 100);
+                const total = storedPlanItems.length;
+                const doneItems = storedPlanItems.filter((i) => i.done);
+                const avDone = doneItems.length;
+                const atelierN = doneItems.filter((i) => i.type === "atelier").length;
+                const kitN = doneItems.filter((i) => i.type === "kit").length;
+                const csmN = doneItems.filter((i) => i.type === "csm" || i.type === "qbr").length;
+                const notDone = total - avDone;
+                const atelierPct = total > 0 ? Math.round((atelierN / total) * 100) : 0;
+                const kitPct = total > 0 ? Math.round((kitN / total) * 100) : 0;
+                const csmPct = total > 0 ? Math.round((csmN / total) * 100) : 0;
                 const notDonePct = 100 - atelierPct - kitPct - csmPct;
+                const av = { done: avDone, total, progress: total > 0 ? Math.round((avDone / total) * 100) : 0, footer: "" };
+
+                const now = new Date();
+                const thisYear = now.getFullYear();
+                const thisMonth = now.getMonth();
+                const thisMonthCount = storedPlanItems.filter((i) => {
+                  for (const part of i.meta.split(" · ")) {
+                    const iso = frDateToIso(part.trim());
+                    if (iso) {
+                      const d = new Date(iso);
+                      return d.getFullYear() === thisYear && d.getMonth() === thisMonth;
+                    }
+                  }
+                  return false;
+                }).length;
+
                 return (
                   <>
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[11px] font-semibold uppercase tracking-[1.1px] text-[#94a8a0]">Avancement projet</span>
-                      <span className="inline-flex items-center gap-1 rounded-[6px] bg-[rgba(168,232,149,0.12)] px-[7px] py-0.5 text-[11px] font-semibold text-[#a8e895]">↑ +2 ce mois</span>
+                      {thisMonthCount > 0 && (
+                        <span className="inline-flex items-center gap-1 rounded-[6px] bg-[rgba(168,232,149,0.12)] px-[7px] py-0.5 text-[11px] font-semibold text-[#a8e895]">↑ +{thisMonthCount} ce mois</span>
+                      )}
                     </div>
                     <div className="mt-0.5 text-[30px] font-semibold leading-[1.05] tracking-[-0.8px] text-[#a8e895]">
                       {av.done} <small className="text-[13px] font-normal tracking-normal text-[#94a8a0]">/ {av.total} jalons</small>
@@ -1459,9 +1506,9 @@ export default function ClientDetailView({ id }: { id: string }) {
               {(["Q1", "Q2", "Q3", "Q4"] as const).map((q) => {
                 const qKey = q.toLowerCase() as "q1" | "q2" | "q3" | "q4";
                 const theme = currentThemes[qKey] || "";
-                const qStatus = Q_MONTH_STATUS[q];
-                const allPast = Object.values(qStatus).every((s) => s === "past");
-                const hasCurrent = Object.values(qStatus).some((s) => s === "current");
+                const pq = getPQ(q);
+                const allPast = pq.status === "past";
+                const hasCurrent = pq.status === "current";
                 const label = allPast ? "Terminé" : hasCurrent ? "En cours" : "À venir";
                 const isNow = hasCurrent;
                 const isDone = allPast;
@@ -1480,7 +1527,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                     }`}>
                     <div className="flex items-center justify-between gap-2">
                       <span className={`text-[10.5px] font-bold uppercase tracking-[1.1px] ${isNow ? "text-[#84d4a6]" : "text-[#94a8a0]"}`}>
-                        {q} · {label}
+                        {label}
                       </span>
                       {total > 0 && (
                         <span className={`text-[10.5px] font-semibold ${isNow ? "text-[#84d4a6]" : "text-[#94a8a0]"}`}>
@@ -1488,7 +1535,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                         </span>
                       )}
                     </div>
-                    <div className="text-[14px] font-medium leading-[1.3] tracking-[-0.2px] text-[#e8f5ef]">{theme || `Trimestre ${q}`}</div>
+                    <div className="text-[14px] font-medium leading-[1.3] tracking-[-0.2px] text-[#e8f5ef]">{theme || "Thème à définir"}</div>
                     <div className="mt-auto h-[4px] overflow-hidden rounded-full bg-[rgba(255,255,255,0.06)]">
                       <div className="h-full rounded-full bg-[#a8e895]" style={{ width: `${pct}%` }} />
                     </div>
@@ -1646,31 +1693,25 @@ export default function ClientDetailView({ id }: { id: string }) {
           )}
 
                     {/* ── Year navigation ── */}
-          <div className="mb-5 flex gap-1.5 rounded-[12px] border border-[#1a3530] bg-[rgba(14,37,32,0.45)] p-1.5">
-            <button
-              onClick={() => { if (detail.prevYear) setPlanYear("prev"); }}
-              className={`flex-1 rounded-[9px] px-3 py-2 text-center text-[12px] font-medium transition-all ${
-                planYear === "prev"
-                  ? "bg-[#1a2e29] text-[#e8f5ef]"
-                  : detail.prevYear
-                  ? "text-[#94a8a0] hover:text-[#e8f5ef]"
-                  : "cursor-not-allowed text-[rgba(148,168,160,0.3)]"
-              }`}
-            >
-              ← {detail.prevYear ? detail.prevYear.yearLabel : "Pas d'historique"}
-            </button>
-            <button
-              onClick={() => setPlanYear("current")}
-              className={`flex-1 rounded-[9px] px-3 py-2 text-center text-[12px] font-medium transition-all ${planYear === "current" ? "bg-[#1a2e29] text-[#e8f5ef]" : "text-[#94a8a0] hover:text-[#e8f5ef]"}`}
-            >
-              Année en cours
-            </button>
-            <button
-              onClick={() => setPlanYear("next")}
-              className={`flex-1 rounded-[9px] px-3 py-2 text-center text-[12px] font-medium transition-all ${planYear === "next" ? "bg-[#1a2e29] text-[#e8f5ef]" : "text-[#94a8a0] hover:text-[#e8f5ef]"}`}
-            >
-              Année suivante →
-            </button>
+          <div className="mb-7 inline-flex items-center gap-0.5 rounded-[11px] border border-white/5 bg-white/[0.025] p-[3px]">
+            {([
+              { key: "prev" as const,    label: detail.prevYear ? detail.prevYear.yearLabel : "Historique", disabled: !detail.prevYear },
+              { key: "current" as const, label: "Année en cours", disabled: false },
+              { key: "next" as const,    label: "Année suivante", disabled: false },
+            ]).map(({ key, label, disabled }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => { if (!disabled) setPlanYear(key); }}
+                className={`rounded-[8px] px-3 py-[7px] text-[11px] font-semibold tracking-[0.5px] transition-all ${
+                  planYear === key
+                    ? "bg-[rgba(94,234,212,0.14)] text-[#5eead4]"
+                    : disabled
+                      ? "cursor-not-allowed text-[rgba(148,168,160,0.3)]"
+                      : "text-[#94a8a0] hover:text-[#e8f5ef]"
+                }`}
+              >{label}</button>
+            ))}
           </div>
 
           {/* ── Previous year ── */}
@@ -1734,13 +1775,19 @@ export default function ClientDetailView({ id }: { id: string }) {
                 ...extraQ4Filtered.map((i) => ({ ...i, done: isPlanDone(i) })),
               ],
             };
-            const qMonths = PLAN_Q_MONTHS[activePlanQ];
+            const qMonths = getPQ(activePlanQ).months;
             const activeQItems = allItemsByQ[activePlanQ];
             const byMonth: Record<string, PlanItem[]> = Object.fromEntries(qMonths.map((m) => [m.key, []]));
             for (const item of activeQItems) byMonth[planItemMonthKey(item, qMonths)].push(item);
 
+            const qLabel = (q: "Q1" | "Q2" | "Q3" | "Q4") => {
+              const pq = getPQ(q);
+              if (pq.status === "past") return "Terminé";
+              if (pq.status === "current") return "En cours";
+              return "À venir";
+            };
             const qStatusLabel: Record<"Q1" | "Q2" | "Q3" | "Q4", string> = {
-              Q1: "Terminé", Q2: "En cours", Q3: "À venir", Q4: "À venir",
+              Q1: qLabel("Q1"), Q2: qLabel("Q2"), Q3: qLabel("Q3"), Q4: qLabel("Q4"),
             };
             const qThemeMap: Record<"Q1" | "Q2" | "Q3" | "Q4", string> = {
               Q1: currentThemes.q1, Q2: currentThemes.q2, Q3: currentThemes.q3, Q4: currentThemes.q4,
@@ -1763,9 +1810,50 @@ export default function ClientDetailView({ id }: { id: string }) {
                   </div>
                 </div>
 
-                {/* Quarter tabs */}
-                <div className="mb-5 grid grid-cols-4 gap-2.5">
+                {/* FocusBar */}
+                {(() => {
+                  const QUARTER_EMOJI: Record<"Q1"|"Q2"|"Q3"|"Q4", string> = { Q1: "🌱", Q2: "📈", Q3: "📊", Q4: "🔄" };
+                  const activeItems = allItemsByQ[activePlanQ];
+                  const fDone = activeItems.filter((i) => isPlanDone(i)).length;
+                  const fUpcoming = activeItems.length - fDone;
+                  const fPct = activeItems.length > 0 ? Math.round((fDone / activeItems.length) * 100) : 0;
+                  const fStatus = qStatusLabel[activePlanQ];
+                  const fTheme = qThemeMap[activePlanQ];
+                  return (
+                    <div className="relative mb-7 overflow-hidden rounded-2xl border border-[rgba(94,234,212,0.22)] px-7 py-5"
+                      style={{ background: "linear-gradient(135deg, rgba(94,234,212,0.12) 0%, rgba(94,234,212,0.03) 100%)" }}>
+                      <div className="absolute inset-y-0 left-0 w-1 rounded-l-2xl" style={{ background: "linear-gradient(180deg, #5eead4 0%, #2dd4bf 100%)" }} />
+                      <div className="flex flex-wrap items-center gap-8">
+                        <div className="flex-1">
+                          <div className="mb-2.5 inline-flex items-center gap-1.5 rounded-[5px] bg-[#5eead4] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[1.2px] text-[#042f2a]">
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#042f2a]" />
+                            {QUARTER_EMOJI[activePlanQ]} {fStatus} · {activePlanQ}
+                          </div>
+                          <div className="text-[20px] font-semibold text-[#e8f5ef]">{fTheme || "Thème à définir"}</div>
+                        </div>
+                        <div className="flex gap-7 border-l border-[rgba(94,234,212,0.18)] pl-8">
+                          <div className="text-center">
+                            <div className="text-[30px] font-bold leading-none tabular-nums text-[#5eead4]">{fUpcoming}</div>
+                            <div className="mt-1.5 text-[10px] uppercase tracking-[1px] text-[#94a8a0]">À venir</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-[30px] font-bold leading-none tabular-nums text-[#5eead4]">{fDone}</div>
+                            <div className="mt-1.5 text-[10px] uppercase tracking-[1px] text-[#94a8a0]">Faits</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-[30px] font-bold leading-none tabular-nums text-[#5eead4]">{fPct}<span className="text-[15px] text-[#94a8a0]">%</span></div>
+                            <div className="mt-1.5 text-[10px] uppercase tracking-[1px] text-[#94a8a0]">Trimestre</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Quarter tabs — client-view style */}
+                <div className="mb-7 grid grid-cols-4 gap-2.5">
                   {(["Q1", "Q2", "Q3", "Q4"] as const).map((q) => {
+                    const QUARTER_EMOJI: Record<"Q1"|"Q2"|"Q3"|"Q4", string> = { Q1: "🌱", Q2: "📈", Q3: "📊", Q4: "🔄" };
                     const qItems = allItemsByQ[q];
                     const total = qItems.length;
                     const done = qItems.filter((i) => isPlanDone(i)).length;
@@ -1774,7 +1862,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                     const isActive = activePlanQ === q;
                     const statusLabel = qStatusLabel[q];
                     const theme = qThemeMap[q];
-                    const monthsAbbr = PLAN_Q_MONTHS[q].map((m) => m.label.slice(0, 3)).join(" · ");
+                    const monthsAbbr = getPQ(q).months.map((m) => m.label.slice(0, 3)).join(" · ");
                     const isPast = statusLabel === "Terminé";
                     const isCurrent = statusLabel === "En cours";
                     return (
@@ -1782,160 +1870,126 @@ export default function ClientDetailView({ id }: { id: string }) {
                         key={q}
                         type="button"
                         onClick={() => setActivePlanQ(q)}
-                        className={`overflow-hidden rounded-[11px] border text-left transition-all ${
-                          isPast
-                            ? isActive
-                              ? "border-[rgba(168,232,149,0.22)] bg-[rgba(168,232,149,0.03)] shadow-[0_0_0_1px_rgba(168,232,149,0.08)]"
-                              : "border-[rgba(168,232,149,0.10)] bg-[rgba(168,232,149,0.015)] opacity-60 hover:opacity-80"
-                            : isCurrent
-                            ? isActive
-                              ? "border-[rgba(94,234,212,0.38)] bg-[rgba(94,234,212,0.08)] shadow-[0_0_0_1px_rgba(94,234,212,0.18)]"
-                              : "border-[rgba(94,234,212,0.20)] bg-[rgba(94,234,212,0.04)] hover:bg-[rgba(94,234,212,0.06)]"
-                            : isActive
-                              ? "border-[rgba(167,139,250,0.35)] bg-[rgba(167,139,250,0.07)] shadow-[0_0_0_1px_rgba(167,139,250,0.14)]"
-                              : "border-[#1a3530] bg-[rgba(14,37,32,0.30)] hover:bg-[rgba(14,37,32,0.45)]"
+                        className={`rounded-[11px] border px-4 py-3.5 text-left transition-all ${
+                          isActive
+                            ? "border-[rgba(94,234,212,0.3)] bg-[rgba(94,234,212,0.07)] shadow-[0_0_0_1px_rgba(94,234,212,0.15),0_8px_28px_-10px_rgba(94,234,212,0.5)]"
+                            : isPast
+                              ? "border-transparent opacity-50 hover:opacity-80"
+                              : "border-transparent hover:bg-white/[0.03]"
                         }`}
                       >
-                        {/* Status accent bar */}
-                        <div className={`h-[3px] w-full ${
-                          isPast ? "bg-[rgba(168,232,149,0.35)]" :
-                          isCurrent ? "bg-[#5eead4]" :
-                          "bg-[rgba(167,139,250,0.40)]"
-                        }`} />
-                        <div className="px-4 py-3.5">
-                          <div className="mb-2 flex items-center justify-between">
-                            <span className={`text-[11px] font-bold tracking-[1px] ${
-                              isPast ? "text-[#a8e895]" :
-                              isCurrent ? "text-[#5eead4]" :
-                              "text-[#a78bfa]"
-                            }`}>{q}</span>
-                            {isPast ? (
-                              <span className="rounded-[4px] bg-[rgba(168,232,149,0.15)] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] text-[#a8e895]">✓ Terminé</span>
-                            ) : isCurrent ? (
-                              <span className="rounded-[4px] bg-[#5eead4] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] text-[#042f2a]">● En cours</span>
-                            ) : (
-                              <span className="rounded-[4px] bg-[rgba(167,139,250,0.12)] px-[7px] py-[3px] text-[9px] font-medium tracking-[0.5px] text-[#a78bfa]">À venir</span>
-                            )}
-                          </div>
-                          {editingQ === `curr-${qKey}` ? (
-                            <input
-                              value={editingVal}
-                              onChange={(e) => setEditingVal(e.target.value)}
-                              onBlur={commitEdit}
-                              onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") commitEdit(); }}
-                              onClick={(e) => e.stopPropagation()}
-                              className="mb-1 w-full rounded-[5px] bg-[rgba(255,255,255,0.08)] px-1.5 py-0.5 text-[12px] font-semibold text-[#e8f5ef] outline-none ring-1 ring-[rgba(94,234,212,0.4)]"
-                              autoFocus
-                            />
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className={`text-[11px] font-bold tracking-[1px] ${isActive ? "text-[#5eead4]" : "text-[#94a8a0]"}`}>
+                            {QUARTER_EMOJI[q]}
+                          </span>
+                          {isCurrent ? (
+                            <span className="rounded-[4px] bg-[#5eead4] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] text-[#042f2a]">Maintenant</span>
                           ) : (
-                            <div className="group mb-1 flex items-start gap-1">
-                              <p className={`min-w-0 flex-1 text-[12px] font-semibold leading-snug ${isPast ? "text-[#94a8a0]" : "text-[#e8f5ef]"}`}>{theme}</p>
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); setEditingQ(`curr-${qKey}`); setEditingVal(theme); }}
-                                className="mt-0.5 shrink-0 rounded-[3px] p-0.5 text-[13px] text-transparent transition-colors group-hover:text-[#94a8a0] hover:!text-[#5eead4]"
-                                title="Modifier le thème"
-                              >✏</button>
-                            </div>
+                            <span className="text-[9px] uppercase tracking-[0.5px] text-[#6b7c75]">{isPast ? "Passé" : "À venir"}</span>
                           )}
-                          <p className="mb-2 text-[10px] text-[#6b7c75]">{monthsAbbr}</p>
-                          <div className="h-[3px] overflow-hidden rounded-full bg-white/5">
-                            <div
-                              className="h-full rounded-full transition-all duration-500"
-                              style={{
-                                width: `${pct}%`,
-                                background: isPast
-                                  ? "rgba(168,232,149,0.45)"
-                                  : isCurrent
-                                  ? "linear-gradient(90deg,#5eead4 0%,#2dd4bf 100%)"
-                                  : "rgba(167,139,250,0.55)",
-                              }}
-                            />
+                        </div>
+                        {editingQ === `curr-${qKey}` ? (
+                          <input
+                            value={editingVal}
+                            onChange={(e) => setEditingVal(e.target.value)}
+                            onBlur={commitEdit}
+                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") commitEdit(); }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="mb-0.5 w-full rounded-[5px] bg-[rgba(255,255,255,0.08)] px-1.5 py-0.5 text-[13px] font-semibold text-[#e8f5ef] outline-none ring-1 ring-[rgba(94,234,212,0.4)]"
+                            autoFocus
+                          />
+                        ) : (
+                          <div className="group mb-0.5 flex items-start gap-1">
+                            <p className="min-w-0 flex-1 text-[13px] font-semibold text-[#e8f5ef]">
+                              {theme || <span className="text-[12px] font-normal text-[#6b7c75]">Définir le thème…</span>}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setEditingQ(`curr-${qKey}`); setEditingVal(theme); }}
+                              className="mt-0.5 shrink-0 rounded-[3px] p-0.5 text-[13px] text-transparent transition-colors group-hover:text-[#94a8a0] hover:!text-[#5eead4]"
+                              title="Modifier le thème"
+                            >✏</button>
                           </div>
-                          <p className="mt-1 text-[9px] text-[#6b7c75]">{done}/{total} jalons · {pct}%</p>
+                        )}
+                        <div className="mb-2.5 text-[10px] tracking-[0.3px] text-[#6b7c75]">{monthsAbbr}</div>
+                        <div className="h-[3px] overflow-hidden rounded-full bg-white/5">
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{ width: `${pct}%`, background: "linear-gradient(90deg,#5eead4 0%,#2dd4bf 100%)" }}
+                          />
                         </div>
                       </button>
                     );
                   })}
                 </div>
 
+                {/* Section header */}
+                <div className="mb-5 flex items-baseline justify-between">
+                  <div className="text-[14px] font-semibold tracking-[0.3px] text-[#e8f5ef]">
+                    Événements du trimestre <span className="text-[#5eead4]">·</span>{" "}
+                    <span className="font-medium text-[#94a8a0]">{activePlanQ}</span>
+                  </div>
+                  <div className="text-[11px] uppercase tracking-[0.5px] text-[#6b7c75]">
+                    {activeQItems.length} événement{activeQItems.length !== 1 ? "s" : ""} · {activeQItems.filter((i) => !isPlanDone(i)).length} à venir
+                  </div>
+                </div>
+
                 {/* Month columns */}
                 <div className="grid grid-cols-3 gap-3.5">
                   {qMonths.map((month) => {
                     const mItems = byMonth[month.key] ?? [];
-                    const isQ1 = activePlanQ === "Q1";
                     const qLower = activePlanQ.toLowerCase() as "q1" | "q2" | "q3" | "q4";
-                    const mStatus = Q_MONTH_STATUS[activePlanQ][month.key] ?? "upcoming";
+                    const mStatus = getPQ(activePlanQ).months.find((m) => m.key === month.key)?.status ?? "upcoming";
                     return (
                       <div
                         key={month.key}
-                        className={`overflow-hidden rounded-[13px] border ${
-                          mStatus === "past"
-                            ? "border-[rgba(255,255,255,0.04)] bg-[rgba(255,255,255,0.007)]"
-                            : mStatus === "current"
-                            ? "border-[rgba(94,234,212,0.20)] bg-[rgba(94,234,212,0.035)]"
-                            : "border-[rgba(167,139,250,0.12)] bg-[rgba(167,139,250,0.025)]"
+                        className={`rounded-[13px] border p-[18px] ${
+                          mStatus === "current"
+                            ? "border-[rgba(94,234,212,0.15)] bg-[rgba(94,234,212,0.035)]"
+                            : "border-white/[0.04] bg-white/[0.012]"
                         }`}
                       >
-                        {/* Top accent bar */}
-                        <div className={`h-[3px] w-full ${
-                          mStatus === "past" ? "bg-[rgba(148,168,160,0.25)]" :
-                          mStatus === "current" ? "bg-[#5eead4]" :
-                          "bg-[rgba(167,139,250,0.45)]"
-                        }`} />
-                        <div className="p-[18px]">
-                          <div className="mb-4 flex items-center justify-between border-b border-white/5 pb-3">
-                            <div className="flex items-center gap-2">
-                              <h4 className={`text-[12px] font-bold uppercase tracking-[1.8px] ${
-                                mStatus === "past" ? "text-[#6b7c75]" :
-                                mStatus === "current" ? "text-[#5eead4]" :
-                                "text-[#c4b5fd]"
-                              }`}>
-                                {month.label}
-                              </h4>
-                              {mStatus === "past" && (
-                                <span className="rounded-[4px] bg-[rgba(148,168,160,0.10)] px-[7px] py-[3px] text-[9px] font-medium tracking-[0.5px] text-[#6b7c75]">Passé</span>
-                              )}
-                              {mStatus === "current" && (
-                                <span className="rounded-[4px] bg-[#5eead4] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] text-[#042f2a]">En cours</span>
-                              )}
-                              {mStatus === "upcoming" && (
-                                <span className="rounded-[4px] bg-[rgba(167,139,250,0.12)] px-[7px] py-[3px] text-[9px] font-medium tracking-[0.5px] text-[#a78bfa]">À venir</span>
-                              )}
-                            </div>
-                            <span className="text-[10px] text-[#6b7c75]">
-                              {mItems.length > 0 ? `${mItems.length} événement${mItems.length > 1 ? "s" : ""}` : "—"}
-                            </span>
-                          </div>
-                          <div className={mStatus === "past" ? "opacity-50" : ""}>
-                            {mItems.length === 0 ? (
-                              <p className="py-5 text-center text-[11px] italic text-[#6b7c75]">Pas d&apos;événement programmé.</p>
-                            ) : (
-                              <ul className="mb-3 flex flex-col gap-1.5">
-                                {mItems.map((item) => (
-                                  <PlanItemRow
-                                    key={item.id}
-                                    item={item}
-                                    onToggle={() => togglePlanItem(item.id)}
-                                    onEdit={() => openPlanEdit(item)}
-                                    labels={clientLabels}
-                                    assignedTargets={itemTargets[item.id] ?? []}
-                                  />
-                                ))}
-                              </ul>
+                        <div className="mb-4 flex items-center justify-between border-b border-white/5 pb-3">
+                          <div className="flex items-center gap-2">
+                            <h4 className={`text-[12px] font-bold uppercase tracking-[1.8px] ${
+                              mStatus === "past" ? "text-[#6b7c75]" : "text-[#e8f5ef]"
+                            }`}>
+                              {month.label}
+                            </h4>
+                            {mStatus === "current" && (
+                              <span className="rounded-[4px] bg-[#5eead4] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] text-[#042f2a]">En cours</span>
                             )}
                           </div>
-                          {!isQ1 && (
-                            <div className="flex flex-wrap justify-center gap-1.5 pt-1">
-                              {(["🎓 Atelier", "📢 Kit", "📞 Point CSM", "⚡ Custom"] as const).map((chip) => (
-                                <button
-                                  key={chip}
-                                  onClick={() => openAddPlan(qLower, CHIP_TYPE_MAP[chip])}
-                                  className="rounded-full border border-dashed border-[#1a3530] px-[11px] py-[5px] text-[11px] text-[#e8f5ef] transition-all hover:border-[#84d4a6] hover:bg-[rgba(132,212,166,0.05)] hover:text-[#84d4a6]"
-                                >{chip}</button>
+                          <span className="text-[10px] text-[#6b7c75]">
+                            {mItems.length > 0 ? `${mItems.length} événement${mItems.length > 1 ? "s" : ""}` : "—"}
+                          </span>
+                        </div>
+                        <div className={mStatus === "past" ? "opacity-50" : ""}>
+                          {mItems.length === 0 ? (
+                            <p className="py-5 text-center text-[11px] italic text-[#6b7c75]">Pas d&apos;événement programmé.</p>
+                          ) : (
+                            <ul className="mb-3 flex flex-col gap-1.5">
+                              {mItems.map((item) => (
+                                <PlanItemRow
+                                  key={item.id}
+                                  item={item}
+                                  onToggle={() => togglePlanItem(item.id)}
+                                  onEdit={() => openPlanEdit(item)}
+                                  labels={clientLabels}
+                                  assignedTargets={itemTargets[item.id] ?? []}
+                                />
                               ))}
-                            </div>
+                            </ul>
                           )}
+                        </div>
+                        <div className="flex flex-wrap justify-center gap-1.5 pt-1">
+                          {(["🎓 Atelier", "📢 Kit", "📞 Point CSM", "⚡ Custom"] as const).map((chip) => (
+                            <button
+                              key={chip}
+                              onClick={() => openAddPlan(qLower, CHIP_TYPE_MAP[chip])}
+                              className="rounded-full border border-dashed border-[#1a3530] px-[11px] py-[5px] text-[11px] text-[#e8f5ef] transition-all hover:border-[#84d4a6] hover:bg-[rgba(132,212,166,0.05)] hover:text-[#84d4a6]"
+                            >{chip}</button>
+                          ))}
                         </div>
                       </div>
                     );
@@ -2589,6 +2643,7 @@ export default function ClientDetailView({ id }: { id: string }) {
               <div className="grid grid-cols-2 gap-3">
                 {([
                   ["Collaborateurs", "collab"],
+                  ["ARR (€)", "arr"],
                   ["Ateliers au contrat (total)", "atelierTotal"],
                   ["Ateliers restants", "atelierRemaining"],
                 ] as [string, keyof LocalDetail][]).map(([label, key]) => (
@@ -2702,7 +2757,24 @@ export default function ClientDetailView({ id }: { id: string }) {
               Annuler
             </button>
             <button
-              onClick={() => { setLocalDetail(editDraft); setLocalCsm(localCsm); setShowEditDetails(false); }}
+              onClick={() => {
+                setLocalDetail(editDraft);
+                setShowEditDetails(false);
+                if (storedClient) {
+                  csmClientsStore.add({
+                    ...storedClient,
+                    collab: editDraft.collab,
+                    arr: editDraft.arr,
+                    formule: editDraft.formule,
+                    atelierTotal: editDraft.atelierTotal,
+                    rdvParCollab: editDraft.rdvParCollab,
+                    contractStart: editDraft.contractStart,
+                    contractEnd: editDraft.contractEnd,
+                    churnNotice: editDraft.churnNotice,
+                    produits: editDraft.produits,
+                  });
+                }
+              }}
               className="rounded-[9px] bg-[rgba(94,234,212,0.9)] px-5 py-2 text-[12px] font-semibold text-[#061a16] transition-colors hover:bg-[#5eead4]"
             >
               Enregistrer
@@ -2990,7 +3062,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                   : "⚡ Nouvel élément custom"}
               </h3>
               <p className="mt-0.5 text-[11px] text-[#94a8a0]">
-                {({ q2: "Q2 · En cours", q3: "Q3 · À venir", q4: "Q4 · À planifier", "next-q1": "Q1 · Année suivante", "next-q2": "Q2 · Année suivante", "next-q3": "Q3 · Année suivante", "next-q4": "Q4 · Année suivante" } as Record<string, string>)[addPlanCtx.quarter] ?? addPlanCtx.quarter}
+                {({ q1: "En cours", q2: "À venir", q3: "À venir", q4: "À planifier", "next-q1": "Année suivante · Trim. 1", "next-q2": "Année suivante · Trim. 2", "next-q3": "Année suivante · Trim. 3", "next-q4": "Année suivante · Trim. 4" } as Record<string, string>)[addPlanCtx.quarter] ?? addPlanCtx.quarter}
               </p>
             </div>
             <button onClick={() => setAddPlanCtx(null)} className="grid h-7 w-7 place-items-center rounded-[8px] bg-[rgba(255,255,255,0.05)] text-[16px] text-[#94a8a0] hover:text-[#e8f5ef]">×</button>
