@@ -188,7 +188,6 @@ export function toClient(s: StoredCsmClient): Client {
 export function toClientDetail(s: StoredCsmClient): ClientDetail {
   return {
     piloteRH: "",
-    csm: "", // CSM name is resolved from owner_csm_id + profiles by the UI
     contrat: "",
     dernierPoint: "",
     contractStart: s.contractStart,

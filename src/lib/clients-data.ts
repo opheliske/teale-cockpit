@@ -128,7 +128,6 @@ export type StatusTag = { label: string; variant: "green" | "blue" | "amber" | "
 
 export type ClientDetail = {
   piloteRH: string;
-  csm: string;
   contrat: string;
   dernierPoint: string;
   contractStart: string;
