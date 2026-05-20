@@ -67,8 +67,12 @@ export async function proxy(request: NextRequest) {
     return redirectTo(request, role === "csm" ? "/csm" : "/", response);
   }
 
-  // A client may never reach the CSM space.
-  if (role === "client" && path.startsWith("/csm")) {
+  // A client only sees their own space: never the CSM area, nor the
+  // CSM-preview route /client/<id>.
+  if (
+    role === "client" &&
+    (path.startsWith("/csm") || path.startsWith("/client/"))
+  ) {
     return redirectTo(request, "/", response);
   }
 
