@@ -23,11 +23,6 @@ function consoColor(ratio: number) {
   return "#ef4444";
 }
 
-const FR_MONTHS: Record<string, number> = {
-  janv: 0, fév: 1, mars: 2, avr: 3, mai: 4, juin: 5,
-  juil: 6, août: 7, sept: 8, oct: 9, nov: 10, déc: 11,
-};
-
 const FR_MONTH_NAMES_FULL = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
 
 function formatDateFr(isoDate: string): string {
@@ -35,11 +30,6 @@ function formatDateFr(isoDate: string): string {
   const [year, month, day] = isoDate.split("-");
   if (!year || !month || !day) return isoDate;
   return `${parseInt(day)} ${FR_MONTH_NAMES_FULL[parseInt(month) - 1]} ${year}`;
-}
-
-function parseRenouvDate(s: string): Date {
-  const parts = s.replace(/\./g, "").split(" ");
-  return new Date(parseInt(parts[2]), FR_MONTHS[parts[1]] ?? 0, parseInt(parts[0]));
 }
 
 function daysUntilDate(d: Date): number {
@@ -246,14 +236,6 @@ export default function CsmHomePage() {
     });
     return s.charAt(0).toUpperCase() + s.slice(1);
   }, []);
-
-  // Top 5 prochains renouvellements (tous clients triés par date)
-  const top5Renewals = useMemo(() =>
-    [...allClients]
-      .map((c) => ({ ...c, daysLeft: daysUntilDate(parseRenouvDate(c.renouvDate)) }))
-      .sort((a, b) => a.daysLeft - b.daysLeft)
-      .slice(0, 5),
-  [allClients]);
 
   const filtered = allClients.filter((c) => {
     if (!c.name.toLowerCase().includes(search.toLowerCase())) return false;
