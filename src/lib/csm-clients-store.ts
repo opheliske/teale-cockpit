@@ -117,11 +117,17 @@ export const csmClientsStore = {
   // True once the initial load has completed (with or without rows).
   isLoaded: (): boolean => _loaded,
 
-  add: async (client: StoredCsmClient) => {
+  // Creates or updates a client. Returns the error message (or null) so the
+  // caller can surface a failure instead of navigating into a broken page.
+  add: async (client: StoredCsmClient): Promise<{ error: string | null }> => {
     const { error } = await supabase.from("clients").upsert(toRow(client));
-    if (error) { console.error("[csm-clients-store] add", error); return; }
+    if (error) {
+      console.error("[csm-clients-store] add", error);
+      return { error: error.message };
+    }
     _clients = [client, ..._clients.filter((c) => c.id !== client.id)];
     notify();
+    return { error: null };
   },
 
   subscribe: (listener: () => void) => {

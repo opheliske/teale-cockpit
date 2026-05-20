@@ -177,6 +177,8 @@ export default function SuiviClientsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [createStep, setCreateStep] = useState<1 | 2>(1);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [createError, setCreateError] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const set = <K extends keyof typeof EMPTY_FORM>(k: K, v: (typeof EMPTY_FORM)[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -184,14 +186,16 @@ export default function SuiviClientsPage() {
   const toggleProduit = (p: ProduitTeale) =>
     set("produits", form.produits.includes(p) ? form.produits.filter((x) => x !== p) : [...form.produits, p]);
 
-  const openCreate = () => { setForm(EMPTY_FORM); setCreateStep(1); setShowCreate(true); };
+  const openCreate = () => { setForm(EMPTY_FORM); setCreateStep(1); setCreateError(""); setShowCreate(true); };
 
   const step1Valid = form.name.trim().length > 0 && form.collab.trim().length > 0;
 
   const submitCreate = async () => {
+    setCreateError("");
+    setCreating(true);
     const id = slugify(form.name);
     const csmLabels: Record<Exclude<CsmKey, "all">, string> = { lucie: "Lucie", adrien: "Adrien", marie: "Marie", tom: "Tom" };
-    await csmClientsStore.add({
+    const { error } = await csmClientsStore.add({
       id,
       name: form.name.trim(),
       initials: form.initials || autoInitials(form.name),
@@ -210,6 +214,11 @@ export default function SuiviClientsPage() {
       arr: 0,
       createdAt: new Date().toISOString().split("T")[0],
     });
+    setCreating(false);
+    if (error) {
+      setCreateError(`La création a échoué : ${error}`);
+      return;
+    }
     impersonationStore.set({ mode: "csm-preview", clientId: id, clientName: form.name.trim(), color: form.color });
     setShowCreate(false);
     router.push(`/csm/clients/${id}`);
@@ -629,6 +638,13 @@ export default function SuiviClientsPage() {
             )}
           </div>
 
+          {/* Error */}
+          {createError && (
+            <div className="mx-6 mb-1 rounded-[8px] bg-[rgba(239,68,68,0.1)] px-3 py-2 text-[12px] text-[#fca5a5]">
+              {createError}
+            </div>
+          )}
+
           {/* Footer */}
           <div className="flex items-center justify-between border-t border-[#1a3530] px-6 py-4">
             <button onClick={() => createStep === 1 ? setShowCreate(false) : setCreateStep(1)}
@@ -646,9 +662,10 @@ export default function SuiviClientsPage() {
             ) : (
               <button
                 onClick={submitCreate}
-                className="rounded-[9px] bg-[#5eead4] px-5 py-2 text-[12px] font-semibold text-[#061a16] transition-colors hover:bg-[#7df0db]"
+                disabled={creating}
+                className="rounded-[9px] bg-[#5eead4] px-5 py-2 text-[12px] font-semibold text-[#061a16] transition-colors hover:bg-[#7df0db] disabled:opacity-40"
               >
-                Créer le client →
+                {creating ? "Création…" : "Créer le client →"}
               </button>
             )}
           </div>
