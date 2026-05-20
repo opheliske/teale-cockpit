@@ -32,24 +32,40 @@ export const targetsStore = {
 
   load: async (clientId: string) => {
     if (_loadedClients.has(clientId)) return;
+
+    // Wait for the session before the RLS-scoped reads — otherwise they can
+    // go out unauthenticated, come back empty, and trigger a bogus re-seed.
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return; // not ready — a later call will retry
+
     _loadedClients.add(clientId);
 
-    const [{ data: labelRows }, { data: assignRows }] = await Promise.all([
+    const [{ data: labelRows, error: labelErr }, { data: assignRows }] = await Promise.all([
       supabase.from("target_labels").select("*").eq("client_id", clientId),
       supabase.from("target_item_assignments").select("*").eq("client_id", clientId),
     ]);
 
+    if (labelErr) {
+      console.error("[targets-store] load", labelErr);
+      _loadedClients.delete(clientId); // allow a retry
+      return;
+    }
+
     if (labelRows && labelRows.length > 0) {
       labels = { ...labels, [clientId]: labelRows as TargetLabel[] };
     } else {
+      // Genuinely no labels yet → seed the defaults once.
       const seeded: TargetLabel[] = DEFAULT_LABELS.map(({ name, color }, i) => ({
         id: name.toLowerCase().replace(/\s+/g, "-") + "-" + (Date.now() + i).toString(36),
         name,
         color,
       }));
-      await supabase
+      const { error: seedErr } = await supabase
         .from("target_labels")
         .insert(seeded.map((l) => ({ ...l, client_id: clientId })));
+      if (seedErr) console.error("[targets-store] seed", seedErr);
       labels = { ...labels, [clientId]: seeded };
     }
 
@@ -69,7 +85,13 @@ export const targetsStore = {
       "-" +
       Date.now().toString(36);
     const newLabel: TargetLabel = { id, name, color };
-    await supabase.from("target_labels").insert({ id, client_id: clientId, name, color });
+    const { error } = await supabase
+      .from("target_labels")
+      .insert({ id, client_id: clientId, name, color });
+    if (error) {
+      console.error("[targets-store] addLabel", error);
+      return id;
+    }
     labels = { ...labels, [clientId]: [...(labels[clientId] ?? []), newLabel] };
     notify();
     return id;
