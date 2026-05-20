@@ -352,7 +352,7 @@ export default function CsmHomePage() {
           {/* KPI cards */}
           <div className="mb-7 grid grid-cols-3 gap-4">
             {/* Santé du portefeuille */}
-            <div className="rounded-[14px] border border-[#1F2832] bg-[#131922] p-5 transition-colors hover:border-[#2A3441]">
+            <div className="rounded-[14px] border border-[#1F2832] bg-[rgba(255,255,255,0.02)] p-5 transition-colors hover:border-[#2A3441]">
               <div className="mb-4 flex items-center justify-between">
                 <p className="m-0 text-[12px] font-medium uppercase tracking-[0.06em] text-[#A7B0BC]">Santé du portefeuille</p>
                 <span className="rounded-full bg-[rgba(94,234,176,0.12)] px-[7px] py-0.5 text-[11px] font-semibold text-[#5EEAB0]">
@@ -386,7 +386,7 @@ export default function CsmHomePage() {
             </div>
 
             {/* Renouvellements à venir */}
-            <div className="rounded-[14px] border border-[#1F2832] bg-[#131922] p-5 transition-colors hover:border-[#2A3441]">
+            <div className="rounded-[14px] border border-[#1F2832] bg-[rgba(255,255,255,0.02)] p-5 transition-colors hover:border-[#2A3441]">
               <div className="mb-4 flex items-center justify-between">
                 <p className="m-0 text-[12px] font-medium uppercase tracking-[0.06em] text-[#A7B0BC]">Renouvellements à venir</p>
                 <span className="rounded-full bg-[rgba(255,181,71,0.12)] px-[7px] py-0.5 text-[11px] font-semibold text-[#FFB547]">90 j</span>
@@ -415,7 +415,7 @@ export default function CsmHomePage() {
             </div>
 
             {/* Actions CSM */}
-            <div className="rounded-[14px] border border-[#1F2832] bg-[#131922] p-5 transition-colors hover:border-[#2A3441]">
+            <div className="rounded-[14px] border border-[#1F2832] bg-[rgba(255,255,255,0.02)] p-5 transition-colors hover:border-[#2A3441]">
               <div className="mb-4 flex items-center justify-between">
                 <p className="m-0 text-[12px] font-medium uppercase tracking-[0.06em] text-[#A7B0BC]">Actions CSM</p>
                 <span className={`rounded-full px-[7px] py-0.5 text-[11px] font-semibold ${
@@ -449,7 +449,7 @@ export default function CsmHomePage() {
           {/* Content grid */}
           <div className="grid grid-cols-[1fr_320px] gap-5">
             {/* Portefeuille panel */}
-            <div className="rounded-[14px] border border-[#1F2832] bg-[#131922] p-5">
+            <div className="rounded-[14px] border border-[#1F2832] bg-[rgba(255,255,255,0.02)] p-5">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="m-0 flex items-center gap-2.5 text-[16px] font-semibold tracking-[-0.01em]">
                   Mon portefeuille
@@ -559,7 +559,7 @@ export default function CsmHomePage() {
             {/* Right column */}
             <div className="flex flex-col gap-4">
               {/* Actions CSM */}
-              <div className="rounded-[14px] border border-[#1F2832] bg-[#131922] p-[18px]">
+              <div className="rounded-[14px] border border-[#1F2832] bg-[rgba(255,255,255,0.02)] p-[18px]">
                 <div className="mb-3.5 flex items-center justify-between">
                   <h3 className="m-0 text-[14px] font-semibold">Actions CSM</h3>
                   <span className="rounded-full bg-[#1A2129] px-2 py-0.5 text-[11px] font-semibold text-[#A7B0BC]">
@@ -625,7 +625,7 @@ export default function CsmHomePage() {
                   .sort((a, b) => a.days - b.days)
                   .slice(0, 5);
                 return (
-                  <div className="rounded-[14px] border border-[#1F2832] bg-[#131922] p-[18px]">
+                  <div className="rounded-[14px] border border-[#1F2832] bg-[rgba(255,255,255,0.02)] p-[18px]">
                     <div className="mb-3.5 flex items-center justify-between">
                       <h3 className="m-0 text-[14px] font-semibold">Prochaines churn notices</h3>
                       <span className="rounded-full bg-[#1A2129] px-2 py-0.5 text-[11px] font-semibold text-[#A7B0BC]">Top 5</span>
