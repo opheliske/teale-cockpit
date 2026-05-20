@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, notFound } from "next/navigation";
 import Link from "next/link";
 import { impersonationStore } from "@/lib/impersonation-store";
 import { CLIENTS, CLIENT_DETAILS, type PlanItem, type PlanItemFile, type PlanItemType, type Note, type PrioAction, type HistoryEvent, type ContractFormule, type ProduitTeale, type Statut } from "@/lib/clients-data";
 import { csmClientsStore, toClient, toClientDetail } from "@/lib/csm-clients-store";
+import ClientDetailSkeleton from "./ClientDetailSkeleton";
 import { clientActionsStore } from "@/lib/client-actions-store";
 import { ATELIERS_CATALOG, KITS_CATALOG, ATELIER_CATEGORIES, KIT_CATEGORIES, type AtelierCatalogItem, type KitCatalogItem } from "@/lib/catalog";
 import { planStore, type StoredPlanItem } from "@/lib/plan-store";
@@ -291,7 +292,8 @@ export default function ClientDetailView({ id }: { id: string }) {
   const router = useRouter();
 
   const [storedClient, setStoredClient] = useState(() => csmClientsStore.get(id));
-  const [storeLoading, setStoreLoading] = useState(!csmClientsStore.get(id) && !CLIENTS.find((c) => c.id === id) && !CLIENT_DETAILS[id]);
+  // Loading until the clients store has finished its initial fetch.
+  const [storeLoading, setStoreLoading] = useState(() => !csmClientsStore.isLoaded());
 
   useEffect(() => {
     return csmClientsStore.subscribe(() => {
@@ -793,12 +795,12 @@ export default function ClientDetailView({ id }: { id: string }) {
     setAddPlanCatFilter("Tous");
   };
 
+  if (storeLoading) {
+    return <ClientDetailSkeleton />;
+  }
   if (!client || !detail) {
-    return (
-      <div className="flex h-full items-center justify-center text-[#94a8a0]">
-        {storeLoading ? "Chargement…" : "Client introuvable."}
-      </div>
-    );
+    // Store is loaded and this id matches nothing → render the 404 page.
+    notFound();
   }
 
   const switchTab = (s: Section) => {

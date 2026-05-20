@@ -86,16 +86,27 @@ function toRow(c: StoredCsmClient): Omit<DbRow, "created_at"> {
 
 let _clients: StoredCsmClient[] = [];
 let _loaded = false;
+let _loadPromise: Promise<void> | null = null;
 const _listeners = new Set<() => void>();
 
 function notify() { _listeners.forEach((l) => l()); }
 
-async function ensureLoaded() {
-  if (_loaded) return;
-  _loaded = true;
-  const { data } = await supabase.from("clients").select("*").order("created_at", { ascending: false });
-  _clients = (data ?? []).map((r) => fromRow(r as DbRow));
-  notify();
+// Loads the clients once. Returns the same promise on every call so late
+// subscribers can await it instead of being silently skipped.
+function ensureLoaded(): Promise<void> {
+  if (!_loadPromise) {
+    _loadPromise = (async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) console.error("[csm-clients-store] load", error);
+      _clients = (data ?? []).map((r) => fromRow(r as DbRow));
+      _loaded = true;
+      notify();
+    })();
+  }
+  return _loadPromise;
 }
 
 export const csmClientsStore = {
@@ -103,16 +114,21 @@ export const csmClientsStore = {
 
   get: (id: string): StoredCsmClient | undefined => _clients.find((c) => c.id === id),
 
+  // True once the initial load has completed (with or without rows).
+  isLoaded: (): boolean => _loaded,
+
   add: async (client: StoredCsmClient) => {
     const { error } = await supabase.from("clients").upsert(toRow(client));
-    if (error) { console.error("csmClientsStore.add", error); return; }
+    if (error) { console.error("[csm-clients-store] add", error); return; }
     _clients = [client, ..._clients.filter((c) => c.id !== client.id)];
     notify();
   },
 
   subscribe: (listener: () => void) => {
     _listeners.add(listener);
-    ensureLoaded();
+    // Always wake the new subscriber once data is ready, even if the load
+    // already completed before it subscribed.
+    ensureLoaded().then(() => listener());
     return () => { _listeners.delete(listener); };
   },
 };
