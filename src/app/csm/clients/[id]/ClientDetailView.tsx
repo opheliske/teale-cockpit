@@ -883,7 +883,7 @@ export default function ClientDetailView({ id }: { id: string }) {
 
   return (
     <>
-    <div ref={mainRef} className="h-full overflow-y-auto bg-[#061a16]">
+    <div ref={mainRef} className="h-full overflow-y-auto">
       <div className="mx-auto max-w-[1480px] px-11 py-8 pb-24">
 
         {/* Back link */}

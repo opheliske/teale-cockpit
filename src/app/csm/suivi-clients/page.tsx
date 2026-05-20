@@ -270,7 +270,7 @@ export default function SuiviClientsPage() {
 
   return (
     <>
-    <div style={{ background: "#050e0d", minHeight: "100%" }} className="px-10 py-8">
+    <div style={{ minHeight: "100%" }} className="px-10 py-8">
       <div className="mx-auto max-w-[1440px]">
 
         {/* Page header */}

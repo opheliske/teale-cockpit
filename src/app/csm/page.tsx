@@ -275,7 +275,7 @@ export default function CsmHomePage() {
   const overdueActionsList = actions.filter((a) => !!a.overdue && !doneIds.has(a.id));
 
   return (
-    <div className="min-h-screen bg-brand-dark px-7 py-6 text-brand-cream">
+    <div className="min-h-screen px-7 py-6 text-brand-cream">
       {/* Header */}
       <div className="mb-5">
         <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[2px] text-[#22c55e]">
