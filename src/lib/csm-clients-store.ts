@@ -92,6 +92,9 @@ function notify() { _listeners.forEach((l) => l()); }
 function ensureLoaded(): Promise<void> {
   if (!_loadPromise) {
     _loadPromise = (async () => {
+      // Wait for the session before querying — otherwise the request can go
+      // out unauthenticated and RLS returns an empty client list.
+      await supabase.auth.getUser();
       const { data, error } = await supabase
         .from("clients")
         .select("*")
