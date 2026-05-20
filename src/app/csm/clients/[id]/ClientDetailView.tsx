@@ -2793,27 +2793,37 @@ export default function ClientDetailView({ id }: { id: string }) {
               </button>
               <button
                 onClick={async () => {
-                  if (!storedClient) return;
                   setEditError("");
-                  const { error } = await csmClientsStore.add({
-                    ...storedClient,
-                    collab: editDraft.collab,
-                    arr: editDraft.arr,
-                    formule: editDraft.formule,
-                    atelierTotal: editDraft.atelierTotal,
-                    rdvParCollab: editDraft.rdvParCollab,
-                    contractStart: editDraft.contractStart,
-                    contractEnd: editDraft.contractEnd,
-                    churnNotice: editDraft.churnNotice,
-                    produits: editDraft.produits,
-                    ownerCsmId: editDraft.ownerCsmId,
-                  });
-                  if (error) {
-                    setEditError(`Échec de l'enregistrement : ${error}`);
+                  const base = storedClient ?? csmClientsStore.get(id);
+                  if (!base) {
+                    setEditError("Client non chargé — rechargez la page puis réessayez.");
                     return;
                   }
-                  setLocalDetail(editDraft);
-                  setShowEditDetails(false);
+                  try {
+                    const { error } = await csmClientsStore.add({
+                      ...base,
+                      collab: editDraft.collab,
+                      arr: editDraft.arr,
+                      formule: editDraft.formule,
+                      atelierTotal: editDraft.atelierTotal,
+                      rdvParCollab: editDraft.rdvParCollab,
+                      contractStart: editDraft.contractStart,
+                      contractEnd: editDraft.contractEnd,
+                      churnNotice: editDraft.churnNotice,
+                      produits: editDraft.produits,
+                      ownerCsmId: editDraft.ownerCsmId,
+                    });
+                    if (error) {
+                      setEditError(`Échec de l'enregistrement : ${error}`);
+                      return;
+                    }
+                    setLocalDetail(editDraft);
+                    setShowEditDetails(false);
+                  } catch (e) {
+                    setEditError(
+                      `Erreur : ${e instanceof Error ? e.message : String(e)}`,
+                    );
+                  }
                 }}
                 className="rounded-[9px] bg-[rgba(94,234,212,0.9)] px-5 py-2 text-[12px] font-semibold text-[#061a16] transition-colors hover:bg-[#5eead4]"
               >
