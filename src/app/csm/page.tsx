@@ -12,16 +12,16 @@ import { useAuth } from "@/lib/auth";
 
 function statutConfig(s: Statut) {
   switch (s) {
-    case "SAIN": return { dot: "#22c55e", text: "#22c55e", bg: "rgba(34,197,94,0.12)", label: "Sain" };
-    case "VIGILANCE": return { dot: "#f59e0b", text: "#f59e0b", bg: "rgba(245,158,11,0.12)", label: "Vigilance" };
-    case "À RISQUE": return { dot: "#ef4444", text: "#ef4444", bg: "rgba(239,68,68,0.12)", label: "À risque" };
+    case "SAIN": return { dot: "#5EEAB0", text: "#5EEAB0", bg: "rgba(94,234,176,0.12)", label: "Sain" };
+    case "VIGILANCE": return { dot: "#FFB547", text: "#FFB547", bg: "rgba(255,181,71,0.12)", label: "Vigilance" };
+    case "À RISQUE": return { dot: "#FF6B6B", text: "#FF6B6B", bg: "rgba(255,107,107,0.12)", label: "À risque" };
   }
 }
 
 function consoColor(ratio: number) {
-  if (ratio >= 0.7) return "#22c55e";
-  if (ratio >= 0.35) return "#f59e0b";
-  return "#ef4444";
+  if (ratio >= 0.7) return "#5EEAB0";
+  if (ratio >= 0.35) return "#FFB547";
+  return "#FF6B6B";
 }
 
 const FR_MONTH_NAMES_FULL = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
@@ -40,10 +40,9 @@ function daysUntilDate(d: Date): number {
 }
 
 function renewalColor(days: number) {
-  if (days < 30) return "#ef4444";
-  if (days < 60) return "#f59e0b";
-  if (days < 90) return "#eab308";
-  return "#22c55e";
+  if (days < 30) return "#FF6B6B";
+  if (days < 90) return "#FFB547";
+  return "#5EEAB0";
 }
 
 function daysUntilIso(iso: string): number {
@@ -88,13 +87,13 @@ const RECENT_ACTIVITY: RecentActivity[] = [];
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function DonutChart({ pct, color, size = 64 }: { pct: number; color: string; size?: number }) {
-  const r = (size - 10) / 2;
+  const r = (size - 12) / 2;
   const circ = 2 * Math.PI * r;
   const offset = circ * (1 - Math.max(0, Math.min(1, pct)));
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth="8"
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#1A2129" strokeWidth="9" />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth="9"
         strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" />
     </svg>
   );
@@ -104,11 +103,11 @@ function ConsoBar({ value, max }: { value: number; max: number }) {
   const pct = Math.min(value / max, 1);
   const color = consoColor(pct);
   return (
-    <div className="flex flex-col gap-0.5">
-      <div className="h-1 w-full overflow-hidden rounded-full bg-[rgba(255,255,255,0.08)]">
+    <div className="flex flex-col gap-1">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#1A2129]">
         <div className="h-full rounded-full transition-all" style={{ width: `${pct * 100}%`, backgroundColor: color }} />
       </div>
-      <span className="text-[11px] tabular-nums text-[rgba(232,245,239,0.6)]">{value} / {max}</span>
+      <span className="text-[11px] tabular-nums text-[#6B7585]">{value} / {max} ateliers</span>
     </div>
   );
 }
@@ -116,9 +115,9 @@ function ConsoBar({ value, max }: { value: number; max: number }) {
 function StatutBadge({ statut }: { statut: Statut }) {
   const cfg = statutConfig(statut);
   return (
-    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+    <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-semibold"
       style={{ backgroundColor: cfg.bg, color: cfg.text }}>
-      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: cfg.dot }} />
+      <span className="h-[7px] w-[7px] rounded-full" style={{ backgroundColor: cfg.dot }} />
       {cfg.label}
     </span>
   );
@@ -126,8 +125,8 @@ function StatutBadge({ statut }: { statut: Statut }) {
 
 function ClientAvatar({ initials, color, size = 32 }: { initials: string; color: string; size?: number }) {
   return (
-    <div className="flex shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
-      style={{ width: size, height: size, backgroundColor: color + "33", color }}>
+    <div className="flex shrink-0 items-center justify-center rounded-[10px] text-[13px] font-semibold"
+      style={{ width: size, height: size, backgroundColor: color + "22", color }}>
       {initials}
     </div>
   );
@@ -157,6 +156,10 @@ function storeToClient(s: StoredCsmClient): Client {
 
 type Filter = "Tous" | "Sains" | "Vigilance" | "Risque" | "Renouvellement";
 const FILTERS: Filter[] = ["Tous", "Sains", "Vigilance", "Risque", "Renouvellement"];
+const FILTER_SHORT: Record<Filter, string> = {
+  Tous: "Tous", Sains: "Sains", Vigilance: "Vigilance", Risque: "Risque",
+  Renouvellement: "Renouv < 90j",
+};
 
 export default function CsmHomePage() {
   const router = useRouter();
@@ -218,19 +221,21 @@ export default function CsmHomePage() {
   );
 
   // ── KPIs ──
+  const total = allClients.length;
   const sainCount = allClients.filter((c) => c.statut === "SAIN").length;
   const vigilanceCount = allClients.filter((c) => c.statut === "VIGILANCE").length;
   const risqueCount = allClients.filter((c) => c.statut === "À RISQUE").length;
   const renewalARR = renewals.reduce((s, r) => s + (r.arr || 0), 0);
   const pendingActionsCount = actions.filter((a) => !doneIds.has(a.id)).length;
   const overdueActionsCount = actions.filter((a) => !!a.overdue && !doneIds.has(a.id)).length;
+  const healthPct = total > 0 ? Math.round((sainCount / total) * 100) : 0;
 
-  const FILTER_LABELS: Record<Filter, string> = {
-    Tous: `Tous (${allClients.length})`,
-    Sains: `Sains (${sainCount})`,
-    Vigilance: `Vigilance (${vigilanceCount})`,
-    Risque: `Risque (${risqueCount})`,
-    Renouvellement: "Renouvellement < 90j",
+  const filterCounts: Record<Filter, number> = {
+    Tous: total,
+    Sains: sainCount,
+    Vigilance: vigilanceCount,
+    Risque: risqueCount,
+    Renouvellement: renewals.length,
   };
 
   const dateStr = useMemo(() => {
@@ -275,29 +280,44 @@ export default function CsmHomePage() {
   const overdueActionsList = actions.filter((a) => !!a.overdue && !doneIds.has(a.id));
 
   return (
-    <div className="min-h-screen px-7 py-6 text-brand-cream">
-      {/* Header */}
-      <div className="mb-5">
-        <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[2px] text-[#22c55e]">
-          <span className="h-1.5 w-1.5 rounded-full bg-[#22c55e]" />
+    <div className="min-h-screen bg-[#0A0E13] px-9 pb-16 pt-7 text-[#F2F5F8]">
+      {/* ── Topbar ── */}
+      <div className="mb-7">
+        <div className="inline-flex items-center gap-2 text-[12px] font-medium uppercase tracking-[0.04em] text-[#A7B0BC]">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#5EEAB0]" />
           {dateStr}
         </div>
-        <h1 className="text-[28px] font-bold tracking-[-0.5px] text-brand-cream">
-          Bonjour{firstName ? ` ${firstName}` : ""} 👋
-        </h1>
-        <p className="mt-1 max-w-[640px] text-[13px] leading-relaxed text-[#94a8a0]">
-          Voici l&apos;état de votre portefeuille de {allClients.length} comptes Teale.{" "}
-          {vigilanceCount + risqueCount > 0
-            ? `${vigilanceCount + risqueCount} client${vigilanceCount + risqueCount > 1 ? "s" : ""} demandent votre attention`
-            : "Tous les clients sont en bonne santé"}
-          {urgentRenewals.length > 0
-            ? `, et vous avez ${urgentRenewals.length} renouvellement${urgentRenewals.length > 1 ? "s" : ""} à prioriser ce mois-ci.`
-            : "."}
-        </p>
       </div>
 
-      {/* Tabs */}
-      <div className="mb-5 flex gap-1 border-b border-[rgba(255,255,255,0.06)] pb-0">
+      {/* ── Hero ── */}
+      <section className="mb-7 flex items-end justify-between gap-6 border-b border-[#1F2832] pb-6">
+        <div>
+          <h1 className="m-0 mb-1.5 text-[28px] font-semibold tracking-[-0.02em]">
+            Bonjour{firstName ? <> <span className="text-[#5EEAB0]">{firstName}</span></> : ""}
+          </h1>
+          <p className="m-0 max-w-[560px] text-[14px] leading-relaxed text-[#A7B0BC]">
+            Voici l&apos;état de votre portefeuille de {total} compte{total > 1 ? "s" : ""} Teale.{" "}
+            {vigilanceCount + risqueCount > 0
+              ? `${vigilanceCount + risqueCount} client${vigilanceCount + risqueCount > 1 ? "s" : ""} demandent votre attention`
+              : "Tous les clients sont en bonne santé"}
+            {urgentRenewals.length > 0
+              ? `, et vous avez ${urgentRenewals.length} renouvellement${urgentRenewals.length > 1 ? "s" : ""} à prioriser ce mois-ci.`
+              : "."}
+          </p>
+        </div>
+        <button
+          onClick={() => router.push("/csm/suivi-clients")}
+          className="inline-flex shrink-0 items-center gap-2 rounded-[8px] bg-[#5EEAB0] px-4 py-2.5 text-[13px] font-semibold text-[#0A2018] transition-[filter] hover:brightness-105"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Nouveau client
+        </button>
+      </section>
+
+      {/* ── Tabs ── */}
+      <div className="mb-6 flex gap-1 border-b border-[#1F2832]">
         {([
           { label: "Portfolio",        key: "Portfolio" as const },
           { label: "Activités et RDV", key: "Activites" as const },
@@ -307,15 +327,17 @@ export default function CsmHomePage() {
           const alertBadge = vigilanceCount + risqueCount + overdueActionsCount;
           return (
             <button key={key} onClick={() => setActiveTab(key)}
-              className={`-mb-px rounded-t-md px-4 py-2 text-[13px] font-medium transition-colors ${
+              className={`-mb-px border-b-2 px-3.5 py-2.5 text-[13.5px] font-medium transition-colors ${
                 isActive
-                  ? "border border-b-[#061a16] border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] text-brand-cream"
-                  : "text-[rgba(232,245,239,0.45)] hover:text-[rgba(232,245,239,0.8)]"
+                  ? "border-[#5EEAB0] text-[#F2F5F8]"
+                  : "border-transparent text-[#A7B0BC] hover:text-[#F2F5F8]"
               }`}
             >
               {label}
               {key === "Alertes" && alertBadge > 0 && (
-                <span className="ml-1.5 rounded-full bg-[rgba(239,68,68,0.2)] px-1.5 py-0.5 text-[10px] font-bold text-[#ef4444]">
+                <span className={`ml-2 rounded-[4px] px-1.5 py-0.5 text-[11px] font-semibold ${
+                  isActive ? "bg-[rgba(94,234,176,0.12)] text-[#5EEAB0]" : "bg-[#1A2129] text-[#A7B0BC]"
+                }`}>
                   {alertBadge}
                 </span>
               )}
@@ -328,172 +350,270 @@ export default function CsmHomePage() {
       {activeTab === "Portfolio" && (
         <>
           {/* KPI cards */}
-          <div className="mb-6 grid grid-cols-4 gap-3">
-            <div className="rounded-[14px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.03)] p-4">
-              <p className="mb-3 text-[11px] font-semibold text-brand-cream">Santé du portefeuille</p>
-              <div className="mb-2 flex items-end gap-3">
-                <div className="text-center">
-                  <div className="text-[26px] font-bold tabular-nums leading-none text-[#22c55e]">{sainCount}</div>
-                  <div className="mt-1 text-[9px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.4)]">Sains</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-[26px] font-bold tabular-nums leading-none text-[#f59e0b]">{vigilanceCount}</div>
-                  <div className="mt-1 text-[9px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.4)]">Vigilance</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-[26px] font-bold tabular-nums leading-none text-[#ef4444]">{risqueCount}</div>
-                  <div className="mt-1 text-[9px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.4)]">Risque</div>
-                </div>
+          <div className="mb-7 grid grid-cols-3 gap-4">
+            {/* Santé du portefeuille */}
+            <div className="rounded-[14px] border border-[#1F2832] bg-[#131922] p-5 transition-colors hover:border-[#2A3441]">
+              <div className="mb-4 flex items-center justify-between">
+                <p className="m-0 text-[12px] font-medium uppercase tracking-[0.06em] text-[#A7B0BC]">Santé du portefeuille</p>
+                <span className="rounded-full bg-[rgba(94,234,176,0.12)] px-[7px] py-0.5 text-[11px] font-semibold text-[#5EEAB0]">
+                  {risqueCount + vigilanceCount === 0 ? "stable" : "à surveiller"}
+                </span>
               </div>
-              <p className="text-[11px] text-[rgba(232,245,239,0.45)]">{allClients.length} comptes actifs · {risqueCount} à risque de churn</p>
-            </div>
-
-            <div className="rounded-[14px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.03)] p-4">
-              <p className="mb-2 text-[11px] font-semibold text-brand-cream">Renouvellements à venir</p>
-              <div className="flex items-center gap-3">
-                <div className="relative shrink-0">
-                  <DonutChart pct={allClients.length > 0 ? renewals.length / allClients.length : 0} color="#f59e0b" size={68} />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-[14px] font-bold text-brand-cream">{renewals.length}/{allClients.length}</span>
+              <div className="flex items-center gap-[18px]">
+                <div className="relative h-20 w-20 shrink-0">
+                  <DonutChart pct={total > 0 ? sainCount / total : 0} color="#5EEAB0" size={80} />
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-[20px] font-semibold leading-none text-[#F2F5F8]">{healthPct}%</span>
+                    <span className="mt-0.5 text-[11px] text-[#6B7585]">sains</span>
                   </div>
                 </div>
-                <div>
-                  <p className="text-[11px] text-[rgba(232,245,239,0.55)]">{renewals.length} contrats à fermer d&apos;ici 90 jours sur {allClients.length} comptes</p>
-                  <p className="mt-1.5 text-[12px] font-semibold text-brand-cream">{renewalARR} k€ ARR concerné</p>
+                <div className="flex flex-wrap gap-x-3.5 gap-y-2">
+                  {[
+                    { c: "#5EEAB0", n: sainCount, l: "sain" },
+                    { c: "#FFB547", n: vigilanceCount, l: "vigilance" },
+                    { c: "#FF6B6B", n: risqueCount, l: "risque" },
+                  ].map(({ c, n, l }) => (
+                    <div key={l} className="flex items-center gap-1.5 text-[12px] text-[#A7B0BC]">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: c }} />
+                      <strong className="font-semibold text-[#F2F5F8]">{n}</strong> {l}
+                    </div>
+                  ))}
                 </div>
+              </div>
+              <div className="mt-3.5 border-t border-dashed border-[#1F2832] pt-3.5 text-[12px] text-[#6B7585]">
+                {total} compte{total > 1 ? "s" : ""} actif{total > 1 ? "s" : ""} · {risqueCount} à risque de churn
               </div>
             </div>
 
-            <div className="rounded-[14px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.03)] p-4">
-              <p className="mb-2 text-[11px] font-semibold text-brand-cream">Actions CSM</p>
-              <div className="mb-1 text-[40px] font-bold tabular-nums leading-none text-brand-cream">{pendingActionsCount}</div>
-              <div className="mb-1 text-[9px] font-semibold uppercase tracking-[1.5px] text-[rgba(232,245,239,0.4)]">À traiter</div>
-              <p className="text-[11px] text-[rgba(232,245,239,0.45)]">Tâches cross-clients en cours</p>
-              {overdueActionsCount > 0 && (
-                <p className="mt-1 text-[11px] font-medium text-[#ef4444]">{overdueActionsCount} en retard</p>
-              )}
+            {/* Renouvellements à venir */}
+            <div className="rounded-[14px] border border-[#1F2832] bg-[#131922] p-5 transition-colors hover:border-[#2A3441]">
+              <div className="mb-4 flex items-center justify-between">
+                <p className="m-0 text-[12px] font-medium uppercase tracking-[0.06em] text-[#A7B0BC]">Renouvellements à venir</p>
+                <span className="rounded-full bg-[rgba(255,181,71,0.12)] px-[7px] py-0.5 text-[11px] font-semibold text-[#FFB547]">90 j</span>
+              </div>
+              <div className="flex items-center gap-[18px]">
+                <div className="relative h-20 w-20 shrink-0">
+                  <DonutChart pct={total > 0 ? renewals.length / total : 0} color="#FFB547" size={80} />
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-[20px] font-semibold leading-none text-[#F2F5F8]">{renewals.length}/{total}</span>
+                    <span className="mt-0.5 text-[11px] text-[#6B7585]">à fermer</span>
+                  </div>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-[32px] font-semibold leading-none tracking-[-0.02em]">{renewalARR}</span>
+                    <span className="text-[14px] text-[#6B7585]">k€ ARR concerné</span>
+                  </div>
+                  <p className="m-0 mt-2 text-[12px] text-[#6B7585]">
+                    {renewals.length} contrat{renewals.length > 1 ? "s" : ""} à fermer d&apos;ici 90 jours sur {total} compte{total > 1 ? "s" : ""}.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3.5 border-t border-dashed border-[#1F2832] pt-3.5 text-[12px] text-[#6B7585]">
+                {renewals.length > 0 ? "Échéances contractuelles sous 90 jours" : "Prochaine échéance contractuelle dans > 90j"}
+              </div>
+            </div>
+
+            {/* Actions CSM */}
+            <div className="rounded-[14px] border border-[#1F2832] bg-[#131922] p-5 transition-colors hover:border-[#2A3441]">
+              <div className="mb-4 flex items-center justify-between">
+                <p className="m-0 text-[12px] font-medium uppercase tracking-[0.06em] text-[#A7B0BC]">Actions CSM</p>
+                <span className={`rounded-full px-[7px] py-0.5 text-[11px] font-semibold ${
+                  overdueActionsCount > 0
+                    ? "bg-[rgba(255,107,107,0.12)] text-[#FF6B6B]"
+                    : "bg-[rgba(94,234,176,0.12)] text-[#5EEAB0]"
+                }`}>
+                  {overdueActionsCount > 0 ? `${overdueActionsCount} en retard` : "à jour"}
+                </span>
+              </div>
+              <div className="flex items-center gap-[18px]">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-[#1A2129]">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#5EEAB0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-[32px] font-semibold leading-none tracking-[-0.02em]">{pendingActionsCount}</span>
+                    <span className="text-[14px] text-[#6B7585]">à traiter</span>
+                  </div>
+                  <p className="m-0 mt-2 text-[12px] text-[#6B7585]">Tâches cross-clients en cours.</p>
+                </div>
+              </div>
+              <div className="mt-3.5 border-t border-dashed border-[#1F2832] pt-3.5 text-[12px] text-[#6B7585]">
+                {overdueActionsCount > 0 ? `${overdueActionsCount} action${overdueActionsCount > 1 ? "s" : ""} en retard` : "Tu es à jour. Bravo 🌿"}
+              </div>
             </div>
           </div>
 
-          {/* Two-column layout: table + right col */}
-          <div className="grid grid-cols-[1fr_300px] gap-4">
-            {/* Portfolio table */}
-            <div>
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-[16px] font-semibold text-brand-cream">Mon portefeuille</h2>
-                <span className="text-[11px] text-[rgba(232,245,239,0.4)]">{allClients.length} comptes · Année contrat 2025—2026</span>
+          {/* Content grid */}
+          <div className="grid grid-cols-[1fr_320px] gap-5">
+            {/* Portefeuille panel */}
+            <div className="rounded-[14px] border border-[#1F2832] bg-[#131922] p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="m-0 flex items-center gap-2.5 text-[16px] font-semibold tracking-[-0.01em]">
+                  Mon portefeuille
+                  <span className="rounded-full bg-[#1A2129] px-2 py-0.5 text-[11px] font-medium text-[#A7B0BC]">
+                    {total} compte{total > 1 ? "s" : ""}
+                  </span>
+                </h2>
+                <span className="text-[12px] text-[#6B7585]">Année contrat 2025 — 2026</span>
               </div>
-              <div className="mb-3 flex gap-1">
-                {FILTERS.map((f) => (
-                  <button key={f} onClick={() => setFilter(f)}
-                    className={`rounded-full px-3 py-1 text-[11px] font-medium transition-colors ${
-                      filter === f ? "bg-[rgba(94,234,212,0.2)] text-[#a8e895]" : "text-[rgba(232,245,239,0.5)] hover:text-[rgba(232,245,239,0.8)]"
-                    }`}>
-                    {FILTER_LABELS[f]}
-                  </button>
+
+              {/* Filters */}
+              <div className="mb-4 flex flex-wrap items-center gap-1.5">
+                {FILTERS.map((f) => {
+                  const isActive = filter === f;
+                  const isWarn = f === "Renouvellement";
+                  return (
+                    <button key={f} onClick={() => setFilter(f)}
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12.5px] font-medium transition-colors ${
+                        isActive
+                          ? "border-[rgba(94,234,176,0.25)] bg-[rgba(94,234,176,0.12)] text-[#5EEAB0]"
+                          : isWarn
+                            ? "border-transparent bg-[rgba(255,181,71,0.12)] text-[#FFB547] hover:brightness-110"
+                            : "border-transparent bg-[#1A2129] text-[#A7B0BC] hover:text-[#F2F5F8]"
+                      }`}>
+                      {FILTER_SHORT[f]}
+                      <span className="text-[11px] tabular-nums opacity-85">{filterCounts[f]}</span>
+                    </button>
+                  );
+                })}
+                <button onClick={() => router.push("/csm/suivi-clients")}
+                  className="ml-auto rounded-full border border-dashed border-[rgba(94,234,176,0.25)] bg-transparent px-3 py-1.5 text-[12.5px] font-medium text-[#5EEAB0] transition-colors hover:bg-[rgba(94,234,176,0.06)]">
+                  + Nouveau
+                </button>
+              </div>
+
+              {/* Search */}
+              <div className="mb-3 flex items-center gap-2 rounded-[10px] bg-[#1A2129] px-3.5 py-2.5">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6B7585" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                  <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input type="text" placeholder="Rechercher un client…" value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="flex-1 bg-transparent text-[13px] text-[#F2F5F8] placeholder-[#6B7585] outline-none" />
+              </div>
+
+              {/* Column headers */}
+              <div
+                className="grid items-center gap-4 px-3 pb-2 pt-1"
+                style={{ gridTemplateColumns: "1.6fr 0.9fr 1.1fr 1.4fr 0.9fr" }}
+              >
+                {["Client", "Statut", "Conso ateliers", "Action prioritaire", "Renouvellement"].map((h, i) => (
+                  <div key={h} className={`text-[11px] font-medium uppercase tracking-[0.06em] text-[#4A5260] ${i === 4 ? "text-right" : ""}`}>
+                    {h}
+                  </div>
                 ))}
               </div>
-              <div className="mb-3 flex h-8 items-center gap-2 rounded-lg border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] px-3">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-[rgba(232,245,239,0.3)]">
-                  <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-                </svg>
-                <input type="text" placeholder="Rechercher un client..." value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="flex-1 bg-transparent text-[12px] text-brand-cream placeholder-[rgba(232,245,239,0.3)] outline-none" />
-              </div>
-              <div className="overflow-hidden rounded-[12px] border border-[rgba(255,255,255,0.07)]">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)]">
-                      {["Client", "Statut", "Conso ateliers", "Action prioritaire", "Renouvellement"].map((h) => (
-                        <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[1.2px] text-[rgba(232,245,239,0.35)]">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((c, i) => (
-                      <tr key={c.name} onClick={() => router.push(`/csm/clients/${c.id}`)}
-                        className={`cursor-pointer border-b border-[rgba(255,255,255,0.04)] transition-colors hover:bg-[rgba(255,255,255,0.03)] ${i === filtered.length - 1 ? "border-b-0" : ""}`}>
-                        <td className="px-3 py-2.5">
-                          <div className="flex items-center gap-2">
-                            <ClientAvatar initials={c.initials} color={c.color} size={28} />
-                            <div>
-                              <div className="text-[12px] font-medium text-brand-cream leading-none">{c.name}</div>
-                              <div className="mt-0.5 text-[10px] text-[rgba(232,245,239,0.4)]">
-                                {c.collab.toLocaleString("fr")} collab
-                                {c.tag ? <> · <span className="text-[rgba(94,234,212,0.7)]">{c.tag}</span></> : ""}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-3 py-2.5"><StatutBadge statut={c.statut} /></td>
-                        <td className="px-3 py-2.5 w-[100px]"><ConsoBar value={c.consoAteliers[0]} max={c.consoAteliers[1]} /></td>
-                        <td className="px-3 py-2.5">
-                          <div className="text-[11px] text-brand-cream">{c.action}</div>
-                          <div className="text-[10px] text-[rgba(232,245,239,0.4)]">{c.actionDate}</div>
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <div className="text-[11px] text-brand-cream">{c.renouvDate}</div>
-                          <div className="text-[10px] font-medium text-[rgba(94,234,212,0.8)]">{c.arr} k€</div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <div className="flex items-center justify-between border-t border-[rgba(255,255,255,0.06)] px-4 py-2.5">
-                  <span className="text-[11px] text-[rgba(232,245,239,0.35)]">
-                    {filtered.length} affichés sur {allClients.length} · trié par alerte décroissante
-                  </span>
-                  <button onClick={() => router.push("/csm/suivi-clients")}
-                    className="text-[11px] font-medium text-[#84d4a6] hover:text-[#a8e895]">
-                    Voir tous les comptes →
-                  </button>
+
+              {/* Client rows */}
+              {filtered.map((c) => {
+                const hasAction = c.action && c.action !== "—";
+                return (
+                  <div key={c.id} onClick={() => router.push(`/csm/clients/${c.id}`)}
+                    className="grid cursor-pointer items-center gap-4 rounded-[10px] border border-transparent px-3 py-3.5 transition-colors hover:border-[#1F2832] hover:bg-[#1A2129]"
+                    style={{ gridTemplateColumns: "1.6fr 0.9fr 1.1fr 1.4fr 0.9fr" }}>
+                    <div className="flex items-center gap-3">
+                      <ClientAvatar initials={c.initials} color={c.color} size={38} />
+                      <div className="min-w-0">
+                        <div className="truncate text-[14px] font-medium leading-tight">{c.name}</div>
+                        <div className="mt-0.5 text-[12px] leading-tight text-[#6B7585]">
+                          {c.collab.toLocaleString("fr")} collaborateurs
+                        </div>
+                      </div>
+                    </div>
+                    <div><StatutBadge statut={c.statut} /></div>
+                    <div><ConsoBar value={c.consoAteliers[0]} max={c.consoAteliers[1]} /></div>
+                    <div className={`text-[12.5px] leading-tight ${hasAction ? "text-[#F2F5F8]" : "italic text-[#4A5260]"}`}>
+                      {hasAction ? c.action : "Aucune action urgente"}
+                      {hasAction && c.actionDate && (
+                        <div className="mt-0.5 text-[11px] text-[#6B7585]">{c.actionDate}</div>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[12.5px] font-medium text-[#F2F5F8]">{c.arr > 0 ? `${c.arr} k€` : "— k€"}</div>
+                      <div className="mt-0.5 text-[11px] text-[#6B7585]">
+                        {c.renouvDate && c.renouvDate !== "—" ? formatIsoFr(c.renouvDate) : "À configurer"}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {filtered.length === 0 && (
+                <div className="px-3 py-10 text-center text-[13px] text-[#6B7585]">
+                  Aucun client ne correspond à ce filtre.
                 </div>
+              )}
+
+              {/* Foot */}
+              <div className="mt-3.5 flex items-center justify-between border-t border-[#1F2832] pt-3.5 text-[12px] text-[#6B7585]">
+                <span>{filtered.length} affiché{filtered.length > 1 ? "s" : ""} sur {total} · trié par alerte décroissante</span>
+                <button onClick={() => router.push("/csm/suivi-clients")}
+                  className="font-medium text-[#5EEAB0] hover:brightness-110">
+                  Voir tous les comptes →
+                </button>
               </div>
             </div>
 
             {/* Right column */}
             <div className="flex flex-col gap-4">
               {/* Actions CSM */}
-              <div className="rounded-[14px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.02)]">
-                <div className="flex items-center justify-between border-b border-[rgba(255,255,255,0.06)] px-4 py-3">
-                  <h3 className="text-[13px] font-semibold text-brand-cream">Actions CSM</h3>
-                  <span className="text-[11px] text-[rgba(232,245,239,0.4)]">{pendingActionsCount} à traiter</span>
+              <div className="rounded-[14px] border border-[#1F2832] bg-[#131922] p-[18px]">
+                <div className="mb-3.5 flex items-center justify-between">
+                  <h3 className="m-0 text-[14px] font-semibold">Actions CSM</h3>
+                  <span className="rounded-full bg-[#1A2129] px-2 py-0.5 text-[11px] font-semibold text-[#A7B0BC]">
+                    {pendingActionsCount} à traiter
+                  </span>
                 </div>
-                <ul className="divide-y divide-[rgba(255,255,255,0.04)]">
-                  {actions.map((a) => {
-                    const isDone = doneIds.has(a.id);
-                    return (
-                      <li key={a.id} className="px-4 py-3">
-                        <div className="flex gap-2.5">
-                          <button onClick={() => toggleDone(a.id)}
-                            className={`mt-0.5 h-3.5 w-3.5 shrink-0 rounded border transition-colors ${
-                              isDone ? "border-[#22c55e] bg-[rgba(34,197,94,0.2)]" : "border-[rgba(255,255,255,0.2)] hover:border-[rgba(255,255,255,0.4)]"
-                            }`}>
-                            {isDone && <svg viewBox="0 0 12 12" fill="none" className="h-full w-full p-0.5"><path d="M2 6l3 3 5-5" stroke="#22c55e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                          </button>
-                          <div className="min-w-0 flex-1">
-                            <p className={`text-[12px] leading-snug ${isDone ? "text-[rgba(232,245,239,0.4)] line-through" : "text-brand-cream"}`}>{a.text}</p>
-                            <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                              {a.clients.slice(0, 3).map((cl) => (
-                                <span key={cl.name} className="rounded px-1.5 py-0.5 text-[9px] font-semibold" style={{ backgroundColor: cl.color + "30", color: cl.color }}>{cl.name}</span>
-                              ))}
-                              {a.clients.length > 3 && <span className="rounded bg-[rgba(255,255,255,0.07)] px-1.5 py-0.5 text-[9px] text-[rgba(232,245,239,0.5)]">+{a.clients.length - 3}</span>}
-                              {a.overdue && !isDone && <span className="rounded bg-[rgba(239,68,68,0.15)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.5px] text-[#ef4444]">En retard</span>}
+                {actions.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2.5 px-2 py-4 text-center">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#1A2129] text-[#6B7585]">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                      </svg>
+                    </div>
+                    <p className="m-0 text-[12.5px] leading-relaxed text-[#A7B0BC]">
+                      Tu n&apos;as pas de tâche cross-clients en cours. Profite-en pour anticiper.
+                    </p>
+                  </div>
+                ) : (
+                  <ul className="m-0 list-none divide-y divide-[#1F2832] p-0">
+                    {actions.map((a) => {
+                      const isDone = doneIds.has(a.id);
+                      return (
+                        <li key={a.id} className="py-2.5 first:pt-0">
+                          <div className="flex gap-2.5">
+                            <button onClick={() => toggleDone(a.id)}
+                              className={`mt-0.5 h-3.5 w-3.5 shrink-0 rounded border transition-colors ${
+                                isDone ? "border-[#5EEAB0] bg-[rgba(94,234,176,0.2)]" : "border-[#2A3441] hover:border-[#4A5260]"
+                              }`}>
+                              {isDone && <svg viewBox="0 0 12 12" fill="none" className="h-full w-full p-0.5"><path d="M2 6l3 3 5-5" stroke="#5EEAB0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                            </button>
+                            <div className="min-w-0 flex-1">
+                              <p className={`m-0 text-[12.5px] leading-snug ${isDone ? "text-[#4A5260] line-through" : "text-[#F2F5F8]"}`}>{a.text}</p>
+                              <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                                {a.clients.slice(0, 3).map((cl) => (
+                                  <span key={cl.name} className="rounded px-1.5 py-0.5 text-[9px] font-semibold" style={{ backgroundColor: cl.color + "30", color: cl.color }}>{cl.name}</span>
+                                ))}
+                                {a.clients.length > 3 && <span className="rounded bg-[#1A2129] px-1.5 py-0.5 text-[9px] text-[#6B7585]">+{a.clients.length - 3}</span>}
+                                {a.overdue && !isDone && <span className="rounded bg-[rgba(255,107,107,0.12)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.04em] text-[#FF6B6B]">En retard</span>}
+                              </div>
+                              <p className="m-0 mt-1 text-[10px] text-[#4A5260]">{a.echeance}</p>
                             </div>
-                            <p className="mt-1 text-[10px] text-[rgba(232,245,239,0.35)]">{a.echeance}</p>
                           </div>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-                <div className="border-t border-[rgba(255,255,255,0.06)] px-4 py-2.5">
-                  <button onClick={() => setShowAddModal(true)}
-                    className="text-[11px] font-medium text-[rgba(94,234,212,0.7)] hover:text-[#a8e895]">
-                    + Ajouter une action
-                  </button>
-                </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                <button onClick={() => setShowAddModal(true)}
+                  className="mt-3 flex w-full items-center gap-2 rounded-[10px] border border-dashed border-[#2A3441] bg-[#1A2129] px-3 py-2.5 text-[12.5px] font-medium text-[#A7B0BC] transition-colors hover:border-[rgba(94,234,176,0.25)] hover:text-[#5EEAB0]">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                  Ajouter une action
+                </button>
               </div>
 
               {/* Prochaines churn notices */}
@@ -505,53 +625,58 @@ export default function CsmHomePage() {
                   .sort((a, b) => a.days - b.days)
                   .slice(0, 5);
                 return (
-                  <div className="rounded-[14px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.02)]">
-                    <div className="border-b border-[rgba(255,255,255,0.06)] px-4 py-3">
-                      <h3 className="text-[13px] font-semibold text-brand-cream">Prochaines churn notices</h3>
-                      <p className="mt-0.5 text-[10px] text-[rgba(232,245,239,0.4)]">Top 5 · triés par date d&apos;échéance</p>
+                  <div className="rounded-[14px] border border-[#1F2832] bg-[#131922] p-[18px]">
+                    <div className="mb-3.5 flex items-center justify-between">
+                      <h3 className="m-0 text-[14px] font-semibold">Prochaines churn notices</h3>
+                      <span className="rounded-full bg-[#1A2129] px-2 py-0.5 text-[11px] font-semibold text-[#A7B0BC]">Top 5</span>
                     </div>
-                    <ul className="divide-y divide-[rgba(255,255,255,0.04)]">
-                      {sorted.length === 0 && (
-                        <li className="px-4 py-6 text-center text-[11px] text-[rgba(232,245,239,0.4)]">
-                          Aucune churn notice à venir.
-                        </li>
-                      )}
-                      {sorted.map((c) => {
-                        const col = renewalColor(c.days);
-                        const cfg = statutConfig(c.statut);
-                        return (
-                          <li key={c.id}
-                            onClick={() => router.push(`/csm/clients/${c.id}`)}
-                            className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-[rgba(255,255,255,0.02)]">
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] text-[11px] font-bold"
-                              style={{ backgroundColor: c.color + "30", color: c.color }}>
-                              {c.initials}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="truncate text-[12px] font-semibold text-brand-cream">{c.name}</span>
-                                <span className="shrink-0 text-[11px] font-bold tabular-nums" style={{ color: col }}>{c.days}j</span>
+                    {sorted.length === 0 ? (
+                      <div className="flex flex-col items-center gap-2.5 px-2 py-4 text-center">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[rgba(94,234,176,0.12)] text-[#5EEAB0]">
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+                          </svg>
+                        </div>
+                        <p className="m-0 text-[12.5px] leading-relaxed text-[#A7B0BC]">
+                          Aucune churn notice à venir. Tes contrats sont sécurisés sur les 90 prochains jours.
+                        </p>
+                      </div>
+                    ) : (
+                      <ul className="m-0 list-none divide-y divide-[#1F2832] p-0">
+                        {sorted.map((c) => {
+                          const col = renewalColor(c.days);
+                          const cfg = statutConfig(c.statut);
+                          return (
+                            <li key={c.id} onClick={() => router.push(`/csm/clients/${c.id}`)}
+                              className="flex cursor-pointer items-center gap-3 py-2.5 first:pt-0">
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] text-[11px] font-semibold"
+                                style={{ backgroundColor: c.color + "22", color: c.color }}>
+                                {c.initials}
                               </div>
-                              <div className="mt-0.5 flex items-center gap-1.5">
-                                <span className="text-[10px] text-[rgba(232,245,239,0.4)]">{formatIsoFr(c.churnNotice ?? "")}</span>
-                                <span className="text-[rgba(232,245,239,0.2)]">·</span>
-                                <span className="inline-flex items-center gap-1 text-[10px]" style={{ color: cfg.text }}>
-                                  <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: cfg.dot }} />
-                                  {cfg.label}
-                                </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="truncate text-[12.5px] font-semibold text-[#F2F5F8]">{c.name}</span>
+                                  <span className="shrink-0 text-[11px] font-semibold tabular-nums" style={{ color: col }}>{c.days}j</span>
+                                </div>
+                                <div className="mt-0.5 flex items-center gap-1.5">
+                                  <span className="text-[10px] text-[#6B7585]">{formatIsoFr(c.churnNotice ?? "")}</span>
+                                  <span className="text-[#2A3441]">·</span>
+                                  <span className="inline-flex items-center gap-1 text-[10px]" style={{ color: cfg.text }}>
+                                    <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: cfg.dot }} />
+                                    {cfg.label}
+                                  </span>
+                                </div>
                               </div>
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
                   </div>
                 );
               })()}
-
             </div>
           </div>
-
         </>
       )}
 
@@ -785,30 +910,30 @@ export default function CsmHomePage() {
       {/* ── Add action modal ── */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowAddModal(false)}>
-          <div className="w-full max-w-md rounded-[16px] border border-[rgba(255,255,255,0.1)] bg-[#061a16] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="mb-4 text-[14px] font-semibold text-brand-cream">Nouvelle action CSM</h3>
+          <div className="w-full max-w-md rounded-[16px] border border-[#1F2832] bg-[#131922] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-4 text-[14px] font-semibold text-[#F2F5F8]">Nouvelle action CSM</h3>
             <div className="space-y-3">
               <div>
-                <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Action</label>
+                <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[#A7B0BC]">Action</label>
                 <input autoFocus type="text" value={newText} onChange={(e) => setNewText(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleAddAction()}
                   placeholder="Décrivez l'action..."
-                  className="w-full rounded-[8px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2 text-[13px] text-brand-cream placeholder-[rgba(232,245,239,0.3)] outline-none focus:border-[rgba(94,234,212,0.5)]" />
+                  className="w-full rounded-[8px] border border-[#1F2832] bg-[#1A2129] px-3 py-2 text-[13px] text-[#F2F5F8] placeholder-[#6B7585] outline-none focus:border-[rgba(94,234,176,0.5)]" />
               </div>
               <div>
-                <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Échéance</label>
+                <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[#A7B0BC]">Échéance</label>
                 <input type="date" value={newEcheance} onChange={(e) => setNewEcheance(e.target.value)}
                   style={{ colorScheme: "dark" }}
-                  className="w-full rounded-[8px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2 text-[13px] text-brand-cream outline-none focus:border-[rgba(94,234,212,0.5)]" />
+                  className="w-full rounded-[8px] border border-[#1F2832] bg-[#1A2129] px-3 py-2 text-[13px] text-[#F2F5F8] outline-none focus:border-[rgba(94,234,176,0.5)]" />
               </div>
             </div>
             <div className="mt-5 flex justify-end gap-2">
               <button onClick={() => setShowAddModal(false)}
-                className="rounded-[8px] px-4 py-2 text-[12px] text-[rgba(232,245,239,0.5)] hover:text-brand-cream">
+                className="rounded-[8px] px-4 py-2 text-[12px] text-[#A7B0BC] hover:text-[#F2F5F8]">
                 Annuler
               </button>
               <button onClick={handleAddAction} disabled={!newText.trim()}
-                className="rounded-[8px] bg-[rgba(94,234,212,0.9)] px-4 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-[#5eead4] disabled:opacity-40">
+                className="rounded-[8px] bg-[#5EEAB0] px-4 py-2 text-[12px] font-semibold text-[#0A2018] transition-[filter] hover:brightness-105 disabled:opacity-40">
                 Ajouter
               </button>
             </div>
