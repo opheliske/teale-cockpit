@@ -77,6 +77,16 @@ The `on_auth_user_created` trigger creates the matching `profiles` row automatic
 
 `src/proxy.ts` (Next.js 16 renamed `middleware` → `proxy`) redirects unauthenticated users to `/login`, sends logged-in users to their home, and blocks clients from `/csm`. The `(client)` route group additionally uses `ClientGuard` to bind the active client context. RLS remains the real data boundary.
 
+### 5. Seed demo data (optional)
+
+To rebuild a clean demo dataset in one command:
+
+```bash
+npm run seed-demo
+```
+
+Creates 3 demo clients (ids `demo-…`) with a yearly plan, CSM actions and health alerts. Idempotent and safe — it only upserts/replaces its own demo rows and never touches real data. Uses the `service_role` key from `.env.local`.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

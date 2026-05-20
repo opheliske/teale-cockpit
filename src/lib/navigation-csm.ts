@@ -23,7 +23,6 @@ export const csmNavSections: NavSection[] = [
     items: [
       { label: "Catalogue d'ateliers", href: "/csm/catalogue" },
       { label: "Kits de communication", href: "/csm/kits" },
-      { label: "Situation d'urgence", href: "/csm/urgence" },
     ],
   },
 ];

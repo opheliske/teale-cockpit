@@ -272,15 +272,15 @@ export default function CsmHomePage() {
     });
   };
 
-  const handleAddAction = () => {
+  const handleAddAction = async () => {
     if (!newText.trim()) return;
-    const newAction: HomeAction = {
-      id: Date.now(),
+    // Persist to Supabase; the clientActionsStore subscription merges the
+    // saved row back into `actions`.
+    await clientActionsStore.add({
       text: newText.trim(),
       clients: [],
       echeance: newEcheance ? formatDateFr(newEcheance) : "Sans échéance",
-    };
-    setActions((prev) => [...prev, newAction]);
+    });
     setNewText("");
     setNewEcheance("");
     setShowAddModal(false);
