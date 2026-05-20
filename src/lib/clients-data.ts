@@ -12,6 +12,7 @@ export type Client = {
   action: string;
   actionDate: string;
   renouvDate: string;
+  churnNotice?: string; // ISO date, optional
   arr: number;
 };
 

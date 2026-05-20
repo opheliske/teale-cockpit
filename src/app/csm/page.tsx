@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { CLIENTS, HOME_ACTIONS, RENEWALS, CHURN_NOTICES, type Statut, type HomeAction, type Client } from "@/lib/clients-data";
+import { CLIENTS, HOME_ACTIONS, type Statut, type HomeAction, type Client } from "@/lib/clients-data";
 import { clientActionsStore } from "@/lib/client-actions-store";
 import { csmEventsStore, type CsmEvent } from "@/lib/csm-events-store";
 import { csmClientsStore, type StoredCsmClient } from "@/lib/csm-clients-store";
@@ -157,6 +157,7 @@ function storeToClient(s: StoredCsmClient): Client {
     action: "—",
     actionDate: "",
     renouvDate: s.contractEnd || "—",
+    churnNotice: s.churnNotice || "",
     arr: s.arr || 0,
   };
 }
@@ -209,14 +210,27 @@ export default function CsmHomePage() {
 
   const allClients = useMemo(() => [...CLIENTS, ...storeClients], [storeClients]);
 
+  // Contracts renewing within 90 days, derived from the real client list.
+  const renewals = useMemo(
+    () =>
+      allClients
+        .map((c) => ({ ...c, days: daysUntilIso(c.renouvDate) }))
+        .filter((c) => Number.isFinite(c.days) && c.days >= 0 && c.days <= 90)
+        .sort((a, b) => a.days - b.days),
+    [allClients],
+  );
+  const urgentRenewals = useMemo(
+    () => renewals.filter((r) => r.days <= 30),
+    [renewals],
+  );
+
   // ── KPIs ──
   const sainCount = allClients.filter((c) => c.statut === "SAIN").length;
   const vigilanceCount = allClients.filter((c) => c.statut === "VIGILANCE").length;
   const risqueCount = allClients.filter((c) => c.statut === "À RISQUE").length;
-  const renewalARR = RENEWALS.reduce((s, r) => s + r.arr, 0);
+  const renewalARR = renewals.reduce((s, r) => s + (r.arr || 0), 0);
   const pendingActionsCount = actions.filter((a) => !doneIds.has(a.id)).length;
   const overdueActionsCount = actions.filter((a) => !!a.overdue && !doneIds.has(a.id)).length;
-  const urgentRenewals = RENEWALS.filter((r) => r.days <= 30);
 
   const FILTER_LABELS: Record<Filter, string> = {
     Tous: `Tous (${allClients.length})`,
@@ -246,7 +260,7 @@ export default function CsmHomePage() {
     if (filter === "Sains") return c.statut === "SAIN";
     if (filter === "Vigilance") return c.statut === "VIGILANCE";
     if (filter === "Risque") return c.statut === "À RISQUE";
-    if (filter === "Renouvellement") return RENEWALS.some((r) => r.name === c.name);
+    if (filter === "Renouvellement") return renewals.some((r) => r.id === c.id);
     return true;
   });
 
@@ -351,13 +365,13 @@ export default function CsmHomePage() {
               <p className="mb-2 text-[11px] font-semibold text-brand-cream">Renouvellements à venir</p>
               <div className="flex items-center gap-3">
                 <div className="relative shrink-0">
-                  <DonutChart pct={allClients.length > 0 ? RENEWALS.length / allClients.length : 0} color="#f59e0b" size={68} />
+                  <DonutChart pct={allClients.length > 0 ? renewals.length / allClients.length : 0} color="#f59e0b" size={68} />
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-[14px] font-bold text-brand-cream">{RENEWALS.length}/{allClients.length}</span>
+                    <span className="text-[14px] font-bold text-brand-cream">{renewals.length}/{allClients.length}</span>
                   </div>
                 </div>
                 <div>
-                  <p className="text-[11px] text-[rgba(232,245,239,0.55)]">{RENEWALS.length} contrats à fermer d&apos;ici 90 jours sur {allClients.length} comptes</p>
+                  <p className="text-[11px] text-[rgba(232,245,239,0.55)]">{renewals.length} contrats à fermer d&apos;ici 90 jours sur {allClients.length} comptes</p>
                   <p className="mt-1.5 text-[12px] font-semibold text-brand-cream">{renewalARR} k€ ARR concerné</p>
                 </div>
               </div>
@@ -497,8 +511,10 @@ export default function CsmHomePage() {
 
               {/* Prochaines churn notices */}
               {(() => {
-                const sorted = [...CHURN_NOTICES]
-                  .map((c) => ({ ...c, days: daysUntilIso(c.churnNotice) }))
+                const sorted = allClients
+                  .filter((c) => !!c.churnNotice)
+                  .map((c) => ({ ...c, days: daysUntilIso(c.churnNotice ?? "") }))
+                  .filter((c) => Number.isFinite(c.days))
                   .sort((a, b) => a.days - b.days)
                   .slice(0, 5);
                 return (
@@ -508,6 +524,11 @@ export default function CsmHomePage() {
                       <p className="mt-0.5 text-[10px] text-[rgba(232,245,239,0.4)]">Top 5 · triés par date d&apos;échéance</p>
                     </div>
                     <ul className="divide-y divide-[rgba(255,255,255,0.04)]">
+                      {sorted.length === 0 && (
+                        <li className="px-4 py-6 text-center text-[11px] text-[rgba(232,245,239,0.4)]">
+                          Aucune churn notice à venir.
+                        </li>
+                      )}
                       {sorted.map((c) => {
                         const col = renewalColor(c.days);
                         const cfg = statutConfig(c.statut);
@@ -525,7 +546,7 @@ export default function CsmHomePage() {
                                 <span className="shrink-0 text-[11px] font-bold tabular-nums" style={{ color: col }}>{c.days}j</span>
                               </div>
                               <div className="mt-0.5 flex items-center gap-1.5">
-                                <span className="text-[10px] text-[rgba(232,245,239,0.4)]">{formatIsoFr(c.churnNotice)}</span>
+                                <span className="text-[10px] text-[rgba(232,245,239,0.4)]">{formatIsoFr(c.churnNotice ?? "")}</span>
                                 <span className="text-[rgba(232,245,239,0.2)]">·</span>
                                 <span className="inline-flex items-center gap-1 text-[10px]" style={{ color: cfg.text }}>
                                   <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: cfg.dot }} />
@@ -660,7 +681,7 @@ export default function CsmHomePage() {
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 {alertClients.map((c) => {
-                  const renewal = RENEWALS.find((r) => r.name === c.name);
+                  const renewal = renewals.find((r) => r.id === c.id);
                   const cfg = statutConfig(c.statut);
                   return (
                     <div key={c.id} onClick={() => router.push(`/csm/clients/${c.id}`)}
@@ -743,10 +764,10 @@ export default function CsmHomePage() {
               <div className="overflow-hidden rounded-[12px] border border-[rgba(255,255,255,0.07)]">
                 <ul className="divide-y divide-[rgba(255,255,255,0.04)]">
                   {urgentRenewals.map((r) => {
-                    const client = allClients.find((c) => c.name === r.name);
+                    const cfg = statutConfig(r.statut);
                     return (
-                      <li key={r.name} onClick={() => client && router.push(`/csm/clients/${client.id}`)}
-                        className={`flex items-center gap-3 bg-[rgba(255,255,255,0.01)] px-4 py-3 transition-colors ${client ? "cursor-pointer hover:bg-[rgba(255,255,255,0.03)]" : ""}`}>
+                      <li key={r.id} onClick={() => router.push(`/csm/clients/${r.id}`)}
+                        className="flex cursor-pointer items-center gap-3 bg-[rgba(255,255,255,0.01)] px-4 py-3 transition-colors hover:bg-[rgba(255,255,255,0.03)]">
                         <div className="relative shrink-0">
                           <DonutChart pct={1 - r.days / 90} color="#ef4444" size={40} />
                           <div className="absolute inset-0 flex items-center justify-center">
@@ -758,9 +779,12 @@ export default function CsmHomePage() {
                             <span className="text-[13px] font-semibold text-brand-cream">{r.name}</span>
                             <span className="text-[12px] font-semibold text-[#84d4a6]">{r.arr} k€</span>
                           </div>
-                          <p className="mt-0.5 text-[10px] text-[rgba(232,245,239,0.4)]">{r.status}</p>
+                          <p className="mt-0.5 inline-flex items-center gap-1 text-[10px]" style={{ color: cfg.text }}>
+                            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: cfg.dot }} />
+                            {cfg.label}
+                          </p>
                         </div>
-                        {client && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-[rgba(232,245,239,0.3)]"><path d="M9 18l6-6-6-6" /></svg>}
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-[rgba(232,245,239,0.3)]"><path d="M9 18l6-6-6-6" /></svg>
                       </li>
                     );
                   })}
