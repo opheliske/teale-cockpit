@@ -402,6 +402,9 @@ export default function ClientDetailView({ id }: { id: string }) {
   }));
   const [editDraft, setEditDraft] = useState<LocalDetail | null>(null);
   const [showEditDetails, setShowEditDetails] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [localDocs, setLocalDocs] = useState<StoredDocument[]>(() => docsStore.getDocs());
   const [showDocModal, setShowDocModal] = useState(false);
   const [editingDoc, setEditingDoc] = useState<StoredDocument | null>(null);
@@ -976,7 +979,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                 Voir l&apos;espace client
               </button>
               <button
-                onClick={() => { setEditDraft({ ...localDetail }); setShowEditDetails(true); }}
+                onClick={() => { setEditDraft({ ...localDetail }); setEditError(""); setShowEditDetails(true); }}
                 className="inline-flex items-center gap-1.5 rounded-[9px] border border-[rgba(94,234,212,0.25)] px-3 py-1.5 text-[12px] font-medium text-[#5eead4] transition-all hover:bg-[rgba(94,234,212,0.08)]"
               >
                 ✏ Modifier les détails
@@ -2769,17 +2772,30 @@ export default function ClientDetailView({ id }: { id: string }) {
 
           </div>
 
+          {/* Error */}
+          {editError && (
+            <div className="mx-6 mb-1 rounded-[8px] bg-[rgba(239,68,68,0.1)] px-3 py-2 text-[12px] text-[#fca5a5]">
+              {editError}
+            </div>
+          )}
+
           {/* Footer */}
-          <div className="flex items-center justify-end gap-2 border-t border-[#1a3530] px-6 py-4">
-            <button onClick={() => setShowEditDetails(false)} className="rounded-[9px] px-4 py-2 text-[12px] text-[rgba(232,245,239,0.5)] hover:text-[#e8f5ef]">
-              Annuler
-            </button>
+          <div className="flex items-center justify-between border-t border-[#1a3530] px-6 py-4">
             <button
-              onClick={() => {
-                setLocalDetail(editDraft);
-                setShowEditDetails(false);
-                if (storedClient) {
-                  csmClientsStore.add({
+              onClick={() => { setEditError(""); setShowDeleteConfirm(true); }}
+              className="rounded-[9px] px-3 py-2 text-[12px] font-medium text-[#fca5a5] transition-colors hover:bg-[rgba(239,68,68,0.1)]"
+            >
+              Supprimer ce client
+            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setShowEditDetails(false)} className="rounded-[9px] px-4 py-2 text-[12px] text-[rgba(232,245,239,0.5)] hover:text-[#e8f5ef]">
+                Annuler
+              </button>
+              <button
+                onClick={async () => {
+                  if (!storedClient) return;
+                  setEditError("");
+                  const { error } = await csmClientsStore.add({
                     ...storedClient,
                     collab: editDraft.collab,
                     arr: editDraft.arr,
@@ -2792,11 +2808,60 @@ export default function ClientDetailView({ id }: { id: string }) {
                     produits: editDraft.produits,
                     ownerCsmId: editDraft.ownerCsmId,
                   });
-                }
-              }}
-              className="rounded-[9px] bg-[rgba(94,234,212,0.9)] px-5 py-2 text-[12px] font-semibold text-[#061a16] transition-colors hover:bg-[#5eead4]"
+                  if (error) {
+                    setEditError(`Échec de l'enregistrement : ${error}`);
+                    return;
+                  }
+                  setLocalDetail(editDraft);
+                  setShowEditDetails(false);
+                }}
+                className="rounded-[9px] bg-[rgba(94,234,212,0.9)] px-5 py-2 text-[12px] font-semibold text-[#061a16] transition-colors hover:bg-[#5eead4]"
+              >
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ── Delete client confirmation ── */}
+    {showDeleteConfirm && (
+      <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-[2px]" onClick={() => !deleting && setShowDeleteConfirm(false)}>
+        <div className="w-full max-w-[400px] rounded-[18px] border border-[rgba(239,68,68,0.25)] bg-[#061a16] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <h3 className="text-[15px] font-semibold text-[#e8f5ef]">Supprimer {client.name} ?</h3>
+          <p className="mt-2 text-[12px] leading-relaxed text-[#94a8a0]">
+            Cette action est définitive. Le client et toutes ses données (plan, événements, documents, alertes) seront supprimés.
+          </p>
+          {editError && (
+            <div className="mt-3 rounded-[8px] bg-[rgba(239,68,68,0.1)] px-3 py-2 text-[12px] text-[#fca5a5]">
+              {editError}
+            </div>
+          )}
+          <div className="mt-5 flex justify-end gap-2">
+            <button
+              onClick={() => setShowDeleteConfirm(false)}
+              disabled={deleting}
+              className="rounded-[9px] px-4 py-2 text-[12px] text-[rgba(232,245,239,0.5)] hover:text-[#e8f5ef] disabled:opacity-40"
             >
-              Enregistrer
+              Annuler
+            </button>
+            <button
+              onClick={async () => {
+                setEditError("");
+                setDeleting(true);
+                const { error } = await csmClientsStore.remove(id);
+                setDeleting(false);
+                if (error) {
+                  setEditError(`Suppression impossible : ${error}`);
+                  return;
+                }
+                router.push("/csm/suivi-clients");
+              }}
+              disabled={deleting}
+              className="rounded-[9px] bg-[#ef4444] px-4 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-[#dc2626] disabled:opacity-40"
+            >
+              {deleting ? "Suppression…" : "Supprimer définitivement"}
             </button>
           </div>
         </div>

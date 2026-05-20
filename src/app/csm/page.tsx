@@ -6,6 +6,7 @@ import { CLIENTS, HOME_ACTIONS, type Statut, type HomeAction, type Client } from
 import { clientActionsStore } from "@/lib/client-actions-store";
 import { csmEventsStore, type CsmEvent } from "@/lib/csm-events-store";
 import { csmClientsStore, type StoredCsmClient } from "@/lib/csm-clients-store";
+import { useAuth } from "@/lib/auth";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -159,6 +160,8 @@ const FILTERS: Filter[] = ["Tous", "Sains", "Vigilance", "Risque", "Renouvelleme
 
 export default function CsmHomePage() {
   const router = useRouter();
+  const { profile } = useAuth();
+  const firstName = profile?.full_name?.trim().split(/\s+/)[0] ?? "";
   const [activeTab, setActiveTab] = useState<"Portfolio" | "Activites" | "Alertes">("Portfolio");
   const [filter, setFilter] = useState<Filter>("Tous");
   const [search, setSearch] = useState("");
@@ -279,7 +282,9 @@ export default function CsmHomePage() {
           <span className="h-1.5 w-1.5 rounded-full bg-[#22c55e]" />
           {dateStr}
         </div>
-        <h1 className="text-[28px] font-bold tracking-[-0.5px] text-brand-cream">Bonjour Lucie 👋</h1>
+        <h1 className="text-[28px] font-bold tracking-[-0.5px] text-brand-cream">
+          Bonjour{firstName ? ` ${firstName}` : ""} 👋
+        </h1>
         <p className="mt-1 max-w-[640px] text-[13px] leading-relaxed text-[#94a8a0]">
           Voici l&apos;état de votre portefeuille de {allClients.length} comptes Teale.{" "}
           {vigilanceCount + risqueCount > 0

@@ -113,15 +113,43 @@ export const csmClientsStore = {
   // True once the initial load has completed (with or without rows).
   isLoaded: (): boolean => _loaded,
 
-  // Creates or updates a client. Returns the error message (or null) so the
-  // caller can surface a failure instead of navigating into a broken page.
+  // Creates or updates a client. An existing client uses a real UPDATE (only
+  // the provided columns), so it can't fail on unrelated NOT NULL columns the
+  // way an upsert's candidate INSERT row would. Returns the error message
+  // (or null) so the caller can surface a failure.
   add: async (client: StoredCsmClient): Promise<{ error: string | null }> => {
-    const { error } = await supabase.from("clients").upsert(toRow(client));
+    const exists = _clients.some((c) => c.id === client.id);
+    const { error } = exists
+      ? await supabase.from("clients").update(toRow(client)).eq("id", client.id)
+      : await supabase.from("clients").insert(toRow(client));
     if (error) {
       console.error("[csm-clients-store] add", error);
       return { error: error.message };
     }
     _clients = [client, ..._clients.filter((c) => c.id !== client.id)];
+    notify();
+    return { error: null };
+  },
+
+  // Deletes a client and its dependent data. The clients row is deleted first:
+  // if it fails (e.g. a client account is still attached), nothing else is
+  // touched. Otherwise the per-client rows are cleaned up.
+  remove: async (id: string): Promise<{ error: string | null }> => {
+    const { error } = await supabase.from("clients").delete().eq("id", id);
+    if (error) {
+      console.error("[csm-clients-store] remove", error);
+      return { error: error.message };
+    }
+    await Promise.all([
+      supabase.from("plan_state").delete().eq("client_id", id),
+      supabase.from("csm_events").delete().eq("client_id", id),
+      supabase.from("health_entries").delete().eq("client_id", id),
+      supabase.from("documents").delete().eq("client_id", id),
+      supabase.from("plan_comments").delete().eq("client_id", id),
+      supabase.from("target_labels").delete().eq("client_id", id),
+      supabase.from("target_item_assignments").delete().eq("client_id", id),
+    ]);
+    _clients = _clients.filter((c) => c.id !== id);
     notify();
     return { error: null };
   },

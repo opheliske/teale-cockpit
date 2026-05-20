@@ -65,10 +65,11 @@ export function useAuth() {
  */
 export async function signOut() {
   try {
-    await supabase.auth.signOut();
+    // scope "local" clears the local session without a network round-trip,
+    // so the redirect can't hang on a slow/offline revocation request.
+    await supabase.auth.signOut({ scope: "local" });
   } catch {
-    // Ignore — even if the server revocation fails, we still clear the local
-    // session and leave the app.
+    // Ignore — we still clear the local context and leave the app.
   }
   impersonationStore.set(null);
   window.location.href = "/login";
