@@ -87,6 +87,14 @@ npm run seed-demo
 
 Creates 3 demo clients (ids `demo-…`) with a yearly plan, CSM actions and health alerts. Idempotent and safe — it only upserts/replaces its own demo rows and never touches real data. Uses the `service_role` key from `.env.local`.
 
+To create ready-to-use demo login accounts (one CSM + one Client):
+
+```bash
+npm run seed-users
+```
+
+Creates `csm.demo@teale.io` (CSM) and `client.demo@teale.io` (Client, attached to the `demo-acme` company or the first existing client) — both with the password `TealeDemo2026!`. Idempotent: existing accounts are left untouched. Run `npm run seed-demo` first so the demo company exists.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

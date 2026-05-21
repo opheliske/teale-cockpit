@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "create-user": "node scripts/create-user.mjs",
-    "seed-demo": "node scripts/seed-demo.mjs"
+    "seed-demo": "node scripts/seed-demo.mjs",
+    "seed-users": "node scripts/seed-users.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",
