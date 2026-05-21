@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { notifyChange, watchChanges } from "@/lib/sync";
 
 export type TargetLabel = { id: string; name: string; color: string };
 
@@ -23,6 +24,27 @@ const listeners: (() => void)[] = [];
 function notify() {
   listeners.forEach((l) => l());
 }
+
+// Re-fetch a client's labels + assignments (no seeding — used on reload).
+async function reloadClient(clientId: string) {
+  const [{ data: labelRows }, { data: assignRows }] = await Promise.all([
+    supabase.from("target_labels").select("*").eq("client_id", clientId),
+    supabase.from("target_item_assignments").select("*").eq("client_id", clientId),
+  ]);
+  labels = { ...labels, [clientId]: (labelRows as TargetLabel[]) ?? [] };
+  const clientAssigns: Record<number, string[]> = {};
+  for (const row of assignRows ?? []) {
+    const itemId = Number(row.item_id);
+    clientAssigns[itemId] = [...(clientAssigns[itemId] ?? []), row.label_id as string];
+  }
+  assigns = { ...assigns, [clientId]: clientAssigns };
+}
+
+// Re-fetch when labels/assignments changed in another tab or from another user.
+watchChanges(["target_labels", "target_item_assignments"], async () => {
+  for (const clientId of _loadedClients) await reloadClient(clientId);
+  notify();
+});
 
 export const targetsStore = {
   getLabels: (clientId: string): TargetLabel[] => labels[clientId] ?? [],
@@ -94,6 +116,7 @@ export const targetsStore = {
     }
     labels = { ...labels, [clientId]: [...(labels[clientId] ?? []), newLabel] };
     notify();
+    notifyChange("target_labels");
     return id;
   },
 
@@ -108,6 +131,7 @@ export const targetsStore = {
     }
     assigns = { ...assigns, [clientId]: next };
     notify();
+    notifyChange("target_labels");
   },
 
   toggleItemTarget: async (clientId: string, itemId: number, labelId: string) => {
@@ -133,6 +157,7 @@ export const targetsStore = {
       };
     }
     notify();
+    notifyChange("target_item_assignments");
   },
 
   setItemTargets: async (clientId: string, itemId: number, labelIds: string[]) => {
@@ -148,6 +173,7 @@ export const targetsStore = {
     }
     assigns = { ...assigns, [clientId]: { ...(assigns[clientId] ?? {}), [itemId]: labelIds } };
     notify();
+    notifyChange("target_item_assignments");
   },
 
   subscribe: (listener: () => void) => {

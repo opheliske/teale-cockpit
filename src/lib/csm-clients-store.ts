@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { notifyChange, watchChanges } from "./sync";
 import type { ContractFormule, ProduitTeale, Client, ClientDetail, Statut } from "./clients-data";
 
 export type StoredCsmClient = {
@@ -87,26 +88,35 @@ const _listeners = new Set<() => void>();
 
 function notify() { _listeners.forEach((l) => l()); }
 
+// Fetches the clients from Supabase and notifies subscribers.
+async function fetchClients(): Promise<void> {
+  // Wait for the session before querying — otherwise the request can go
+  // out unauthenticated and RLS returns an empty client list.
+  await supabase.auth.getUser();
+  const { data, error } = await supabase
+    .from("clients")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.error("[csm-clients-store] load", error);
+    return;
+  }
+  _clients = (data ?? []).map((r) => fromRow(r as DbRow));
+  _loaded = true;
+  notify();
+}
+
 // Loads the clients once. Returns the same promise on every call so late
 // subscribers can await it instead of being silently skipped.
 function ensureLoaded(): Promise<void> {
-  if (!_loadPromise) {
-    _loadPromise = (async () => {
-      // Wait for the session before querying — otherwise the request can go
-      // out unauthenticated and RLS returns an empty client list.
-      await supabase.auth.getUser();
-      const { data, error } = await supabase
-        .from("clients")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) console.error("[csm-clients-store] load", error);
-      _clients = (data ?? []).map((r) => fromRow(r as DbRow));
-      _loaded = true;
-      notify();
-    })();
-  }
+  if (!_loadPromise) _loadPromise = fetchClients();
   return _loadPromise;
 }
+
+// Re-fetch when a client changed in another tab or from another user.
+watchChanges(["clients"], () => {
+  void fetchClients();
+});
 
 export const csmClientsStore = {
   getAll: (): StoredCsmClient[] => _clients,
@@ -131,6 +141,7 @@ export const csmClientsStore = {
     }
     _clients = [client, ..._clients.filter((c) => c.id !== client.id)];
     notify();
+    notifyChange("clients");
     return { error: null };
   },
 
@@ -154,6 +165,7 @@ export const csmClientsStore = {
     ]);
     _clients = _clients.filter((c) => c.id !== id);
     notify();
+    notifyChange("clients");
     return { error: null };
   },
 

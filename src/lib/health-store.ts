@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { notifyChange, watchChanges } from "@/lib/sync";
 
 export type HealthStatut = "SAIN" | "VIGILANCE" | "À RISQUE";
 
@@ -27,6 +28,19 @@ const listeners: (() => void)[] = [];
 function notify() {
   listeners.forEach((l) => l());
 }
+
+// Re-fetch every loaded client when a health entry changed elsewhere.
+watchChanges(["health_entries"], async () => {
+  for (const clientId of Object.keys(state)) {
+    const { data } = await supabase
+      .from("health_entries")
+      .select("*")
+      .eq("client_id", clientId)
+      .order("iso_date");
+    state = { ...state, [clientId]: data ? data.map(fromRow) : [] };
+  }
+  notify();
+});
 
 export const healthStore = {
   getEntries: (clientId: string): HealthEntry[] =>
@@ -57,6 +71,7 @@ export const healthStore = {
     if (data) {
       state = { ...state, [clientId]: [...(state[clientId] ?? []), fromRow(data)] };
       notify();
+      notifyChange("health_entries");
     }
   },
 
@@ -67,6 +82,7 @@ export const healthStore = {
       [clientId]: (state[clientId] ?? []).filter((e) => e.id !== entryId),
     };
     notify();
+    notifyChange("health_entries");
   },
 
   subscribe: (listener: () => void) => {

@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { notifyChange, watchChanges } from "@/lib/sync";
 
 export type PlanComment = {
   id: number;
@@ -23,6 +24,27 @@ function fromRow(row: Record<string, unknown>): PlanComment {
 let _comments: PlanComment[] = [];
 const _loadedThreads = new Set<string>();
 const _listeners = new Set<() => void>();
+
+// Re-fetch every loaded thread when a comment changed elsewhere.
+async function reloadThreads() {
+  for (const threadId of _loadedThreads) {
+    const { data } = await supabase
+      .from("plan_comments")
+      .select("*")
+      .eq("thread_id", threadId)
+      .order("created_at");
+    if (data) {
+      _comments = [
+        ..._comments.filter((c) => c.threadId !== threadId),
+        ...data.map(fromRow),
+      ];
+    }
+  }
+  notify();
+}
+watchChanges(["plan_comments"], () => {
+  void reloadThreads();
+});
 
 function notify() {
   _listeners.forEach((l) => l());
@@ -66,6 +88,7 @@ export const commentsStore = {
     if (data) {
       _comments = [..._comments, fromRow(data)];
       notify();
+      notifyChange("plan_comments");
     }
   },
 

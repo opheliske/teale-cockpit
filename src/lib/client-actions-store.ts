@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { notifyChange, watchChanges } from "@/lib/sync";
 import { HOME_ACTIONS, type HomeAction } from "./clients-data";
 
 let _actions: HomeAction[] = [];
@@ -40,6 +41,19 @@ async function ensureLoaded() {
   _listeners.forEach((l) => l());
 }
 
+// Plain re-fetch (no seeding) when an action changed elsewhere.
+async function reloadActions() {
+  const { data } = await supabase
+    .from("client_actions")
+    .select("*")
+    .order("created_at");
+  _actions = data ? data.map(fromRow) : [];
+  _listeners.forEach((l) => l());
+}
+watchChanges(["client_actions"], () => {
+  void reloadActions();
+});
+
 export const clientActionsStore = {
   getActions: (): HomeAction[] => _actions,
 
@@ -64,6 +78,7 @@ export const clientActionsStore = {
     if (data) {
       _actions = [..._actions, fromRow(data)];
       _listeners.forEach((l) => l());
+      notifyChange("client_actions");
     }
   },
 
@@ -71,13 +86,16 @@ export const clientActionsStore = {
   addLegacy: (action: HomeAction) => {
     _actions = [..._actions, action];
     _listeners.forEach((l) => l());
-    supabase.from("client_actions").insert({
-      text: action.text,
-      clients: action.clients,
-      echeance: action.echeance,
-      overdue: action.overdue ?? false,
-      done: action.done ?? false,
-    });
+    supabase
+      .from("client_actions")
+      .insert({
+        text: action.text,
+        clients: action.clients,
+        echeance: action.echeance,
+        overdue: action.overdue ?? false,
+        done: action.done ?? false,
+      })
+      .then(() => notifyChange("client_actions"));
   },
 
   update: async (id: number, patch: Partial<Omit<HomeAction, "id">>) => {
@@ -91,6 +109,7 @@ export const clientActionsStore = {
     if (data) {
       _actions = _actions.map((a) => (a.id === id ? fromRow(data) : a));
       _listeners.forEach((l) => l());
+      notifyChange("client_actions");
     }
   },
 
@@ -98,6 +117,7 @@ export const clientActionsStore = {
     await supabase.from("client_actions").delete().eq("id", id);
     _actions = _actions.filter((a) => a.id !== id);
     _listeners.forEach((l) => l());
+    notifyChange("client_actions");
   },
 
   subscribe: (listener: () => void): (() => void) => {

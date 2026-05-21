@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { notifyChange, watchChanges } from "@/lib/sync";
 
 export type CsmEvent = {
   id: number;
@@ -32,9 +33,7 @@ let _events: CsmEvent[] = [];
 let _loaded = false;
 const _listeners = new Set<() => void>();
 
-async function ensureLoaded() {
-  if (_loaded) return;
-  _loaded = true;
+async function fetchEvents() {
   const { data } = await supabase
     .from("csm_events")
     .select("*")
@@ -42,6 +41,17 @@ async function ensureLoaded() {
   _events = data ? data.map(fromRow) : [];
   _listeners.forEach((l) => l());
 }
+
+async function ensureLoaded() {
+  if (_loaded) return;
+  _loaded = true;
+  await fetchEvents();
+}
+
+// Re-fetch when an event changed in another tab or from another user.
+watchChanges(["csm_events"], () => {
+  void fetchEvents();
+});
 
 export const csmEventsStore = {
   getEvents: (): CsmEvent[] => _events,
@@ -68,6 +78,7 @@ export const csmEventsStore = {
     if (data) {
       _events = [..._events, fromRow(data)];
       _listeners.forEach((l) => l());
+      notifyChange("csm_events");
     }
   },
 
@@ -75,6 +86,7 @@ export const csmEventsStore = {
     await supabase.from("csm_events").delete().eq("id", id);
     _events = _events.filter((e) => e.id !== id);
     _listeners.forEach((l) => l());
+    notifyChange("csm_events");
   },
 
   subscribe: (listener: () => void): (() => void) => {
