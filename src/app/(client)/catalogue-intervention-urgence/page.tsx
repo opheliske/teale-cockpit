@@ -12,10 +12,7 @@ import {
   type UrgencyModalities,
   type UrgencyType,
 } from "@/lib/urgencies";
-import { impersonationStore } from "@/lib/impersonation-store";
-
-// Active client from the session context (seeded by ClientGuard / login).
-const CLIENT_ID = impersonationStore.get()?.clientId ?? "";
+import { useActiveClient } from "@/lib/client-context";
 
 type ChecklistGroup = {
   id: string;
@@ -514,6 +511,7 @@ function todayIso(): string {
 
 function DeclareUrgencyModal({ onClose }: { onClose: () => void }) {
   const router = useRouter();
+  const { clientId: CLIENT_ID } = useActiveClient();
   const [submitted, setSubmitted] = useState<Urgency | null>(null);
 
   const [type, setType] = useState<UrgencyType>("deces");

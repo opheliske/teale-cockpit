@@ -2,16 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { impersonationStore } from "@/lib/impersonation-store";
+import { useActiveClient } from "@/lib/client-context";
 import { csmClientsStore, type StoredCsmClient } from "@/lib/csm-clients-store";
 import { planStore, type StoredPlanState } from "@/lib/plan-store";
 import { csmEventsStore, type CsmEvent } from "@/lib/csm-events-store";
 import { docsStore, type StoredDocument } from "@/lib/docs-store";
 import { openClientFile } from "@/lib/storage";
-
-// The active client comes from the session context (seeded by ClientGuard /
-// the login flow). All data below is also RLS-scoped to this client server-side.
-const CLIENT_ID = impersonationStore.get()?.clientId ?? "";
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -37,6 +33,8 @@ const QUARTER_OF_MONTH = ["Q1", "Q1", "Q1", "Q2", "Q2", "Q2", "Q3", "Q3", "Q3", 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ClientHomePage() {
+  // Active client resolved by ClientGuard (no module-load race).
+  const { clientId: CLIENT_ID } = useActiveClient();
   const [company, setCompany] = useState<StoredCsmClient | undefined>(
     () => csmClientsStore.get(CLIENT_ID),
   );

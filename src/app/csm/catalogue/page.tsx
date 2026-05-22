@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useRef, type ReactNode } from "react";
-import { themes, type Workshop, type ProgrammeStep } from "@/app/(client)/catalogue-ateliers/data";
+import { themes, type Workshop } from "@/app/(client)/catalogue-ateliers/data";
 import { useWorkshops } from "@/lib/workshops-store";
 
 // ─── helpers ────────────────────────────────────────────────────────────────

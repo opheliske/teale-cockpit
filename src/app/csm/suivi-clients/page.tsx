@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { csmClientsStore, toClient } from "@/lib/csm-clients-store";
 import { impersonationStore } from "@/lib/impersonation-store";
@@ -643,7 +643,7 @@ export default function SuiviClientsPage() {
             ) : (
               <div className="space-y-4">
                 <p className="text-[13px] leading-relaxed text-[#94a8a0]">
-                  Définis un thème pour chaque trimestre du one-year plan. Ces thèmes guideront les ateliers, kits et actions planifiées tout au long de l'année.
+                  Définis un thème pour chaque trimestre du one-year plan. Ces thèmes guideront les ateliers, kits et actions planifiées tout au long de l&apos;année.
                 </p>
                 {QUARTER_THEMES.map(({ key, emoji, placeholder }) => {
                   const fieldKey = `theme${key.toUpperCase()}` as "themeQ1" | "themeQ2" | "themeQ3" | "themeQ4";

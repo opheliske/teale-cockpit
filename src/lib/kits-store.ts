@@ -2,9 +2,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import {
-  lancementKits as defaultLancement,
-  animationItems as defaultAnimation,
-  emailTopicKits as defaultEmails,
   type LancementKit,
   type AnimationItem,
   type EmailTopicKit,
@@ -50,32 +47,19 @@ export function useKitsStore() {
   const [emailTopicKits, setEmailTopicKits] = useState<EmailTopicKit[]>([]);
 
   useEffect(() => {
-    Promise.all([
-      supabase.from("kits_lancement").select("*").order("id"),
-      supabase.from("kits_animation").select("*").order("id"),
-      supabase.from("kits_email").select("*").order("id"),
-    ]).then(async ([lancement, animation, emails]) => {
-      if (lancement.data && lancement.data.length > 0) {
-        setLancementKits(lancement.data as LancementKit[]);
-      } else {
-        await supabase.from("kits_lancement").insert(defaultLancement);
-        setLancementKits(defaultLancement);
-      }
-
-      if (animation.data && animation.data.length > 0) {
-        setAnimationItems(animation.data.map(animationFromRow));
-      } else {
-        await supabase.from("kits_animation").insert(defaultAnimation.map(animationToRow));
-        setAnimationItems(defaultAnimation);
-      }
-
-      if (emails.data && emails.data.length > 0) {
-        setEmailTopicKits(emails.data as EmailTopicKit[]);
-      } else {
-        await supabase.from("kits_email").insert(defaultEmails);
-        setEmailTopicKits(defaultEmails);
-      }
-    });
+    // No front-side seeding (avoids concurrent re-seed races): an empty table
+    // just yields an empty list. Catalogue seeding is an admin script.
+    (async () => {
+      await supabase.auth.getUser();
+      const [lancement, animation, emails] = await Promise.all([
+        supabase.from("kits_lancement").select("*").order("id"),
+        supabase.from("kits_animation").select("*").order("id"),
+        supabase.from("kits_email").select("*").order("id"),
+      ]);
+      setLancementKits((lancement.data ?? []) as LancementKit[]);
+      setAnimationItems((animation.data ?? []).map(animationFromRow));
+      setEmailTopicKits((emails.data ?? []) as EmailTopicKit[]);
+    })();
   }, []);
 
   const addLancementKit = useCallback(async (item: LancementKit) => {

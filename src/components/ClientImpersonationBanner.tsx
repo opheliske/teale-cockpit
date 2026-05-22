@@ -1,17 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { impersonationStore } from "@/lib/impersonation-store";
 
 export default function ClientImpersonationBanner() {
   const router = useRouter();
-  const [state, setState] = useState<ReturnType<typeof impersonationStore.get>>(null);
-
-  useEffect(() => {
-    setState(impersonationStore.get());
-    return impersonationStore.subscribe(() => setState(impersonationStore.get()));
-  }, []);
+  // External-store subscription — no setState-in-effect.
+  const state = useSyncExternalStore(
+    impersonationStore.subscribe,
+    impersonationStore.get,
+    impersonationStore.get,
+  );
 
   // Only shown when a CSM is previewing — never for a client viewing their own space.
   if (!state || state.mode !== "csm-preview") return null;

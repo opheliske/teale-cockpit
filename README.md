@@ -58,6 +58,8 @@ Run the SQL in the Supabase SQL editor, **in this exact order** — the result i
    5. `…160000_clients_drop_legacy_csm.sql` — drops the legacy `csm` / `csm_label` columns.
    6. `…20260521120000_enable_realtime.sql` — adds the data tables to the Realtime publication.
    7. `…20260522120000_urgencies.sql` — `urgencies` table + RLS + Realtime.
+   8. `…20260522130000_storage_client_files.sql` — private `client-files` Storage bucket + RLS.
+   9. `…20260522140000_client_id_foreign_keys.sql` — adds the missing `client_id` foreign keys (`ON DELETE CASCADE`).
 
 > ⚠️ Running `schema.sql` **alone** leaves the tables without RLS. The migrations (step 2) are mandatory — they are what secures the database.
 
@@ -92,6 +94,14 @@ npm run seed-demo
 ```
 
 Creates 3 demo clients (ids `demo-…`) with a yearly plan, CSM actions and health alerts. Idempotent and safe — it only upserts/replaces its own demo rows and never touches real data. Uses the `service_role` key from `.env.local`.
+
+To seed the workshop catalogue (table `workshops`):
+
+```bash
+npm run seed-catalog
+```
+
+Upserts the default catalogue from `src/app/(client)/catalogue-ateliers/data.ts`. Idempotent. This replaces the former front-side auto-seed (the app no longer seeds the catalogue itself).
 
 To create ready-to-use demo login accounts (one CSM + one Client):
 

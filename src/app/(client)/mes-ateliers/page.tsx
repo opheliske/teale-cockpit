@@ -226,11 +226,11 @@ export default function MesAteliersPage() {
 
   const upcomingByMonth = useMemo(() => groupByMonth(upcomingItems), [upcomingItems]);
 
-  const avgRating = useMemo(() => {
-    const rated = realiseItems.filter((s) => s.satisfaction !== undefined);
-    if (!rated.length) return null;
-    return (rated.reduce((a, s) => a + (s.satisfaction ?? 0), 0) / rated.length).toFixed(1);
-  }, [realiseItems]);
+  // Plain computation — the React Compiler memoizes it automatically.
+  const ratedItems = realiseItems.filter((s) => s.satisfaction !== undefined);
+  const avgRating = ratedItems.length
+    ? (ratedItems.reduce((a, s) => a + (s.satisfaction ?? 0), 0) / ratedItems.length).toFixed(1)
+    : null;
 
   const totalFeedbacks = useMemo(
     () => realiseItems.reduce((a, s) => a + (s.participantFeedbacks ?? 0), 0),

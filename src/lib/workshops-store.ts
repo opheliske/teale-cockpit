@@ -2,7 +2,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import {
-  workshops as defaultWorkshops,
   themes,
   type Workshop,
   type Theme,
@@ -44,22 +43,15 @@ export function useWorkshops() {
 
   useEffect(() => {
     (async () => {
-      // Wait for the session before querying — otherwise the request can go
-      // out unauthenticated and the seed logic would misfire.
+      // Wait for the session so the request goes out authenticated.
       await supabase.auth.getUser();
       const { data } = await supabase
         .from("workshops")
         .select("*")
         .order("created_at");
-      if (data && data.length > 0) {
-        setWorkshops(data.map(fromRow));
-      } else {
-        const { data: seeded } = await supabase
-          .from("workshops")
-          .insert(defaultWorkshops.map(toRow))
-          .select();
-        setWorkshops(seeded ? seeded.map(fromRow) : defaultWorkshops);
-      }
+      // No front-side seeding: an empty table just yields an empty catalogue.
+      // The catalogue is seeded once via `npm run seed-catalog` (admin script).
+      setWorkshops((data ?? []).map(fromRow));
       setLoading(false);
     })();
   }, []);
@@ -84,17 +76,5 @@ export function useWorkshops() {
     setWorkshops((prev) => prev.filter((w) => w.id !== id));
   }, []);
 
-  const resetToDefaults = useCallback(async () => {
-    await supabase.from("workshops").delete().neq("id", "");
-    const { data } = await supabase.from("workshops").insert(defaultWorkshops.map(toRow)).select();
-    setWorkshops(data ? data.map(fromRow) : defaultWorkshops);
-  }, []);
-
-  const persist = useCallback(async (next: Workshop[]) => {
-    setWorkshops(next);
-    await supabase.from("workshops").delete().neq("id", "");
-    await supabase.from("workshops").insert(next.map(toRow));
-  }, []);
-
-  return { workshops, loading, addWorkshop, updateWorkshop, deleteWorkshop, resetToDefaults, persist };
+  return { workshops, loading, addWorkshop, updateWorkshop, deleteWorkshop };
 }

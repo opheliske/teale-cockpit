@@ -18,14 +18,13 @@ import {
 } from "@/lib/urgencies";
 import { workshops } from "@/app/(client)/catalogue-ateliers/data";
 import { lancementKits, animationItems, emailTopicKits } from "@/app/(client)/kits-communication/data";
-import { impersonationStore } from "@/lib/impersonation-store";
+import { useActiveClient } from "@/lib/client-context";
 import { buildPlanQuarters } from "@/lib/plan-quarters";
 import { csmClientsStore } from "@/lib/csm-clients-store";
 
 const TODAY_MONTH = "May";
 const TODAY_YEAR = 2026;
 const AVAILABLE_YEARS = [2025, 2026, 2027] as const;
-const CLIENT_ID = impersonationStore.get()?.clientId ?? "";
 type Year = (typeof AVAILABLE_YEARS)[number];
 
 const allMonths = [
@@ -397,6 +396,8 @@ function defaultQuarter(qs: Quarter[]): QuarterId {
 }
 
 export default function MonPlanningPage() {
+  // Active client resolved by ClientGuard (no module-load race).
+  const { clientId: CLIENT_ID } = useActiveClient();
   const [contractStart, setContractStart] = useState<string>(
     () => csmClientsStore.get(CLIENT_ID)?.contractStart ?? ""
   );
@@ -1321,6 +1322,7 @@ function EventModal({
   year: Year;
   onClose: () => void;
 }) {
+  const { clientId: CLIENT_ID } = useActiveClient();
   const threadId = event.threadId ?? `${event.type}:${event.title}`;
   const [comments, setComments] = useState<PlanComment[]>(() =>
     commentsStore.getByThread(threadId)

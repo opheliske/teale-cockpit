@@ -398,6 +398,7 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [showStatutDropdown, setShowStatutDropdown] = useState(false);
   const { profiles: csmProfiles } = useCsmProfiles();
   const { workshops: workshopList } = useWorkshops();
+  const planItemSeq = useRef(1_000_000_000);
   const [localDetail, setLocalDetail] = useState<LocalDetail>(() => ({
     collab: client?.collab ?? 0,
     arr: storedClient?.arr ?? 0,
@@ -441,8 +442,13 @@ export default function ClientDetailView({ id }: { id: string }) {
 
 
   // When storedClient loads from Supabase, sync dependent local state
-  useEffect(() => {
-    if (!storedClient) return;
+  // Re-seed the editable local copy when the stored client row changes (after
+  // a save or a realtime update). This is React's documented "adjust state
+  // when a value changes" pattern — a guarded setState during render, not an
+  // effect — so it doesn't trip react-hooks/set-state-in-effect.
+  const [syncedClient, setSyncedClient] = useState(storedClient);
+  if (storedClient && storedClient !== syncedClient) {
+    setSyncedClient(storedClient);
     const c = toClient(storedClient);
     const d = toClientDetail(storedClient);
     setLocalStatut(c.statut);
@@ -456,12 +462,12 @@ export default function ClientDetailView({ id }: { id: string }) {
       churnNotice: d.churnNotice,
       dernierPoint: d.dernierPoint,
       rdvParCollab: d.rdvParCollab,
-      nombreTokens: (d as {nombreTokens?: number}).nombreTokens ?? 0,
+      nombreTokens: (d as { nombreTokens?: number }).nombreTokens ?? 0,
       atelierTotal: d.atelierTotal,
       atelierRemaining: d.atelierRemaining,
       produits: d.produits,
     });
-  }, [storedClient]); // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   const [storedPlanItems, setStoredPlanItems] = useState<import("@/lib/plan-store").StoredPlanItem[]>(() => planStore.getState()?.items ?? []);
   const planThemesLoaded = useRef(false);
@@ -773,7 +779,9 @@ export default function ClientDetailView({ id }: { id: string }) {
 
   const handleAddToPlan = () => {
     if (!addPlanCtx) return;
-    const newId = Date.now();
+    // Monotonic id for ad-hoc plan items — high base avoids colliding with
+    // the small numeric ids of seeded plan items.
+    const newId = (planItemSeq.current += 1);
     if (addPlanCtx.type === "atelier" || addPlanCtx.type === "kit") {
       const item = catalogItems.find((i) => i.id === selectedCatalogId);
       if (!item) return;
@@ -830,13 +838,6 @@ export default function ClientDetailView({ id }: { id: string }) {
     () => buildPlanQuarters(localDetail.contractStart),
     [localDetail.contractStart],
   );
-
-  const planQAutoSet = useRef(false);
-  useEffect(() => {
-    if (planQAutoSet.current) return;
-    const target = planQuarters.find((q) => q.status === "current") ?? planQuarters.find((q) => q.status === "upcoming");
-    if (target) { setActivePlanQ(target.id); planQAutoSet.current = true; }
-  }, [planQuarters]);
 
   if (storeLoading) {
     return <ClientDetailSkeleton />;
@@ -2923,7 +2924,7 @@ export default function ClientDetailView({ id }: { id: string }) {
       <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-[2px]" onClick={() => setShowHealthModal(false)}>
         <div className="w-full max-w-[400px] rounded-[18px] border border-[rgba(168,232,149,0.18)] bg-[#061a16] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
           <div className="mb-5 flex items-center justify-between">
-            <h3 className="text-[15px] font-semibold text-[#e8f5ef]">Mettre à jour l'état de santé</h3>
+            <h3 className="text-[15px] font-semibold text-[#e8f5ef]">Mettre à jour l&apos;état de santé</h3>
             <button onClick={() => setShowHealthModal(false)} className="text-[18px] leading-none text-[#94a8a0] hover:text-[#e8f5ef]">×</button>
           </div>
           <div className="space-y-4">

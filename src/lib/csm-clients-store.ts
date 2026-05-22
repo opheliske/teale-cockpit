@@ -145,24 +145,15 @@ export const csmClientsStore = {
     return { error: null };
   },
 
-  // Deletes a client and its dependent data. The clients row is deleted first:
-  // if it fails (e.g. a client account is still attached), nothing else is
-  // touched. Otherwise the per-client rows are cleaned up.
+  // Deletes a client. Each per-client table has a client_id foreign key with
+  // ON DELETE CASCADE, so this single statement atomically removes the client
+  // and all its dependent rows — no manual (non-atomic) multi-delete needed.
   remove: async (id: string): Promise<{ error: string | null }> => {
     const { error } = await supabase.from("clients").delete().eq("id", id);
     if (error) {
       console.error("[csm-clients-store] remove", error);
       return { error: error.message };
     }
-    await Promise.all([
-      supabase.from("plan_state").delete().eq("client_id", id),
-      supabase.from("csm_events").delete().eq("client_id", id),
-      supabase.from("health_entries").delete().eq("client_id", id),
-      supabase.from("documents").delete().eq("client_id", id),
-      supabase.from("plan_comments").delete().eq("client_id", id),
-      supabase.from("target_labels").delete().eq("client_id", id),
-      supabase.from("target_item_assignments").delete().eq("client_id", id),
-    ]);
     _clients = _clients.filter((c) => c.id !== id);
     notify();
     notifyChange("clients");
