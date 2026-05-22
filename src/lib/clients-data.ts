@@ -69,7 +69,7 @@ export type ProduitTeale = "Joy" | "Dashboard RH" | "Pulse" | "Call d'orientatio
 export type PlanItemFile = {
   id: string;
   name: string;
-  url: string;
+  path: string; // path in the Supabase Storage "client-files" bucket
   sizeLabel: string;
   mimeType: string;
 };

@@ -57,10 +57,10 @@ export async function proxy(request: NextRequest) {
     return isLogin ? response : redirectTo(request, "/login", response);
   }
 
-  // Role lives in the JWT metadata (set by the admin create-user script).
-  const role = (user.app_metadata?.role ?? user.user_metadata?.role) as
-    | Role
-    | undefined;
+  // Role is read ONLY from app_metadata — it is set by the admin create-user
+  // script and cannot be changed by the user. user_metadata is user-editable
+  // (via supabase.auth.updateUser) and must never be trusted for authorization.
+  const role = user.app_metadata?.role as Role | undefined;
 
   // Logged in but on /login → send to the right home.
   if (isLogin) {

@@ -7,6 +7,7 @@ import { csmClientsStore, type StoredCsmClient } from "@/lib/csm-clients-store";
 import { planStore, type StoredPlanState } from "@/lib/plan-store";
 import { csmEventsStore, type CsmEvent } from "@/lib/csm-events-store";
 import { docsStore, type StoredDocument } from "@/lib/docs-store";
+import { openClientFile } from "@/lib/storage";
 
 // The active client comes from the session context (seeded by ClientGuard /
 // the login flow). All data below is also RLS-scoped to this client server-side.
@@ -251,13 +252,13 @@ export default function ClientHomePage() {
                     return (
                       <li key={doc.id}>
                         {file ? (
-                          <a
-                            href={file.url}
-                            download={file.name}
-                            className="flex items-center gap-2.5 rounded-[10px] border border-[#1a3530] bg-[rgba(255,255,255,0.02)] px-3 py-2.5 transition-colors hover:border-[rgba(94,234,212,0.3)]"
+                          <button
+                            type="button"
+                            onClick={() => void openClientFile(file.path, file.name)}
+                            className="flex w-full items-center gap-2.5 rounded-[10px] border border-[#1a3530] bg-[rgba(255,255,255,0.02)] px-3 py-2.5 text-left transition-colors hover:border-[rgba(94,234,212,0.3)]"
                           >
                             {row}
-                          </a>
+                          </button>
                         ) : (
                           <div className="flex items-center gap-2.5 rounded-[10px] border border-[#1a3530] bg-[rgba(255,255,255,0.02)] px-3 py-2.5">
                             {row}

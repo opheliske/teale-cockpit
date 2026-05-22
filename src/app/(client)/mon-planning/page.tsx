@@ -5,6 +5,7 @@ import { planStore, type StoredPlanState, type StoredPlanItemType } from "@/lib/
 import { commentsStore, type PlanComment } from "@/lib/comments-store";
 import { targetsStore, type TargetLabel } from "@/lib/targets-store";
 import { docsStore, type StoredDocument } from "@/lib/docs-store";
+import { openClientFile } from "@/lib/storage";
 import {
   getUrgencies,
   watchUrgencies,
@@ -1625,17 +1626,17 @@ function DocumentCard({ doc }: { doc: CsmDocument }) {
       {hasFiles ? (
         <div className="flex flex-col gap-1.5">
           {doc.files!.map((f) => (
-            <a
+            <button
               key={f.id}
-              href={f.url}
-              download={f.name}
-              className="inline-flex items-center gap-2 rounded-xl border border-brand-border-dark px-3 py-2 text-[12px] font-medium text-brand-cream transition-colors hover:border-brand-green-bright/40 hover:bg-brand-green-bright/5"
+              type="button"
+              onClick={() => void openClientFile(f.path, f.name)}
+              className="inline-flex items-center gap-2 rounded-xl border border-brand-border-dark px-3 py-2 text-left text-[12px] font-medium text-brand-cream transition-colors hover:border-brand-green-bright/40 hover:bg-brand-green-bright/5"
             >
               <span className="text-[14px]">{getFileIcon(f.mimeType)}</span>
               <span className="min-w-0 flex-1 truncate">{f.name}</span>
               <span className="shrink-0 text-[11px] text-brand-muted-on-dark">{f.sizeLabel}</span>
               <span className="shrink-0 text-brand-green-bright"><DownloadIcon /></span>
-            </a>
+            </button>
           ))}
         </div>
       ) : (

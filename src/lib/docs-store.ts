@@ -7,7 +7,7 @@ export type StoredDocumentFile = {
   mimeType: string;
   sizeBytes: number;
   sizeLabel: string;
-  url: string; // blob URL from URL.createObjectURL — valid for the session only
+  path: string; // path in the Supabase Storage "client-files" bucket
 };
 
 export type StoredDocument = {

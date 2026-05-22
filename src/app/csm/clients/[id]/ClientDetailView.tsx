@@ -9,9 +9,20 @@ import { csmClientsStore, toClient, toClientDetail } from "@/lib/csm-clients-sto
 import { useCsmProfiles } from "@/lib/use-csm-profiles";
 import ClientDetailSkeleton from "./ClientDetailSkeleton";
 import { clientActionsStore } from "@/lib/client-actions-store";
-import { ATELIERS_CATALOG, KITS_CATALOG, ATELIER_CATEGORIES, KIT_CATEGORIES, type AtelierCatalogItem, type KitCatalogItem } from "@/lib/catalog";
+import { useWorkshops, themes as workshopThemes } from "@/lib/workshops-store";
+
+// Unified item shape consumed by the "Ajouter au plan" modal.
+type CatalogItem = {
+  id: string;
+  icon: string;
+  title: string;
+  description: string;
+  category: string;
+  duration?: string;
+};
 import { planStore, type StoredPlanItem } from "@/lib/plan-store";
 import { docsStore, type StoredDocument, type StoredDocumentFile } from "@/lib/docs-store";
+import { uploadClientFile, openClientFile } from "@/lib/storage";
 import { csmEventsStore, parseFrDateWeekday } from "@/lib/csm-events-store";
 import { healthStore, type HealthEntry, type HealthStatut } from "@/lib/health-store";
 import { targetsStore, type TargetLabel, LABEL_COLORS } from "@/lib/targets-store";
@@ -141,13 +152,14 @@ function PlanItemRow({ item, onToggle, onEdit, labels = [], assignedTargets = []
             {item.files && item.files.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {item.files.map((f) => (
-                  <a key={f.id} href={f.url} download={f.name} onClick={(e) => e.stopPropagation()}
+                  <button key={f.id} type="button"
+                    onClick={(e) => { e.stopPropagation(); void openClientFile(f.path, f.name); }}
                     className="inline-flex items-center gap-1 rounded-[6px] px-2 py-[3px] text-[10px] transition-colors"
                     style={{ background: "rgba(220,237,99,0.10)", color: "#dced63", border: "1px solid rgba(220,237,99,0.2)" }}>
                     <span>{getFileIcon(f.mimeType)}</span>
                     <span className="max-w-[120px] truncate">{f.name}</span>
                     <span className="opacity-60">{f.sizeLabel}</span>
-                  </a>
+                  </button>
                 ))}
               </div>
             )}
@@ -385,6 +397,7 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [localStatut, setLocalStatut] = useState<Statut>(() => client?.statut ?? "SAIN");
   const [showStatutDropdown, setShowStatutDropdown] = useState(false);
   const { profiles: csmProfiles } = useCsmProfiles();
+  const { workshops: workshopList } = useWorkshops();
   const [localDetail, setLocalDetail] = useState<LocalDetail>(() => ({
     collab: client?.collab ?? 0,
     arr: storedClient?.arr ?? 0,
@@ -421,6 +434,7 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [addPlanCustomFiles, setAddPlanCustomFiles] = useState<PlanItemFile[]>([]);
   const [addPlanTargets, setAddPlanTargets] = useState<string[]>([]);
   const [isPlanFileDragOver, setIsPlanFileDragOver] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const planFileInputRef = useRef<HTMLInputElement>(null);
   const mainRef = useRef<HTMLDivElement>(null);
@@ -665,21 +679,28 @@ export default function ClientDetailView({ id }: { id: string }) {
     setShowDocModal(true);
   };
 
-  const handleFileSelect = (fileList: FileList) => {
-    const added: StoredDocumentFile[] = Array.from(fileList).map((f) => ({
-      id: `f-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      name: f.name,
-      mimeType: f.type || "application/octet-stream",
-      sizeBytes: f.size,
-      sizeLabel: formatFileSize(f.size),
-      url: URL.createObjectURL(f),
-    }));
-    setDocFiles((prev) => {
-      const next = [...prev, ...added];
-      const totalBytes = next.reduce((s, f) => s + f.sizeBytes, 0);
-      setDocSize(formatFileSize(totalBytes));
-      return next;
-    });
+  const handleFileSelect = async (fileList: FileList) => {
+    setUploadError("");
+    for (const f of Array.from(fileList)) {
+      const { path, error } = await uploadClientFile(id, f);
+      if (error || !path) {
+        setUploadError(error ?? "Échec de l'envoi du fichier.");
+        continue;
+      }
+      const stored: StoredDocumentFile = {
+        id: `f-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        name: f.name,
+        mimeType: f.type || "application/octet-stream",
+        sizeBytes: f.size,
+        sizeLabel: formatFileSize(f.size),
+        path,
+      };
+      setDocFiles((prev) => {
+        const next = [...prev, stored];
+        setDocSize(formatFileSize(next.reduce((s, x) => s + x.sizeBytes, 0)));
+        return next;
+      });
+    }
   };
 
   const removeDocFile = (fileId: string) => {
@@ -690,15 +711,23 @@ export default function ClientDetailView({ id }: { id: string }) {
     });
   };
 
-  const handlePlanFileSelect = (fileList: FileList) => {
-    const added: PlanItemFile[] = Array.from(fileList).map((f) => ({
-      id: `pf-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      name: f.name,
-      mimeType: f.type || "application/octet-stream",
-      sizeLabel: formatFileSize(f.size),
-      url: URL.createObjectURL(f),
-    }));
-    setAddPlanCustomFiles((prev) => [...prev, ...added]);
+  const handlePlanFileSelect = async (fileList: FileList) => {
+    setUploadError("");
+    for (const f of Array.from(fileList)) {
+      const { path, error } = await uploadClientFile(id, f);
+      if (error || !path) {
+        setUploadError(error ?? "Échec de l'envoi du fichier.");
+        continue;
+      }
+      const stored: PlanItemFile = {
+        id: `pf-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        name: f.name,
+        mimeType: f.type || "application/octet-stream",
+        sizeLabel: formatFileSize(f.size),
+        path,
+      };
+      setAddPlanCustomFiles((prev) => [...prev, stored]);
+    }
   };
 
   const saveDoc = () => {
@@ -745,16 +774,11 @@ export default function ClientDetailView({ id }: { id: string }) {
   const handleAddToPlan = () => {
     if (!addPlanCtx) return;
     const newId = Date.now();
-    if (addPlanCtx.type === "atelier") {
-      const item = ATELIERS_CATALOG.find((i) => i.id === selectedCatalogId);
+    if (addPlanCtx.type === "atelier" || addPlanCtx.type === "kit") {
+      const item = catalogItems.find((i) => i.id === selectedCatalogId);
       if (!item) return;
-      const meta = [item.facilitator, item.duration, formatDateFr(addPlanDate), addPlanTime.trim()].filter(Boolean).join(" · ");
-      setExtraPlanItems((prev) => [...prev, { id: newId, type: "atelier", icon: item.icon, title: item.title, meta, done: false, quarter: addPlanCtx.quarter }]);
-    } else if (addPlanCtx.type === "kit") {
-      const item = KITS_CATALOG.find((i) => i.id === selectedCatalogId);
-      if (!item) return;
-      const meta = [item.format, item.target, formatDateFr(addPlanDate)].filter(Boolean).join(" · ");
-      setExtraPlanItems((prev) => [...prev, { id: newId, type: "kit", icon: item.icon, title: item.title, meta, done: false, quarter: addPlanCtx.quarter }]);
+      const meta = [item.duration, formatDateFr(addPlanDate), addPlanTime.trim()].filter(Boolean).join(" · ");
+      setExtraPlanItems((prev) => [...prev, { id: newId, type: addPlanCtx.type, icon: item.icon, title: item.title, meta, done: false, quarter: addPlanCtx.quarter }]);
     } else {
       if (!addPlanCustomTitle.trim()) return;
       const dateFr = formatDateFr(addPlanDate);
@@ -867,8 +891,22 @@ export default function ClientDetailView({ id }: { id: string }) {
   const extraQ3Filtered = filterPlanItems(extraPlanItems.filter((i) => i.quarter === "q3") as PlanItem[]).filter((i) => !planTargetFilter || (itemTargets[i.id] ?? []).includes(planTargetFilter));
   const extraQ4Filtered = filterPlanItems(extraPlanItems.filter((i) => i.quarter === "q4") as PlanItem[]).filter((i) => !planTargetFilter || (itemTargets[i.id] ?? []).includes(planTargetFilter));
 
-  const catalogItems: (AtelierCatalogItem | KitCatalogItem)[] = addPlanCtx?.type === "atelier" ? ATELIERS_CATALOG : addPlanCtx?.type === "kit" ? KITS_CATALOG : [];
-  const catalogCategories = addPlanCtx?.type === "atelier" ? ATELIER_CATEGORIES : addPlanCtx?.type === "kit" ? KIT_CATEGORIES : [];
+  // Ateliers come from the real workshops catalogue (workshops table).
+  const workshopCatalog: CatalogItem[] = workshopList.map((w) => ({
+    id: w.id,
+    icon: "🎓",
+    title: w.title,
+    description: w.subtitle ?? w.objectives[0] ?? "",
+    category: workshopThemes.find((t) => t.id === w.themeId)?.name ?? w.themeId,
+    duration: w.duration ?? "1h",
+  }));
+  // NOTE: kits — no single kit catalogue yet (3 heterogeneous kit tables).
+  // Wiring "Ajouter au plan → kit" to a real source is a pending decision.
+  const catalogItems: CatalogItem[] = addPlanCtx?.type === "atelier" ? workshopCatalog : [];
+  const catalogCategories =
+    addPlanCtx?.type === "atelier"
+      ? ["Tous", ...workshopThemes.map((t) => t.name)]
+      : [];
   const filteredCatalogItems = catalogItems.filter((item) => {
     const q = addPlanSearch.toLowerCase();
     const matchSearch = !q || item.title.toLowerCase().includes(q) || item.description.toLowerCase().includes(q);
@@ -2107,18 +2145,17 @@ export default function ClientDetailView({ id }: { id: string }) {
                   {doc.files && doc.files.length > 0 && (
                     <div className="flex flex-wrap gap-1.5">
                       {doc.files.map((f) => (
-                        <a
+                        <button
                           key={f.id}
-                          href={f.url}
-                          download={f.name}
-                          onClick={(e) => e.stopPropagation()}
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); void openClientFile(f.path, f.name); }}
                           className="inline-flex items-center gap-1.5 rounded-[7px] border border-[rgba(94,234,212,0.15)] bg-[rgba(94,234,212,0.06)] px-2.5 py-1 text-[11px] text-[#5eead4] transition-colors hover:bg-[rgba(94,234,212,0.12)]"
                           title={`Télécharger ${f.name}`}
                         >
                           <span className="text-[13px]">{getFileIcon(f.mimeType)}</span>
                           <span className="max-w-[120px] truncate">{f.name}</span>
                           <span className="opacity-60">↓</span>
-                        </a>
+                        </button>
                       ))}
                     </div>
                   )}
@@ -3097,6 +3134,11 @@ export default function ClientDetailView({ id }: { id: string }) {
                 className="hidden"
                 onChange={(e) => e.target.files && handleFileSelect(e.target.files)}
               />
+              {uploadError && (
+                <p className="mt-2 rounded-[8px] bg-[rgba(239,68,68,0.1)] px-3 py-2 text-[11px] text-[#fca5a5]">
+                  {uploadError}
+                </p>
+              )}
               {docFiles.length > 0 && (
                 <div className="mt-2 space-y-1.5">
                   {docFiles.map((f) => (
@@ -3206,11 +3248,10 @@ export default function ClientDetailView({ id }: { id: string }) {
                       <div className="min-w-0 flex-1">
                         <div className={`text-[13px] font-medium leading-snug ${isSelected ? "text-[#5eead4]" : "text-[#e8f5ef]"}`}>{item.title}</div>
                         <div className="mt-0.5 line-clamp-2 text-[11px] leading-[1.4] text-[#94a8a0]">{item.description}</div>
-                        {addPlanCtx.type === "atelier" && (
-                          <div className="mt-1 text-[10px] text-[rgba(148,168,160,0.65)]">{(item as AtelierCatalogItem).duration} · {(item as AtelierCatalogItem).facilitator}</div>
-                        )}
-                        {addPlanCtx.type === "kit" && (
-                          <div className="mt-1 text-[10px] text-[rgba(148,168,160,0.65)]">{(item as KitCatalogItem).format} · {(item as KitCatalogItem).target}</div>
+                        {(item.duration || item.category) && (
+                          <div className="mt-1 text-[10px] text-[rgba(148,168,160,0.65)]">
+                            {[item.duration, item.category].filter(Boolean).join(" · ")}
+                          </div>
                         )}
                       </div>
                       {isSelected && <span className="ml-auto shrink-0 text-[12px] font-bold text-[#5eead4]">✓</span>}
@@ -3352,6 +3393,11 @@ export default function ClientDetailView({ id }: { id: string }) {
                       </div>
                     )}
                     <input ref={planFileInputRef} type="file" multiple className="hidden" onChange={(e) => e.target.files && handlePlanFileSelect(e.target.files)} />
+                    {uploadError && (
+                      <p className="mt-2 rounded-[8px] bg-[rgba(239,68,68,0.1)] px-3 py-2 text-[11px] text-[#fca5a5]">
+                        {uploadError}
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
