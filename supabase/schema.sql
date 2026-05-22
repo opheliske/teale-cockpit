@@ -133,10 +133,11 @@ create table if not exists target_item_assignments (
 
 -- ─── Plan state (one row per client) ─────────────────────────────────────────
 create table if not exists plan_state (
-  client_id  text primary key,
-  themes     jsonb not null default '{"Q1":"","Q2":"","Q3":"","Q4":""}',
-  items      jsonb not null default '[]',
-  updated_at timestamptz not null default now()
+  client_id   text primary key,
+  themes      jsonb not null default '{"Q1":"","Q2":"","Q3":"","Q4":""}',
+  next_themes jsonb,
+  items       jsonb not null default '[]',
+  updated_at  timestamptz not null default now()
 );
 
 -- ─── Documents (per client) ──────────────────────────────────────────────────

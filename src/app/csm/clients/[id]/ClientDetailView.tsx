@@ -292,18 +292,28 @@ function storedToPlanItem(s: StoredPlanItem): PlanItem {
   };
 }
 
-// Rebuilds the per-quarter plan from the saved plan_state items, so the CSM
-// plan tab reloads exactly what was persisted instead of a static base.
+// Rebuilds the current-year per-quarter plan from the saved plan_state items,
+// so the CSM plan tab reloads exactly what was persisted instead of a static
+// base. Next-year items (year === "next") are excluded here.
 function buildPlanBase(items: StoredPlanItem[]) {
+  const cur = items.filter((i) => i.year !== "next");
   return {
-    planQ1: items.filter((i) => i.quarter === "Q1").map(storedToPlanItem),
-    planQ2Done: items.filter((i) => i.quarter === "Q2" && i.done).map(storedToPlanItem),
-    planQ2Upcoming: items.filter((i) => i.quarter === "Q2" && !i.done).map(storedToPlanItem),
-    planQ3: items.filter((i) => i.quarter === "Q3").map(storedToPlanItem),
-    planQ4: items.filter((i) => i.quarter === "Q4").map(storedToPlanItem),
+    planQ1: cur.filter((i) => i.quarter === "Q1").map(storedToPlanItem),
+    planQ2Done: cur.filter((i) => i.quarter === "Q2" && i.done).map(storedToPlanItem),
+    planQ2Upcoming: cur.filter((i) => i.quarter === "Q2" && !i.done).map(storedToPlanItem),
+    planQ3: cur.filter((i) => i.quarter === "Q3").map(storedToPlanItem),
+    planQ4: cur.filter((i) => i.quarter === "Q4").map(storedToPlanItem),
   };
 }
 type PlanBase = ReturnType<typeof buildPlanBase>;
+
+// Restores the next-year items as `extraPlanItems` (keyed "next-q1".."next-q4"),
+// so a milestone planned for the following year doesn't leak into this year.
+function buildNextExtras(items: StoredPlanItem[]): Array<PlanItem & { quarter: string }> {
+  return items
+    .filter((i) => i.year === "next")
+    .map((s) => ({ ...storedToPlanItem(s), quarter: `next-${s.quarter.toLowerCase()}` }));
+}
 
 export default function ClientDetailView({ id }: { id: string }) {
   const router = useRouter();
@@ -505,6 +515,15 @@ export default function ClientDetailView({ id }: { id: string }) {
       // edited / deleted items survive a reload instead of being clobbered.
       if (state?.items && state.items.length > 0) {
         setPlanBase(buildPlanBase(state.items));
+        setExtraPlanItems(buildNextExtras(state.items));
+      }
+      if (state?.nextThemes) {
+        setNextThemes({
+          q1: state.nextThemes.Q1 || "",
+          q2: state.nextThemes.Q2 || "",
+          q3: state.nextThemes.Q3 || "",
+          q4: state.nextThemes.Q4 || "",
+        });
       }
       setPlanLoaded(true);
     })();
@@ -590,10 +609,14 @@ export default function ClientDetailView({ id }: { id: string }) {
     if (!detail || !planLoaded) return;
     const eff = (item: PlanItem): PlanItem => planOverrides[item.id] ?? item;
     const isDone = (item: PlanItem): boolean => item.done || !!planItems[item.id];
-    const toStored = (item: PlanItem, quarter: StoredPlanItem["quarter"]): StoredPlanItem => {
+    const toStored = (
+      item: PlanItem,
+      quarter: StoredPlanItem["quarter"],
+      year: "current" | "next",
+    ): StoredPlanItem => {
       const e = eff(item);
       return {
-        id: e.id, quarter, type: e.type, icon: e.icon, title: e.title, meta: e.meta,
+        id: e.id, quarter, year, type: e.type, icon: e.icon, title: e.title, meta: e.meta,
         done: isDone(item),
         impact: e.impact || undefined,
         responsable: e.responsable || undefined,
@@ -608,21 +631,24 @@ export default function ClientDetailView({ id }: { id: string }) {
     };
     planStore.setState({
       themes: { Q1: currentThemes.q1, Q2: currentThemes.q2, Q3: currentThemes.q3, Q4: currentThemes.q4 },
+      nextThemes: { Q1: nextThemes.q1, Q2: nextThemes.q2, Q3: nextThemes.q3, Q4: nextThemes.q4 },
       items: [
-        ...planBase.planQ1.filter((i) => !deletedPlanIds.has(i.id)).map((i) => toStored(i, "Q1")),
-        ...planBase.planQ2Done.filter((i) => !deletedPlanIds.has(i.id)).map((i) => ({ ...toStored(i, "Q2"), done: true })),
-        ...planBase.planQ2Upcoming.filter((i) => !deletedPlanIds.has(i.id)).map((i) => toStored(i, "Q2")),
-        ...planBase.planQ3.filter((i) => !deletedPlanIds.has(i.id)).map((i) => toStored(i, "Q3")),
-        ...planBase.planQ4.filter((i) => !deletedPlanIds.has(i.id)).map((i) => toStored(i, "Q4")),
+        ...planBase.planQ1.filter((i) => !deletedPlanIds.has(i.id)).map((i) => toStored(i, "Q1", "current")),
+        ...planBase.planQ2Done.filter((i) => !deletedPlanIds.has(i.id)).map((i) => ({ ...toStored(i, "Q2", "current"), done: true })),
+        ...planBase.planQ2Upcoming.filter((i) => !deletedPlanIds.has(i.id)).map((i) => toStored(i, "Q2", "current")),
+        ...planBase.planQ3.filter((i) => !deletedPlanIds.has(i.id)).map((i) => toStored(i, "Q3", "current")),
+        ...planBase.planQ4.filter((i) => !deletedPlanIds.has(i.id)).map((i) => toStored(i, "Q4", "current")),
         ...extraPlanItems
           .filter((i) => !deletedPlanIds.has(i.id))
-          .map((i) => toStored(i, qMap[i.quarter] ?? "Q2")),
+          .map((i) =>
+            toStored(i, qMap[i.quarter] ?? "Q2", i.quarter.startsWith("next-") ? "next" : "current"),
+          ),
       ],
     });
     // `detail`, `planBase` and `planTargetFilter` are intentionally omitted:
     // `planBase` is set once on load, and re-running on `detail` (an unstable
     // derived object) would resync on every render.
-  }, [planOverrides, deletedPlanIds, extraPlanItems, currentThemes, planItems, itemTargets, planLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [planOverrides, deletedPlanIds, extraPlanItems, currentThemes, nextThemes, planItems, itemTargets, planLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getEffective = (item: PlanItem): PlanItem => planOverrides[item.id] ?? item;
 
@@ -2159,10 +2185,37 @@ export default function ClientDetailView({ id }: { id: string }) {
                       </button>
                     )}
                   </div>
-                  <div className="flex flex-col items-center gap-3 p-5 text-center">
-                    <div className="text-[26px] opacity-[0.12]">+</div>
-                    <p className="text-[12px] text-[rgba(148,168,160,0.5)]">Aucun jalon planifié</p>
-                    <div className="flex flex-wrap justify-center gap-1.5">
+                  <div className="flex flex-col gap-2 p-5">
+                    {(() => {
+                      const nextItems = extraPlanItems.filter(
+                        (it) => it.quarter === `next-${q}` && !deletedPlanIds.has(it.id),
+                      );
+                      return nextItems.length === 0 ? (
+                        <div className="flex flex-col items-center gap-2 py-2 text-center">
+                          <div className="text-[26px] opacity-[0.12]">+</div>
+                          <p className="text-[12px] text-[rgba(148,168,160,0.5)]">Aucun jalon planifié</p>
+                        </div>
+                      ) : (
+                        nextItems.map((it) => (
+                          <div key={it.id} className="flex items-center gap-2 rounded-[8px] border border-[#1a3530] bg-[rgba(255,255,255,0.02)] px-2.5 py-2">
+                            <span className="shrink-0 text-[14px]">{it.icon}</span>
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-[12px] font-medium text-[#e8f5ef]">{it.title}</div>
+                              {it.meta && <div className="truncate text-[10px] text-[#94a8a0]">{it.meta}</div>}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setExtraPlanItems((prev) => prev.filter((x) => x.id !== it.id))}
+                              className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-[12px] text-[#94a8a0] transition-colors hover:bg-[rgba(230,170,153,0.15)] hover:text-[#E6AA99]"
+                              aria-label="Retirer ce jalon"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))
+                      );
+                    })()}
+                    <div className="mt-1 flex flex-wrap justify-center gap-1.5">
                       {(["🎓 Atelier", "📢 Kit", "📞 Point CSM", "⚡ Custom"] as const).map((chip) => (
                         <button key={chip} onClick={() => openAddPlan(`next-${q}`, CHIP_TYPE_MAP[chip])} className="rounded-full border border-dashed border-[#1a3530] px-[10px] py-[5px] text-[11px] text-[#94a8a0] transition-all hover:border-[#84d4a6] hover:bg-[rgba(132,212,166,0.05)] hover:text-[#84d4a6]">{chip}</button>
                       ))}

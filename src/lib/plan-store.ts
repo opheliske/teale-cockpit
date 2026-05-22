@@ -4,9 +4,13 @@ import type { PlanItemFile } from "@/lib/clients-data";
 
 export type StoredPlanItemType = "atelier" | "kit" | "csm" | "qbr" | "custom";
 
+export type QuarterThemes = { Q1: string; Q2: string; Q3: string; Q4: string };
+
 export type StoredPlanItem = {
   id: number;
   quarter: "Q1" | "Q2" | "Q3" | "Q4";
+  // Plan year the item belongs to. Absent ⇒ current (back-compatible).
+  year?: "current" | "next";
   type: StoredPlanItemType;
   icon: string;
   title: string;
@@ -20,7 +24,9 @@ export type StoredPlanItem = {
 };
 
 export type StoredPlanState = {
-  themes: { Q1: string; Q2: string; Q3: string; Q4: string };
+  themes: QuarterThemes;
+  // Quarter themes for the following year (absent on legacy rows).
+  nextThemes?: QuarterThemes;
   items: StoredPlanItem[];
 };
 
@@ -35,7 +41,11 @@ async function fetchPlan(clientId: string) {
     .eq("client_id", clientId)
     .single();
   _state = data
-    ? { themes: data.themes as StoredPlanState["themes"], items: data.items as StoredPlanItem[] }
+    ? {
+        themes: data.themes as QuarterThemes,
+        nextThemes: (data.next_themes as QuarterThemes | null) ?? undefined,
+        items: data.items as StoredPlanItem[],
+      }
     : null;
   _listeners.forEach((l) => l());
 }
@@ -60,6 +70,7 @@ export const planStore = {
     await supabase.from("plan_state").upsert({
       client_id: _clientId,
       themes: state.themes,
+      next_themes: state.nextThemes ?? null,
       items: state.items,
       updated_at: new Date().toISOString(),
     });

@@ -58,6 +58,7 @@ Run the SQL in the Supabase SQL editor, **in this exact order** — the result i
    7. `…20260522120000_urgencies.sql` — `urgencies` table + RLS + Realtime.
    8. `…20260522130000_storage_client_files.sql` — private `client-files` Storage bucket + RLS.
    9. `…20260522140000_client_id_foreign_keys.sql` — adds the missing `client_id` foreign keys (`ON DELETE CASCADE`).
+   10. `…20260522150000_plan_state_next_themes.sql` — adds `plan_state.next_themes` (next-year quarter themes).
 
 > ⚠️ Running `schema.sql` **alone** leaves the tables without RLS. The migrations (step 2) are mandatory — they are what secures the database.
 
