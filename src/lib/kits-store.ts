@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, ensureSession } from "@/lib/supabase";
 import {
   type LancementKit,
   type AnimationItem,
@@ -49,17 +49,29 @@ export function useKitsStore() {
   useEffect(() => {
     // No front-side seeding (avoids concurrent re-seed races): an empty table
     // just yields an empty list. Catalogue seeding is an admin script.
+    let alive = true;
     (async () => {
-      await supabase.auth.getUser();
+      // Wait for the session, otherwise the queries go out anonymous and RLS
+      // returns empty kit lists (intermittently).
+      await ensureSession();
       const [lancement, animation, emails] = await Promise.all([
         supabase.from("kits_lancement").select("*").order("id"),
         supabase.from("kits_animation").select("*").order("id"),
         supabase.from("kits_email").select("*").order("id"),
       ]);
+      if (!alive) return;
+      if (lancement.error || animation.error || emails.error) {
+        // Transient failure — keep the current lists rather than blanking them.
+        console.error("[kits-store] load", lancement.error ?? animation.error ?? emails.error);
+        return;
+      }
       setLancementKits((lancement.data ?? []) as LancementKit[]);
       setAnimationItems((animation.data ?? []).map(animationFromRow));
       setEmailTopicKits((emails.data ?? []) as EmailTopicKit[]);
     })();
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const addLancementKit = useCallback(async (item: LancementKit) => {

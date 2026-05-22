@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, ensureSession } from "@/lib/supabase";
 import {
   themes,
   type Workshop,
@@ -42,18 +42,30 @@ export function useWorkshops() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let alive = true;
     (async () => {
-      // Wait for the session so the request goes out authenticated.
-      await supabase.auth.getUser();
-      const { data } = await supabase
+      // Wait for the session to be loaded, otherwise the query goes out
+      // anonymous and RLS returns an empty catalogue (intermittently).
+      await ensureSession();
+      const { data, error } = await supabase
         .from("workshops")
         .select("*")
         .order("created_at");
+      if (!alive) return;
+      if (error) {
+        // Transient failure — keep the current list rather than blanking it.
+        console.error("[workshops-store] load", error);
+        setLoading(false);
+        return;
+      }
       // No front-side seeding: an empty table just yields an empty catalogue.
       // The catalogue is seeded once via `npm run seed-catalog` (admin script).
       setWorkshops((data ?? []).map(fromRow));
       setLoading(false);
     })();
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const addWorkshop = useCallback(async (w: Workshop) => {
