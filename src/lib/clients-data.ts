@@ -81,6 +81,7 @@ export type PlanItem = {
   title: string;
   meta: string;
   done: boolean;
+  month?: number; // 0-11 — explicit month placement within the quarter
   responsable?: string;
   detail?: string;
   impact?: string;

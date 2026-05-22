@@ -215,7 +215,15 @@ function formatFileSize(bytes: number): string {
 const FR_MONTH_NAMES = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
 
 
-function planItemMonthKey(item: PlanItem, qMonths: Array<{ key: string; label: string }>): string {
+function planItemMonthKey(
+  item: PlanItem,
+  qMonths: Array<{ key: string; label: string; num: number }>,
+): string {
+  // Explicit month wins — set when the item is added from a month card.
+  if (item.month != null) {
+    const byNum = qMonths.find((qm) => qm.num === item.month);
+    if (byNum) return byNum.key;
+  }
   const meta = item.meta ?? "";
   let m = meta.match(/(?:\d+|fin)\s+(janv|fév|févr?|mars|avr|mai|juin|juil|ao[uû]t|sept|oct|nov|déc)/i);
   if (!m) m = meta.match(/(?<!\w)(janv|fév|févr?|mars|avr|mai|juin|juil|ao[uû]t|sept|oct|nov|déc)(?!\w)/i);
@@ -284,6 +292,7 @@ function storedToPlanItem(s: StoredPlanItem): PlanItem {
     title: s.title,
     meta: s.meta,
     done: s.done,
+    month: s.month,
     impact: s.impact,
     responsable: s.responsable,
     detail: s.detail,
@@ -400,7 +409,7 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [newActionTitle, setNewActionTitle] = useState("");
   const [newActionDue, setNewActionDue] = useState("");
   const [newActionStatus, setNewActionStatus] = useState<"normal" | "warn" | "late">("normal");
-  const [addPlanCtx, setAddPlanCtx] = useState<{ quarter: string; type: "atelier" | "kit" | "csm" | "custom" } | null>(null);
+  const [addPlanCtx, setAddPlanCtx] = useState<{ quarter: string; type: "atelier" | "kit" | "csm" | "custom"; month?: number } | null>(null);
   const [selectedCatalogId, setSelectedCatalogId] = useState<string | null>(null);
   const [addPlanDate, setAddPlanDate] = useState("");
   const [addPlanCustomTitle, setAddPlanCustomTitle] = useState("");
@@ -616,7 +625,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     ): StoredPlanItem => {
       const e = eff(item);
       return {
-        id: e.id, quarter, year, type: e.type, icon: e.icon, title: e.title, meta: e.meta,
+        id: e.id, quarter, year, month: e.month, type: e.type, icon: e.icon, title: e.title, meta: e.meta,
         done: isDone(item),
         impact: e.impact || undefined,
         responsable: e.responsable || undefined,
@@ -830,8 +839,12 @@ export default function ClientDetailView({ id }: { id: string }) {
     setShowDocModal(false);
   };
 
-  const openAddPlan = (quarter: string, type: "atelier" | "kit" | "csm" | "custom") => {
-    setAddPlanCtx({ quarter, type });
+  const openAddPlan = (
+    quarter: string,
+    type: "atelier" | "kit" | "csm" | "custom",
+    month?: number,
+  ) => {
+    setAddPlanCtx({ quarter, type, month });
     setAddPlanSearch("");
     setAddPlanCatFilter("Tous");
     setSelectedCatalogId(null);
@@ -849,6 +862,11 @@ export default function ClientDetailView({ id }: { id: string }) {
     // Monotonic id for ad-hoc plan items — high base avoids colliding with
     // the small numeric ids of seeded plan items.
     const newId = (planItemSeq.current += 1);
+    // Month placement: a picked date wins, else the month card it was added
+    // from. Stored on the item so every view places it identically.
+    const month = addPlanDate
+      ? parseInt(addPlanDate.split("-")[1], 10) - 1
+      : addPlanCtx.month;
     if (addPlanCtx.type === "atelier" || addPlanCtx.type === "kit") {
       const item = catalogItems.find((i) => i.id === selectedCatalogId);
       if (!item) return;
@@ -857,7 +875,7 @@ export default function ClientDetailView({ id }: { id: string }) {
         formatDateFr(addPlanDate),
         addPlanTime.trim(),
       ].filter(Boolean).join(" · ");
-      setExtraPlanItems((prev) => [...prev, { id: newId, type: addPlanCtx.type, icon: item.icon, title: item.title, meta, done: false, quarter: addPlanCtx.quarter }]);
+      setExtraPlanItems((prev) => [...prev, { id: newId, type: addPlanCtx.type, icon: item.icon, title: item.title, meta, done: false, month, quarter: addPlanCtx.quarter }]);
     } else {
       if (!addPlanCustomTitle.trim()) return;
       const dateFr = formatDateFr(addPlanDate);
@@ -869,6 +887,7 @@ export default function ClientDetailView({ id }: { id: string }) {
         title: addPlanCustomTitle.trim(),
         meta: metaParts.join(" · "),
         done: false,
+        month,
         quarter: addPlanCtx.quarter,
         responsable: addPlanResponsable.trim() || undefined,
         detail: addPlanDetail.trim() || undefined,
@@ -2140,7 +2159,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                           {(["🎓 Atelier", "📢 Kit", "📞 Point CSM", "⚡ Custom"] as const).map((chip) => (
                             <button
                               key={chip}
-                              onClick={() => openAddPlan(qLower, CHIP_TYPE_MAP[chip])}
+                              onClick={() => openAddPlan(qLower, CHIP_TYPE_MAP[chip], month.num)}
                               className="rounded-full border border-dashed border-[#1a3530] px-[11px] py-[5px] text-[11px] text-[#e8f5ef] transition-all hover:border-[#84d4a6] hover:bg-[rgba(132,212,166,0.05)] hover:text-[#84d4a6]"
                             >{chip}</button>
                           ))}

@@ -494,10 +494,15 @@ export default function MonPlanningPage() {
     if (storeState && activeYear === TODAY_YEAR) {
       for (const month of allMonths) merged[month] = [];
       for (const item of storeState.items) {
+        // Explicit month wins (set by the CSM plan editor). Otherwise fall
+        // back to parsing the meta date, then to the quarter's first month.
         const parsed = metaToMonthYear(item.meta);
-        const month = (parsed && parsed.year === activeYear)
-          ? parsed.month
-          : quarterFirstMonth[item.quarter];
+        const month =
+          typeof item.month === "number" && allMonths[item.month]
+            ? allMonths[item.month]
+            : parsed && parsed.year === activeYear
+              ? parsed.month
+              : quarterFirstMonth[item.quarter];
         if (!allMonths.includes(month)) continue;
         merged[month].push({
           type: PLAN_EVENT_TYPE_MAP[item.type] ?? "atelier",

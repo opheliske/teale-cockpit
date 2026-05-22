@@ -11,6 +11,8 @@ export type StoredPlanItem = {
   quarter: "Q1" | "Q2" | "Q3" | "Q4";
   // Plan year the item belongs to. Absent ⇒ current (back-compatible).
   year?: "current" | "next";
+  // Month within the quarter (0-11). Absent on legacy rows.
+  month?: number;
   type: StoredPlanItemType;
   icon: string;
   title: string;
