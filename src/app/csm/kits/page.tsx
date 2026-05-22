@@ -442,7 +442,6 @@ export default function CsmKitsPage() {
             {activeTheme === "animation" && (
               <AdminAnimationSection
                 items={filteredAnimation}
-                allItems={animationItems}
                 onAdd={() => openNew("animation")}
                 onEdit={(id) => openEdit("animation", id)}
                 onDelete={(id) => setConfirmDelete({ kind: "animation", id })}
@@ -532,13 +531,11 @@ export default function CsmKitsPage() {
 
 function AdminAnimationSection({
   items,
-  allItems,
   onAdd,
   onEdit,
   onDelete,
 }: {
   items: AnimationItem[];
-  allItems: AnimationItem[];
   onAdd: () => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;

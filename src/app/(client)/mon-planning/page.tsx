@@ -406,7 +406,7 @@ export default function MonPlanningPage() {
     return csmClientsStore.subscribe(() => {
       setContractStart(csmClientsStore.get(CLIENT_ID)?.contractStart ?? "");
     });
-  }, []);
+  }, [CLIENT_ID]);
 
   const planQuarters = useMemo(() => buildPlanQuarters(contractStart), [contractStart]);
 
@@ -462,17 +462,17 @@ export default function MonPlanningPage() {
   useEffect(() => {
     planStore.load(CLIENT_ID);
     return planStore.subscribe(() => setStoreState(planStore.getState()));
-  }, []);
+  }, [CLIENT_ID]);
 
   useEffect(() => {
     docsStore.load(CLIENT_ID);
     return docsStore.subscribe(() => setStoreDocs(docsStore.getDocs()));
-  }, []);
+  }, [CLIENT_ID]);
 
   useEffect(() => {
     targetsStore.load(CLIENT_ID);
     return targetsStore.subscribe(() => setClientLabels(targetsStore.getLabels(CLIENT_ID)));
-  }, []);
+  }, [CLIENT_ID]);
 
   // Override quarter themes from CSM plan store when available
   const displayQuarters = useMemo<Quarter[]>(() => {
@@ -526,14 +526,6 @@ export default function MonPlanningPage() {
     }
     return merged;
   }, [activeYear, urgencies, storeState, quarterFirstMonth]);
-
-  const remainingEvents = Object.values(yearEvents)
-    .flat()
-    .filter((e) => !e.done).length;
-  const yearTotalEvents = Object.values(yearEvents).reduce(
-    (n, arr) => n + arr.length,
-    0
-  );
 
   const switchYear = (y: Year) => {
     setActiveYear(y);
@@ -593,7 +585,7 @@ export default function MonPlanningPage() {
           {/* Year switcher + quarter tabs */}
           <div className="mb-7 grid items-center gap-6" style={{ gridTemplateColumns: "auto 1fr" }}>
             <YearSwitcher year={activeYear} onChange={switchYear} />
-            <QuarterTabs active={activeQuarterId} year={activeYear} onSelect={setActiveQuarterId} quarterList={displayQuarters} />
+            <QuarterTabs active={activeQuarterId} onSelect={setActiveQuarterId} quarterList={displayQuarters} />
           </div>
 
           {/* Section header */}
@@ -716,12 +708,10 @@ function YearSwitcher({
 
 function QuarterTabs({
   active,
-  year,
   onSelect,
   quarterList,
 }: {
   active: QuarterId;
-  year: Year;
   onSelect: (id: QuarterId) => void;
   quarterList: Quarter[];
 }) {
@@ -1660,29 +1650,6 @@ function DocumentCard({ doc }: { doc: CsmDocument }) {
         </div>
       )}
     </article>
-  );
-}
-
-function StatPill({
-  value,
-  label,
-  accent,
-}: {
-  value: number | string;
-  label: string;
-  accent?: boolean;
-}) {
-  return (
-    <div className="min-w-[110px] rounded-2xl border border-brand-border-dark bg-brand-surface px-4 py-3">
-      <div
-        className={`text-2xl font-medium leading-none ${accent ? "text-brand-green-bright" : "text-brand-cream"}`}
-      >
-        {value}
-      </div>
-      <div className="mt-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-brand-muted-on-dark">
-        {label}
-      </div>
-    </div>
   );
 }
 

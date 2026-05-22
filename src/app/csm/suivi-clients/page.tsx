@@ -82,14 +82,6 @@ function csmInitials(name: string): string {
   return parts.slice(0, 2).map((p) => p[0]!.toUpperCase()).join("");
 }
 
-const STATUS_LABELS: Record<Exclude<StatusKey, "all">, string> = {
-  green: "Sains",
-  amber: "Vigilance",
-  danger: "À risque",
-  blue: "Onboarding",
-  new: "Sans suivi",
-};
-
 const STATUS_TAG_STYLES: Record<Exclude<StatusKey, "all">, { bg: string; border: string; text: string; dot: string }> = {
   green:  { bg: "rgba(168,232,149,0.15)",  border: "rgba(168,232,149,0.2)",  text: "#a8e895", dot: "#a8e895" },
   amber:  { bg: "rgba(253,224,71,0.15)",   border: "rgba(253,224,71,0.2)",   text: "#fde047", dot: "#fde047" },

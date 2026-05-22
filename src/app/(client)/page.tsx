@@ -59,7 +59,7 @@ export default function ClientHomePage() {
       unsubEvents();
       unsubDocs();
     };
-  }, []);
+  }, [CLIENT_ID]);
 
   const today = useMemo(() => {
     const d = new Date();
@@ -82,7 +82,7 @@ export default function ClientHomePage() {
       .filter((e): e is CsmEvent & { when: Date } =>
         e.when !== null && e.when.getTime() >= today.getTime())
       .sort((a, b) => a.when.getTime() - b.when.getTime());
-  }, [events, today]);
+  }, [events, today, CLIENT_ID]);
 
   const planItems = plan?.items ?? [];
   const planDone = planItems.filter((i) => i.done).length;

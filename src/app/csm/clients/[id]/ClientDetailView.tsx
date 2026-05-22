@@ -73,33 +73,6 @@ const PLAN_STYLE: Record<string, { border: string; bg: string; hoverBg: string }
   custom:  { border: "#dced63", bg: "rgba(220,236,99,0.05)",  hoverBg: "rgba(220,236,99,0.10)" },
 };
 
-// ─── Sparklines ───────────────────────────────────────────────────────────────
-
-function SparkLine({ variant }: { variant: "up" | "flat" | "amber" | "muted" }) {
-  const paths: Record<string, { line: string; area: string }> = {
-    up:   { line: "M0,28 L20,26 L40,22 L60,18 L80,14 L100,10 L120,6", area: "M0,28 L20,26 L40,22 L60,18 L80,14 L100,10 L120,6 L120,34 L0,34 Z" },
-    flat: { line: "M0,16 L20,15 L40,16 L60,15 L80,15 L100,16 L120,15", area: "M0,16 L20,15 L40,16 L60,15 L80,15 L100,16 L120,15 L120,34 L0,34 Z" },
-    amber:{ line: "M0,12 L20,18 L40,14 L60,22 L80,16 L100,20 L120,14", area: "M0,12 L20,18 L40,14 L60,22 L80,16 L100,20 L120,14 L120,34 L0,34 Z" },
-    muted:{ line: "M0,4 L20,7 L40,11 L60,15 L80,19 L100,23 L120,28",  area: "M0,4 L20,7 L40,11 L60,15 L80,19 L100,23 L120,28 L120,34 L0,34 Z" },
-  };
-  const colors: Record<string, { stroke: string; fill: string; dot: string }> = {
-    up:   { stroke: "#a8e895", fill: "rgba(168,232,149,0.35)", dot: "#a8e895" },
-    flat: { stroke: "#94a8a0", fill: "rgba(148,168,160,0.20)", dot: "#94a8a0" },
-    amber:{ stroke: "#fde047", fill: "rgba(253,224,71,0.25)", dot: "#fde047" },
-    muted:{ stroke: "#94a8a0", fill: "rgba(148,168,160,0.20)", dot: "#94a8a0" },
-  };
-  const p = paths[variant];
-  const c = colors[variant];
-  const dotX = variant === "muted" ? 120 : 120;
-  const dotY = variant === "muted" ? 28 : variant === "flat" ? 15 : variant === "amber" ? 14 : 6;
-  return (
-    <svg viewBox="0 0 120 34" preserveAspectRatio="none" className="h-[34px] w-full">
-      <path d={p.area} fill={c.fill} />
-      <path d={p.line} fill="none" stroke={c.stroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={dotX} cy={dotY} r="2.5" fill={c.dot} />
-    </svg>
-  );
-}
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -334,7 +307,6 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [editPlanType, setEditPlanType] = useState<PlanItemType>("atelier");
   const [editPlanIcon, setEditPlanIcon] = useState("");
   const [editPlanTargets, setEditPlanTargets] = useState<string[]>([]);
-  const [q1Open, setQ1Open] = useState(false);
   const [planFilter, setPlanFilter] = useState<string>("Tous");
   const [activeSection, setActiveSection] = useState<Section>("big-picture");
   const [planYear, setPlanYear] = useState<"prev" | "current" | "next">("current");
@@ -581,7 +553,10 @@ export default function ClientDetailView({ id }: { id: string }) {
           .map((i) => toStored(i, qMap[i.quarter] ?? "Q2")),
       ],
     });
-  }, [planOverrides, deletedPlanIds, extraPlanItems, currentThemes, planItems, itemTargets]);
+    // `detail` and `planTargetFilter` are intentionally omitted: `detail` is an
+    // unstable derived value (a fresh object when the client isn't in the
+    // static map), so listing it would re-run this store sync every render.
+  }, [planOverrides, deletedPlanIds, extraPlanItems, currentThemes, planItems, itemTargets]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getEffective = (item: PlanItem): PlanItem => planOverrides[item.id] ?? item;
 
@@ -1644,7 +1619,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                   </span>
                   <div className="-mx-4 mt-auto border-t border-[#1a3530] px-4 pt-2.5">
                     <button
-                      onClick={() => setDoneActions((prev) => { const s = new Set(prev); done ? s.delete(action.id) : s.add(action.id); return s; })}
+                      onClick={() => setDoneActions((prev) => { const s = new Set(prev); if (done) s.delete(action.id); else s.add(action.id); return s; })}
                       className={`w-full rounded-[8px] border px-3 py-[7px] text-[12px] font-semibold transition-all ${
                         done ? "border-[#a8e895] bg-[#a8e895] text-[#06241d]" : "border-[#84d4a6] text-[#84d4a6] hover:bg-[#84d4a6] hover:text-[#06241d]"
                       }`}
@@ -2341,7 +2316,7 @@ export default function ClientDetailView({ id }: { id: string }) {
               {/* Vertical timeline line */}
               <div className="absolute left-[7px] top-2 bottom-2 w-px bg-[#1a3530]" />
               <div className="flex flex-col gap-0">
-                {filtered.map((event: HistoryEvent, idx: number) => {
+                {filtered.map((event: HistoryEvent) => {
                   const cfg = HISTORY_CONFIG[event.type] ?? HISTORY_CONFIG.csm;
                   return (
                     <div key={event.id} className="relative flex gap-4 pb-5">

@@ -129,9 +129,6 @@ function commQuarterProgress(q: CommQuarter): number {
   return Math.round((todayIdx - startIdx) * 33 + 15);
 }
 
-const LETSTALK_LISTING_URL =
-  "https://app.livestorm.co/teale-1/upcoming?limit=5";
-
 type UpcomingLetsTalk = {
   id: string;
   title: string;
@@ -144,12 +141,6 @@ type UpcomingLetsTalk = {
 
 const upcomingLetsTalks: UpcomingLetsTalk[] = [];
 
-
-function statusStyle(status: string): string {
-  if (status.includes("Current")) return "bg-brand-accent/15 text-brand-accent";
-  if (status.includes("Upcoming")) return "bg-brand-highlight/15 text-brand-highlight";
-  return "bg-brand-muted-on-dark/15 text-brand-muted-on-dark";
-}
 
 function typeStyle(t: string): string {
   if (t.toLowerCase().includes("let's talk")) return "bg-[#E6AA99]/15 text-[#E6AA99]";
@@ -1216,88 +1207,6 @@ function SectionTitle({
         {description}
       </p>
     </header>
-  );
-}
-
-function Chip({
-  selected,
-  onClick,
-  children,
-}: {
-  selected: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={selected}
-      className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-        selected
-          ? "border-brand-accent bg-brand-accent text-brand-dark"
-          : "border-brand-border-dark bg-brand-dark text-brand-cream hover:border-brand-muted-on-dark"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function SearchInput({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div className="relative">
-      <svg
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-brand-muted-on-dark"
-        aria-hidden
-      >
-        <circle cx="11" cy="11" r="7" />
-        <path d="m20 20-3.5-3.5" />
-      </svg>
-      <input
-        type="search"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="Rechercher un kit, une thématique, un mois…"
-        className="w-full rounded-full border border-brand-border-dark bg-brand-dark py-3 pl-12 pr-12 text-sm text-brand-cream placeholder:text-brand-muted-on-dark focus:border-brand-accent focus:outline-none focus:ring-2 focus:ring-brand-accent/20"
-      />
-      {value && (
-        <button
-          type="button"
-          onClick={() => onChange("")}
-          aria-label="Effacer la recherche"
-          className="absolute right-3 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-brand-muted-on-dark transition-colors hover:bg-brand-border-dark hover:text-brand-cream"
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden
-          >
-            <path d="M6 6l12 12M6 18 18 6" />
-          </svg>
-        </button>
-      )}
-    </div>
   );
 }
 
