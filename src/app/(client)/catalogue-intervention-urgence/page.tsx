@@ -12,6 +12,10 @@ import {
   type UrgencyModalities,
   type UrgencyType,
 } from "@/lib/urgencies";
+import { impersonationStore } from "@/lib/impersonation-store";
+
+// Active client from the session context (seeded by ClientGuard / login).
+const CLIENT_ID = impersonationStore.get()?.clientId ?? "";
 
 type ChecklistGroup = {
   id: string;
@@ -543,7 +547,7 @@ function DeclareUrgencyModal({ onClose }: { onClose: () => void }) {
   const toggleModality = (k: keyof UrgencyModalities) =>
     setModalities((prev) => ({ ...prev, [k]: !prev[k] }));
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const urgency: Urgency = {
       id: `urg-${Date.now().toString(36)}`,
@@ -557,7 +561,9 @@ function DeclareUrgencyModal({ onClose }: { onClose: () => void }) {
       location: location.trim() || undefined,
       rhContact: rhContact.trim() || undefined,
     };
-    addUrgency(urgency);
+    // Persist to Supabase so the declaration reaches the CSM. The summary
+    // screen (copyable) stays available as a manual fallback either way.
+    await addUrgency(urgency, CLIENT_ID);
     setSubmitted(urgency);
   };
 

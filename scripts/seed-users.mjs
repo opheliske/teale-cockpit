@@ -46,12 +46,33 @@ if (!url || !serviceKey) {
   process.exit(1);
 }
 
+// ── Safety guards ────────────────────────────────────────────────────────────
+// This script creates a CSM account (full access). Running it on a production
+// project would expose admin credentials. It refuses to run unless the
+// operator explicitly opts in with ALLOW_SEED=1.
+if ((env.ALLOW_SEED || process.env.ALLOW_SEED) !== "1") {
+  console.error(
+    "✗ Exécution refusée — seed-users crée un compte CSM à accès total.\n" +
+      "  NE JAMAIS le lancer sur la production.\n" +
+      "  Sur un environnement de démo/dev, relance avec :\n" +
+      "    ALLOW_SEED=1 SEED_DEMO_PASSWORD='<mot de passe fort>' npm run seed-users",
+  );
+  process.exit(1);
+}
+
+// Password comes from the environment — no weak default committed to the repo.
+const PASSWORD = env.SEED_DEMO_PASSWORD || process.env.SEED_DEMO_PASSWORD;
+if (!PASSWORD || PASSWORD.length < 12) {
+  console.error(
+    "✗ SEED_DEMO_PASSWORD manquant ou trop court (12 caractères minimum).\n" +
+      "  Exemple : ALLOW_SEED=1 SEED_DEMO_PASSWORD='<mot de passe fort>' npm run seed-users",
+  );
+  process.exit(1);
+}
+
 const supabase = createClient(url, serviceKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
-
-// Fixed demo password — reproducible across runs.
-const PASSWORD = "TealeDemo2026!";
 const CSM = { email: "csm.demo@teale.io", name: "CSM Démo" };
 const CLIENT = { email: "client.demo@teale.io", name: "RH Démo" };
 

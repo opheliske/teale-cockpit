@@ -799,6 +799,21 @@ export default function ClientDetailView({ id }: { id: string }) {
     setAddPlanCatFilter("Tous");
   };
 
+  // Dynamic quarters based on contract start date.
+  // NOTE: every hook must stay above the early returns below — calling a hook
+  // conditionally violates the Rules of Hooks and crashes the render.
+  const planQuarters = useMemo(
+    () => buildPlanQuarters(localDetail.contractStart),
+    [localDetail.contractStart],
+  );
+
+  const planQAutoSet = useRef(false);
+  useEffect(() => {
+    if (planQAutoSet.current) return;
+    const target = planQuarters.find((q) => q.status === "current") ?? planQuarters.find((q) => q.status === "upcoming");
+    if (target) { setActivePlanQ(target.id); planQAutoSet.current = true; }
+  }, [planQuarters]);
+
   if (storeLoading) {
     return <ClientDetailSkeleton />;
   }
@@ -832,19 +847,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     { key: "⚡ Custom", count: allPlanItems.filter((i) => i.type === "custom").length },
   ].filter((o) => o.count > 0);
 
-  // Dynamic quarters based on contract start date
-  const planQuarters = useMemo(
-    () => buildPlanQuarters(localDetail.contractStart),
-    [localDetail.contractStart],
-  );
   const getPQ = (q: "Q1" | "Q2" | "Q3" | "Q4") => planQuarters.find((pq) => pq.id === q)!;
-
-  const planQAutoSet = useRef(false);
-  useEffect(() => {
-    if (planQAutoSet.current) return;
-    const target = planQuarters.find((q) => q.status === "current") ?? planQuarters.find((q) => q.status === "upcoming");
-    if (target) { setActivePlanQ(target.id); planQAutoSet.current = true; }
-  }, [planQuarters]);
 
   const filterPlanItems = (items: PlanItem[]) => {
     const active = items.filter((i) => !deletedPlanIds.has(i.id)).map(getEffective);

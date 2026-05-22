@@ -1,3 +1,6 @@
+import { supabase } from "@/lib/supabase";
+import { notifyChange, watchChanges } from "@/lib/sync";
+
 export type UrgencyType =
   | "deces"
   | "suicide"
@@ -28,25 +31,68 @@ export type Urgency = {
   rhContact?: string;
 };
 
-const KEY = "teale-urgencies-v1";
-
-export function getUrgencies(): Urgency[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as Urgency[]) : [];
-  } catch {
-    return [];
-  }
+function fromRow(row: Record<string, unknown>): Urgency {
+  return {
+    id: row.id as string,
+    createdAt: row.created_at as string,
+    eventDate: row.event_date as string,
+    type: row.type as UrgencyType,
+    description: (row.description as string) ?? undefined,
+    modalities: (row.modalities as UrgencyModalities) ?? {
+      suivisIndividuels: false,
+      groupeParole24h: false,
+      groupeParole72h: false,
+      atelierPtsd: false,
+    },
+    affectedHeadcount: (row.affected_headcount as string) ?? undefined,
+    mode: row.mode as UrgencyMode,
+    location: (row.location as string) ?? undefined,
+    rhContact: (row.rh_contact as string) ?? undefined,
+  };
 }
 
-export function addUrgency(u: Urgency): void {
-  if (typeof window === "undefined") return;
-  const all = getUrgencies();
-  all.unshift(u);
-  window.localStorage.setItem(KEY, JSON.stringify(all));
+/** Loads urgency declarations. RLS scopes: a client sees its own, a CSM all. */
+export async function getUrgencies(): Promise<Urgency[]> {
+  const { data, error } = await supabase
+    .from("urgencies")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.error("[urgencies] load", error);
+    return [];
+  }
+  return (data ?? []).map(fromRow);
+}
+
+/** Declares an emergency intervention for the given client. */
+export async function addUrgency(
+  u: Urgency,
+  clientId: string,
+): Promise<{ error: string | null }> {
+  const { error } = await supabase.from("urgencies").insert({
+    id: u.id,
+    client_id: clientId,
+    created_at: u.createdAt,
+    event_date: u.eventDate,
+    type: u.type,
+    description: u.description ?? null,
+    modalities: u.modalities,
+    affected_headcount: u.affectedHeadcount ?? null,
+    mode: u.mode,
+    location: u.location ?? null,
+    rh_contact: u.rhContact ?? null,
+  });
+  if (error) {
+    console.error("[urgencies] add", error);
+    return { error: error.message };
+  }
+  notifyChange("urgencies");
+  return { error: null };
+}
+
+/** Calls `cb` when an urgency changes (another tab, another user, Realtime). */
+export function watchUrgencies(cb: () => void): () => void {
+  return watchChanges(["urgencies"], cb);
 }
 
 export const urgencyTypeLabels: Record<UrgencyType, string> = {

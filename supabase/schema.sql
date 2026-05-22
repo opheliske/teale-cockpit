@@ -1,5 +1,35 @@
--- Teale Cockpit — Supabase schema
--- Run this in the Supabase SQL editor to create all tables.
+-- Teale Cockpit — Supabase schema (baseline)
+--
+-- ⚠️  This file only creates the tables. It does NOT enable Row Level Security.
+--     Running it ALONE leaves every table world-readable/writable.
+--
+-- Correct setup order (see README → "Authentication & roles"):
+--   1. Run this schema.sql
+--   2. Run every file in supabase/migrations/ in chronological (filename) order
+--      → profiles, RLS policies, owner_csm_id, Realtime publication, urgencies…
+-- Only after step 2 is the database complete and secured by RLS.
+
+-- ─── Clients (company table) ─────────────────────────────────────────────────
+-- Referenced by profiles.client_id and every per-client table. Must exist
+-- before the migrations run (the auth_profiles migration FKs to it).
+create table if not exists public.clients (
+  id             text primary key,
+  name           text not null,
+  initials       text not null,
+  color          text not null,
+  collab         integer not null default 0,
+  owner_csm_id   uuid,  -- FK to profiles(id) added by the clients_owner_csm migration
+  statut         text not null default 'green' check (statut in ('green', 'amber', 'danger')),
+  formule        text not null,
+  atelier_total  integer not null default 0,
+  rdv_par_collab numeric not null default 0,
+  contract_start text not null default '',
+  contract_end   text not null default '',
+  churn_notice   text not null default '',
+  produits       jsonb not null default '[]',
+  arr            integer not null default 0,
+  created_at     timestamptz not null default now()
+);
 
 -- ─── Workshops ──────────────────────────────────────────────────────────────
 -- Full Workshop objects stored as JSON (objectives, programme, targetAudience arrays).
@@ -125,6 +155,7 @@ create table if not exists documents (
 create index if not exists documents_client_id_idx on documents (client_id);
 
 -- ─── Plan comments (messaging between client and CSM) ────────────────────────
+-- client_id is added by the plan_comments_client_id migration.
 create table if not exists plan_comments (
   id         bigint primary key generated always as identity,
   thread_id  text not null,   -- String(planItemId) or "type:title" for static events
@@ -134,3 +165,20 @@ create table if not exists plan_comments (
 );
 
 create index if not exists plan_comments_thread_id_idx on plan_comments (thread_id);
+
+-- ─── Urgencies (emergency intervention declarations) ─────────────────────────
+create table if not exists public.urgencies (
+  id                 text primary key,
+  client_id          text not null references public.clients (id) on delete cascade,
+  created_at         timestamptz not null default now(),
+  event_date         text not null,
+  type               text not null,
+  description        text,
+  modalities         jsonb not null default '{}',
+  affected_headcount text,
+  mode               text not null,
+  location           text,
+  rh_contact         text
+);
+
+create index if not exists urgencies_client_id_idx on public.urgencies (client_id);

@@ -7,6 +7,7 @@ import { targetsStore, type TargetLabel } from "@/lib/targets-store";
 import { docsStore, type StoredDocument } from "@/lib/docs-store";
 import {
   getUrgencies,
+  watchUrgencies,
   modalitiesToList,
   parseEventDate,
   urgencyTypeEmoji,
@@ -442,7 +443,18 @@ export default function MonPlanningPage() {
   const [targetFilter, setTargetFilter] = useState<string | null>(null);
 
   useEffect(() => {
-    setUrgencies(getUrgencies());
+    let active = true;
+    const refresh = () => {
+      void getUrgencies().then((u) => {
+        if (active) setUrgencies(u);
+      });
+    };
+    refresh();
+    const unwatch = watchUrgencies(refresh);
+    return () => {
+      active = false;
+      unwatch();
+    };
   }, []);
 
   useEffect(() => {

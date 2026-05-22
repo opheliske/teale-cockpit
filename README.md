@@ -45,17 +45,23 @@ cp .env.example .env.local
 
 `.env.local` is git-ignored. **Never commit the service_role key.**
 
-### 2. Apply the database migrations
+### 2. Set up the database
 
-Run the SQL files in `supabase/migrations/` **in chronological order** in the Supabase SQL editor:
+Run the SQL in the Supabase SQL editor, **in this exact order** — the result is a complete database with RLS active:
 
-1. `…_auth_profiles.sql` — `profiles` table + role enum + auto-provisioning trigger.
-2. `…_plan_comments_client_id.sql` — adds `client_id` to `plan_comments` for per-client isolation.
-3. `…_rls_policies.sql` — enables RLS and the access policies on every table.
+1. **`supabase/schema.sql`** — creates every table (`clients`, `profiles`-less baseline, etc.). ⚠️ This file does **not** enable RLS on its own.
+2. **Every file in `supabase/migrations/`, in chronological (filename) order**:
+   1. `…140000_auth_profiles.sql` — `profiles` table + role enum + auto-provisioning trigger.
+   2. `…140100_plan_comments_client_id.sql` — adds `client_id` to `plan_comments`.
+   3. `…140200_rls_policies.sql` — **enables RLS** and the access policies on every table.
+   4. `…150000_clients_owner_csm.sql` — adds `clients.owner_csm_id` (FK to `profiles`).
+   5. `…160000_clients_drop_legacy_csm.sql` — drops the legacy `csm` / `csm_label` columns.
+   6. `…20260521120000_enable_realtime.sql` — adds the data tables to the Realtime publication.
+   7. `…20260522120000_urgencies.sql` — `urgencies` table + RLS + Realtime.
 
-> These migrations run against the existing Supabase project (the `clients` table must already exist).
+> ⚠️ Running `schema.sql` **alone** leaves the tables without RLS. The migrations (step 2) are mandatory — they are what secures the database.
 
-After applying them, you can verify isolation with `supabase/tests/rls_access_test.sql` (fill in the placeholder ids, then run each block in the SQL editor).
+After applying everything, verify isolation with `supabase/tests/rls_access_test.sql` (fill in the placeholder ids, then run each block in the SQL editor).
 
 ### 3. Create user accounts (admin)
 
@@ -90,10 +96,12 @@ Creates 3 demo clients (ids `demo-…`) with a yearly plan, CSM actions and heal
 To create ready-to-use demo login accounts (one CSM + one Client):
 
 ```bash
-npm run seed-users
+ALLOW_SEED=1 SEED_DEMO_PASSWORD='<strong password>' npm run seed-users
 ```
 
-Creates `csm.demo@teale.io` (CSM) and `client.demo@teale.io` (Client, attached to the `demo-acme` company or the first existing client) — both with the password `TealeDemo2026!`. Idempotent: existing accounts are left untouched. Run `npm run seed-demo` first so the demo company exists.
+Creates `csm.demo@teale.io` (CSM) and `client.demo@teale.io` (Client, attached to the `demo-acme` company or the first existing client), both with the password from `SEED_DEMO_PASSWORD`. Idempotent: existing accounts are left untouched. Run `npm run seed-demo` first so the demo company exists.
+
+> ⚠️ **Never run `seed-users` against production.** It creates a CSM account with full access. The script refuses to run unless you explicitly pass `ALLOW_SEED=1`, and there is no default password — `SEED_DEMO_PASSWORD` must be provided. Only run it on a dedicated demo/dev Supabase project.
 
 ## Learn More
 
