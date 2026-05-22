@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { impersonationStore } from "@/lib/impersonation-store";
+import { closeSync } from "@/lib/sync";
 
 export type UserRole = "csm" | "client";
 
@@ -61,13 +62,24 @@ export function useAuth() {
 /**
  * Signs the user out and sends them to the login page.
  *
- * Made bulletproof on purpose: `supabase.auth.signOut()` can hang (a stuck
- * internal auth lock), which previously blocked the redirect entirely. So we
- * cap the call with a timeout AND clear the Supabase auth cookies ourselves,
- * then do a hard navigation — the proxy then sees no session.
+ * KNOWN WORKAROUND — `supabase.auth.signOut()` can hang indefinitely when the
+ * `@supabase/auth-js` Navigator LockManager lock gets stuck (observed across
+ * tabs / after a Realtime socket close; see supabase/auth-js issues around the
+ * `lock`/`navigatorLock` behaviour). A hung promise previously blocked the
+ * redirect entirely, leaving the user "stuck logged in".
+ *
+ * So this is deliberately defensive rather than a clean `await signOut()`:
+ *   1. Close the Realtime channels / BroadcastChannel (closeSync).
+ *   2. Race the real signOut against a 1.5 s timeout — never block on it.
+ *   3. Clear the `sb-*` auth cookies ourselves (the actual logout).
+ *   4. Hard-navigate to /login — the proxy then sees no session.
+ *
+ * Revisit (drop the timeout, plain await) once the upstream lock issue is
+ * fixed in a future @supabase/auth-js release.
  */
 export async function signOut() {
   impersonationStore.set(null);
+  closeSync();
 
   // Best-effort proper sign-out, but never let it block the redirect.
   try {

@@ -18,8 +18,6 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
 ## Authentication & roles
 
 The app is gated by Supabase Auth (email + password). There are two roles:
@@ -113,17 +111,17 @@ Creates `csm.demo@teale.io` (CSM) and `client.demo@teale.io` (Client, attached t
 
 > ⚠️ **Never run `seed-users` against production.** It creates a CSM account with full access. The script refuses to run unless you explicitly pass `ALLOW_SEED=1`, and there is no default password — `SEED_DEMO_PASSWORD` must be provided. Only run it on a dedicated demo/dev Supabase project.
 
-## Learn More
+## Tests & CI
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm test          # unit tests for the src/lib helpers (Node test runner)
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Every push and pull request runs `tsc`, ESLint, the tests and a production
+build via GitHub Actions (`.github/workflows/ci.yml`).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Deployment
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The app is deployed on Vercel from the `main` branch. Set the environment
+variables from `.env.example` in the Vercel project, and apply any pending
+SQL migrations (see "Set up the database") before the first deploy.

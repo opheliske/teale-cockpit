@@ -15,7 +15,7 @@ type Entry = { tables: Set<string>; cb: ChangeListener };
 const CHANNEL_NAME = "teale-sync";
 
 const entries = new Set<Entry>();
-const realtimeTables = new Set<string>();
+const realtimeChannels = new Map<string, ReturnType<typeof supabase.channel>>();
 let bc: BroadcastChannel | null = null;
 
 function dispatch(table: string) {
@@ -34,13 +34,13 @@ function initBroadcast() {
 }
 
 function initRealtimeTable(table: string) {
-  if (typeof window === "undefined" || realtimeTables.has(table)) return;
-  realtimeTables.add(table);
+  if (typeof window === "undefined" || realtimeChannels.has(table)) return;
   // RLS applies to Realtime too — a client only receives changes it can read.
-  supabase
+  const channel = supabase
     .channel(`teale-rt-${table}`)
     .on("postgres_changes", { event: "*", schema: "public", table }, () => dispatch(table))
     .subscribe();
+  realtimeChannels.set(table, channel);
 }
 
 /** Broadcasts a local write so the other tabs of this browser re-fetch. */
@@ -62,4 +62,18 @@ export function watchChanges(tables: string[], onChange: ChangeListener): () => 
   return () => {
     entries.delete(entry);
   };
+}
+
+/**
+ * Tears down every Realtime channel and the BroadcastChannel. Call it on
+ * sign-out so the WebSocket and channel aren't left open across sessions.
+ */
+export function closeSync() {
+  for (const channel of realtimeChannels.values()) {
+    supabase.removeChannel(channel);
+  }
+  realtimeChannels.clear();
+  bc?.close();
+  bc = null;
+  entries.clear();
 }
