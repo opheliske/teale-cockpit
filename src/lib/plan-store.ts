@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { notifyChange, watchChanges } from "@/lib/sync";
+import type { PlanItemFile } from "@/lib/clients-data";
 
 export type StoredPlanItemType = "atelier" | "kit" | "csm" | "qbr" | "custom";
 
@@ -13,6 +14,9 @@ export type StoredPlanItem = {
   done: boolean;
   impact?: string;
   targets?: string[];
+  responsable?: string;
+  detail?: string;
+  files?: PlanItemFile[];
 };
 
 export type StoredPlanState = {

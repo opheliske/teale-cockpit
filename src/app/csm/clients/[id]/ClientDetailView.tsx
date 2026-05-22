@@ -275,6 +275,36 @@ type LocalDetail = {
   produits: ProduitTeale[];
 };
 
+// Converts a persisted plan item back to the editable PlanItem shape.
+function storedToPlanItem(s: StoredPlanItem): PlanItem {
+  return {
+    id: s.id,
+    type: s.type,
+    icon: s.icon,
+    title: s.title,
+    meta: s.meta,
+    done: s.done,
+    impact: s.impact,
+    responsable: s.responsable,
+    detail: s.detail,
+    files: s.files,
+    targets: s.targets,
+  };
+}
+
+// Rebuilds the per-quarter plan from the saved plan_state items, so the CSM
+// plan tab reloads exactly what was persisted instead of a static base.
+function buildPlanBase(items: StoredPlanItem[]) {
+  return {
+    planQ1: items.filter((i) => i.quarter === "Q1").map(storedToPlanItem),
+    planQ2Done: items.filter((i) => i.quarter === "Q2" && i.done).map(storedToPlanItem),
+    planQ2Upcoming: items.filter((i) => i.quarter === "Q2" && !i.done).map(storedToPlanItem),
+    planQ3: items.filter((i) => i.quarter === "Q3").map(storedToPlanItem),
+    planQ4: items.filter((i) => i.quarter === "Q4").map(storedToPlanItem),
+  };
+}
+type PlanBase = ReturnType<typeof buildPlanBase>;
+
 export default function ClientDetailView({ id }: { id: string }) {
   const router = useRouter();
 
@@ -443,17 +473,27 @@ export default function ClientDetailView({ id }: { id: string }) {
     });
   }
 
-  const [storedPlanItems, setStoredPlanItems] = useState<import("@/lib/plan-store").StoredPlanItem[]>(() => planStore.getState()?.items ?? []);
-  const planThemesLoaded = useRef(false);
+  const [storedPlanItems, setStoredPlanItems] = useState<StoredPlanItem[]>(() => planStore.getState()?.items ?? []);
+  // The saved plan, used as the editable base once loaded (instead of the
+  // static `detail`). planLoaded gates the sync effect so it can't overwrite
+  // plan_state with the static base before the real plan has been read.
+  const [planBase, setPlanBase] = useState<PlanBase>(() => ({
+    planQ1: detail?.planQ1 ?? [],
+    planQ2Done: detail?.planQ2Done ?? [],
+    planQ2Upcoming: detail?.planQ2Upcoming ?? [],
+    planQ3: detail?.planQ3 ?? [],
+    planQ4: detail?.planQ4 ?? [],
+  }));
+  const [planLoaded, setPlanLoaded] = useState(false);
 
   useEffect(() => {
-    planThemesLoaded.current = false;
-    planStore.load(id);
-    return planStore.subscribe(() => {
+    let alive = true;
+    (async () => {
+      await planStore.load(id);
+      if (!alive) return;
       const state = planStore.getState();
       setStoredPlanItems(state?.items ?? []);
-      if (!planThemesLoaded.current && state?.themes) {
-        planThemesLoaded.current = true;
+      if (state?.themes) {
         setCurrentThemes({
           q1: state.themes.Q1 || "🚀 Kickoff et onboarding",
           q2: state.themes.Q2 || "",
@@ -461,7 +501,20 @@ export default function ClientDetailView({ id }: { id: string }) {
           q4: state.themes.Q4 || "",
         });
       }
+      // Once there is a saved plan, it becomes the editable base — so added /
+      // edited / deleted items survive a reload instead of being clobbered.
+      if (state?.items && state.items.length > 0) {
+        setPlanBase(buildPlanBase(state.items));
+      }
+      setPlanLoaded(true);
+    })();
+    const unsub = planStore.subscribe(() => {
+      setStoredPlanItems(planStore.getState()?.items ?? []);
     });
+    return () => {
+      alive = false;
+      unsub();
+    };
   }, [id]);
 
   useEffect(() => {
@@ -529,14 +582,25 @@ export default function ClientDetailView({ id }: { id: string }) {
     setHealthDate(new Date().toISOString().split("T")[0]);
   }
 
-  // Sync effective plan state to shared store so client "Suivi projet" view reflects CSM changes
+  // Sync the effective plan to plan_state so the client "Suivi projet" view
+  // reflects CSM changes. Gated on planLoaded: it must NOT run before the
+  // saved plan has been read, otherwise it would overwrite plan_state with
+  // the static base and wipe everything that had been added.
   useEffect(() => {
-    if (!detail) return;
+    if (!detail || !planLoaded) return;
     const eff = (item: PlanItem): PlanItem => planOverrides[item.id] ?? item;
     const isDone = (item: PlanItem): boolean => item.done || !!planItems[item.id];
     const toStored = (item: PlanItem, quarter: StoredPlanItem["quarter"]): StoredPlanItem => {
       const e = eff(item);
-      return { id: e.id, quarter, type: e.type, icon: e.icon, title: e.title, meta: e.meta, done: isDone(item), impact: e.impact || undefined, targets: e.targets?.length ? e.targets : (itemTargets[e.id]?.length ? itemTargets[e.id] : undefined) };
+      return {
+        id: e.id, quarter, type: e.type, icon: e.icon, title: e.title, meta: e.meta,
+        done: isDone(item),
+        impact: e.impact || undefined,
+        responsable: e.responsable || undefined,
+        detail: e.detail || undefined,
+        files: e.files?.length ? e.files : undefined,
+        targets: e.targets?.length ? e.targets : (itemTargets[e.id]?.length ? itemTargets[e.id] : undefined),
+      };
     };
     const qMap: Record<string, StoredPlanItem["quarter"]> = {
       q1: "Q1", q2: "Q2", q3: "Q3", q4: "Q4",
@@ -545,20 +609,20 @@ export default function ClientDetailView({ id }: { id: string }) {
     planStore.setState({
       themes: { Q1: currentThemes.q1, Q2: currentThemes.q2, Q3: currentThemes.q3, Q4: currentThemes.q4 },
       items: [
-        ...detail.planQ1.filter((i) => !deletedPlanIds.has(i.id)).filter((i) => !planTargetFilter || (itemTargets[i.id] ?? []).includes(planTargetFilter)).map((i) => toStored(i, "Q1")),
-        ...detail.planQ2Done.filter((i) => !deletedPlanIds.has(i.id)).map((i) => ({ ...toStored(i, "Q2"), done: true })),
-        ...detail.planQ2Upcoming.filter((i) => !deletedPlanIds.has(i.id)).map((i) => toStored(i, "Q2")),
-        ...detail.planQ3.filter((i) => !deletedPlanIds.has(i.id)).map((i) => toStored(i, "Q3")),
-        ...detail.planQ4.filter((i) => !deletedPlanIds.has(i.id)).map((i) => toStored(i, "Q4")),
+        ...planBase.planQ1.filter((i) => !deletedPlanIds.has(i.id)).map((i) => toStored(i, "Q1")),
+        ...planBase.planQ2Done.filter((i) => !deletedPlanIds.has(i.id)).map((i) => ({ ...toStored(i, "Q2"), done: true })),
+        ...planBase.planQ2Upcoming.filter((i) => !deletedPlanIds.has(i.id)).map((i) => toStored(i, "Q2")),
+        ...planBase.planQ3.filter((i) => !deletedPlanIds.has(i.id)).map((i) => toStored(i, "Q3")),
+        ...planBase.planQ4.filter((i) => !deletedPlanIds.has(i.id)).map((i) => toStored(i, "Q4")),
         ...extraPlanItems
           .filter((i) => !deletedPlanIds.has(i.id))
           .map((i) => toStored(i, qMap[i.quarter] ?? "Q2")),
       ],
     });
-    // `detail` and `planTargetFilter` are intentionally omitted: `detail` is an
-    // unstable derived value (a fresh object when the client isn't in the
-    // static map), so listing it would re-run this store sync every render.
-  }, [planOverrides, deletedPlanIds, extraPlanItems, currentThemes, planItems, itemTargets]); // eslint-disable-line react-hooks/exhaustive-deps
+    // `detail`, `planBase` and `planTargetFilter` are intentionally omitted:
+    // `planBase` is set once on load, and re-running on `detail` (an unstable
+    // derived object) would resync on every render.
+  }, [planOverrides, deletedPlanIds, extraPlanItems, currentThemes, planItems, itemTargets, planLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getEffective = (item: PlanItem): PlanItem => planOverrides[item.id] ?? item;
 
@@ -839,10 +903,10 @@ export default function ClientDetailView({ id }: { id: string }) {
   const isPlanDone = (item: PlanItem) => item.done || !!planItems[item.id];
 
   const allPlanItems = [
-    ...detail.planQ2Done,
-    ...detail.planQ2Upcoming,
-    ...detail.planQ3,
-    ...detail.planQ4,
+    ...planBase.planQ2Done,
+    ...planBase.planQ2Upcoming,
+    ...planBase.planQ3,
+    ...planBase.planQ4,
   ];
   const planFilterOptions = [
     { key: "Tous", count: allPlanItems.length },
@@ -865,10 +929,10 @@ export default function ClientDetailView({ id }: { id: string }) {
     return active.filter((i) => i.type === typeMap[planFilter]);
   };
 
-  const q2DoneFiltered = filterPlanItems(detail.planQ2Done).filter((i) => !planTargetFilter || (itemTargets[i.id] ?? []).includes(planTargetFilter));
-  const q2UpcomingFiltered = filterPlanItems(detail.planQ2Upcoming).filter((i) => !planTargetFilter || (itemTargets[i.id] ?? []).includes(planTargetFilter));
-  const q3Filtered = filterPlanItems(detail.planQ3).filter((i) => !planTargetFilter || (itemTargets[i.id] ?? []).includes(planTargetFilter));
-  const q4Filtered = filterPlanItems(detail.planQ4).filter((i) => !planTargetFilter || (itemTargets[i.id] ?? []).includes(planTargetFilter));
+  const q2DoneFiltered = filterPlanItems(planBase.planQ2Done).filter((i) => !planTargetFilter || (itemTargets[i.id] ?? []).includes(planTargetFilter));
+  const q2UpcomingFiltered = filterPlanItems(planBase.planQ2Upcoming).filter((i) => !planTargetFilter || (itemTargets[i.id] ?? []).includes(planTargetFilter));
+  const q3Filtered = filterPlanItems(planBase.planQ3).filter((i) => !planTargetFilter || (itemTargets[i.id] ?? []).includes(planTargetFilter));
+  const q4Filtered = filterPlanItems(planBase.planQ4).filter((i) => !planTargetFilter || (itemTargets[i.id] ?? []).includes(planTargetFilter));
   const extraQ2Filtered = filterPlanItems(extraPlanItems.filter((i) => i.quarter === "q2") as PlanItem[]).filter((i) => !planTargetFilter || (itemTargets[i.id] ?? []).includes(planTargetFilter));
   const extraQ3Filtered = filterPlanItems(extraPlanItems.filter((i) => i.quarter === "q3") as PlanItem[]).filter((i) => !planTargetFilter || (itemTargets[i.id] ?? []).includes(planTargetFilter));
   const extraQ4Filtered = filterPlanItems(extraPlanItems.filter((i) => i.quarter === "q4") as PlanItem[]).filter((i) => !planTargetFilter || (itemTargets[i.id] ?? []).includes(planTargetFilter));
@@ -1821,7 +1885,7 @@ export default function ClientDetailView({ id }: { id: string }) {
           {/* ── Current year ── */}
           {planYear === "current" && (() => {
             const allItemsByQ: Record<"Q1" | "Q2" | "Q3" | "Q4", PlanItem[]> = {
-              Q1: detail.planQ1
+              Q1: planBase.planQ1
                 .filter((i) => !deletedPlanIds.has(i.id))
                 .filter((i) => !planTargetFilter || (itemTargets[i.id] ?? []).includes(planTargetFilter))
                 .map(getEffective),
