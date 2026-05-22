@@ -10,6 +10,7 @@ import { useCsmProfiles } from "@/lib/use-csm-profiles";
 import ClientDetailSkeleton from "./ClientDetailSkeleton";
 import { clientActionsStore } from "@/lib/client-actions-store";
 import { useWorkshops, themes as workshopThemes } from "@/lib/workshops-store";
+import { useKitsStore } from "@/lib/kits-store";
 
 // Unified item shape consumed by the "Ajouter au plan" modal.
 type CatalogItem = {
@@ -370,6 +371,7 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [showStatutDropdown, setShowStatutDropdown] = useState(false);
   const { profiles: csmProfiles } = useCsmProfiles();
   const { workshops: workshopList } = useWorkshops();
+  const { lancementKits, animationItems, emailTopicKits } = useKitsStore();
   const planItemSeq = useRef(1_000_000_000);
   const [localDetail, setLocalDetail] = useState<LocalDetail>(() => ({
     collab: client?.collab ?? 0,
@@ -760,7 +762,11 @@ export default function ClientDetailView({ id }: { id: string }) {
     if (addPlanCtx.type === "atelier" || addPlanCtx.type === "kit") {
       const item = catalogItems.find((i) => i.id === selectedCatalogId);
       if (!item) return;
-      const meta = [item.duration, formatDateFr(addPlanDate), addPlanTime.trim()].filter(Boolean).join(" · ");
+      const meta = [
+        addPlanCtx.type === "kit" ? item.category : item.duration,
+        formatDateFr(addPlanDate),
+        addPlanTime.trim(),
+      ].filter(Boolean).join(" · ");
       setExtraPlanItems((prev) => [...prev, { id: newId, type: addPlanCtx.type, icon: item.icon, title: item.title, meta, done: false, quarter: addPlanCtx.quarter }]);
     } else {
       if (!addPlanCustomTitle.trim()) return;
@@ -876,13 +882,48 @@ export default function ClientDetailView({ id }: { id: string }) {
     category: workshopThemes.find((t) => t.id === w.themeId)?.name ?? w.themeId,
     duration: w.duration ?? "1h",
   }));
-  // NOTE: kits — no single kit catalogue yet (3 heterogeneous kit tables).
-  // Wiring "Ajouter au plan → kit" to a real source is a pending decision.
-  const catalogItems: CatalogItem[] = addPlanCtx?.type === "atelier" ? workshopCatalog : [];
+  // Kits — merged from the 3 kit tables; all selectable, filterable by source.
+  const kitStepLabels: Record<string, string> = {
+    before: "Avant le lancement",
+    dday: "Jour J",
+    after: "Après le lancement",
+  };
+  const kitCatalog: CatalogItem[] = [
+    ...lancementKits.map((k) => ({
+      id: `lancement:${k.id}`,
+      icon: "🚀",
+      title: k.title,
+      description: [kitStepLabels[k.step] ?? k.step, k.language].filter(Boolean).join(" · "),
+      category: "Kit de lancement",
+    })),
+    ...animationItems.map((k) => ({
+      id: `animation:${k.id}`,
+      icon: "📣",
+      title: k.title,
+      description: [k.type, k.month].filter(Boolean).join(" · "),
+      category: "Animation",
+    })),
+    ...emailTopicKits.map((k) => ({
+      id: `email:${k.id}`,
+      icon: "✉️",
+      title: k.title,
+      description: [k.topic, k.language].filter(Boolean).join(" · "),
+      category: "Email",
+    })),
+  ];
+
+  const catalogItems: CatalogItem[] =
+    addPlanCtx?.type === "atelier"
+      ? workshopCatalog
+      : addPlanCtx?.type === "kit"
+        ? kitCatalog
+        : [];
   const catalogCategories =
     addPlanCtx?.type === "atelier"
       ? ["Tous", ...workshopThemes.map((t) => t.name)]
-      : [];
+      : addPlanCtx?.type === "kit"
+        ? ["Tous", "Kit de lancement", "Animation", "Email"]
+        : [];
   const filteredCatalogItems = catalogItems.filter((item) => {
     const q = addPlanSearch.toLowerCase();
     const matchSearch = !q || item.title.toLowerCase().includes(q) || item.description.toLowerCase().includes(q);
