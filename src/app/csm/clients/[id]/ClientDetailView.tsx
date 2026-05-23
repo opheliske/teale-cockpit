@@ -232,7 +232,25 @@ function planItemMonthKey(
     const norm = raw === "aout" ? "août" : raw.startsWith("févr") ? "fév" : raw;
     if (qMonths.some((qm) => qm.key === norm)) return norm;
   }
-  return qMonths[qMonths.length - 1].key;
+  // Fallback: first month of the quarter — same default as the client view,
+  // so an item with no resolvable month is placed identically on both sides.
+  return qMonths[0].key;
+}
+
+const FR_MONTH_ABBR_NUM: Record<string, number> = {
+  janv: 0, fév: 1, mars: 2, avr: 3, mai: 4, juin: 5,
+  juil: 6, août: 7, sept: 8, oct: 9, nov: 10, déc: 11,
+};
+
+// Best-effort month (0-11) parsed from a plan item's meta text. Used to
+// back-fill `month` on legacy items that were stored before it existed.
+function monthFromMeta(meta: string): number | undefined {
+  const m = meta?.match(/(janv|févr?|mars|avr|mai|juin|juil|ao[uû]t|sept|oct|nov|déc)/i);
+  if (!m) return undefined;
+  let raw = m[1].toLowerCase();
+  if (raw === "aout") raw = "août";
+  if (raw.startsWith("fév")) raw = "fév";
+  return FR_MONTH_ABBR_NUM[raw];
 }
 
 function formatDateFr(isoDate: string): string {
@@ -292,7 +310,7 @@ function storedToPlanItem(s: StoredPlanItem): PlanItem {
     title: s.title,
     meta: s.meta,
     done: s.done,
-    month: s.month,
+    month: s.month ?? monthFromMeta(s.meta),
     impact: s.impact,
     responsable: s.responsable,
     detail: s.detail,
@@ -345,6 +363,9 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [showHeroExpanded, setShowHeroExpanded] = useState(false);
   const [doneActions, setDoneActions] = useState<Set<number>>(new Set());
   const [planItems, setPlanItems] = useState<Record<number, boolean>>({});
+  // Effective done state. A session toggle (planItems) FULLY overrides the
+  // stored value — so an item can be checked AND un-checked again.
+  const isPlanDone = (item: PlanItem): boolean => planItems[item.id] ?? item.done;
   const [planOverrides, setPlanOverrides] = useState<Record<number, PlanItem>>({});
   const [deletedPlanIds, setDeletedPlanIds] = useState<Set<number>>(new Set());
   const [editingPlanItem, setEditingPlanItem] = useState<PlanItem | null>(null);
@@ -356,6 +377,7 @@ export default function ClientDetailView({ id }: { id: string }) {
   const commentBottomRef = useRef<HTMLDivElement>(null);
   const [editPlanType, setEditPlanType] = useState<PlanItemType>("atelier");
   const [editPlanIcon, setEditPlanIcon] = useState("");
+  const [editPlanMonth, setEditPlanMonth] = useState<number | undefined>(undefined);
   const [editPlanTargets, setEditPlanTargets] = useState<string[]>([]);
   const [planFilter, setPlanFilter] = useState<string>("Tous");
   const [activeSection, setActiveSection] = useState<Section>("big-picture");
@@ -393,7 +415,7 @@ export default function ClientDetailView({ id }: { id: string }) {
   };
 
   const [currentThemes, setCurrentThemes] = useState({
-    q1: "🚀 Kickoff et onboarding",
+    q1: "",
     q2: "",
     q3: "",
     q4: "",
@@ -422,6 +444,12 @@ export default function ClientDetailView({ id }: { id: string }) {
   const { workshops: workshopList } = useWorkshops();
   const { lancementKits, animationItems, emailTopicKits } = useKitsStore();
   const planItemSeq = useRef(1_000_000_000);
+  const [planQAutoPicked, setPlanQAutoPicked] = useState(false);
+  // Seed the id counter from the clock so two sessions can't mint the same
+  // plan-item ids. Done in an effect — Date.now() must stay out of render.
+  useEffect(() => {
+    planItemSeq.current = Date.now();
+  }, []);
   const [localDetail, setLocalDetail] = useState<LocalDetail>(() => ({
     collab: client?.collab ?? 0,
     arr: storedClient?.arr ?? 0,
@@ -514,7 +542,7 @@ export default function ClientDetailView({ id }: { id: string }) {
       setStoredPlanItems(state?.items ?? []);
       if (state?.themes) {
         setCurrentThemes({
-          q1: state.themes.Q1 || "🚀 Kickoff et onboarding",
+          q1: state.themes.Q1 || "",
           q2: state.themes.Q2 || "",
           q3: state.themes.Q3 || "",
           q4: state.themes.Q4 || "",
@@ -617,7 +645,6 @@ export default function ClientDetailView({ id }: { id: string }) {
   useEffect(() => {
     if (!detail || !planLoaded) return;
     const eff = (item: PlanItem): PlanItem => planOverrides[item.id] ?? item;
-    const isDone = (item: PlanItem): boolean => item.done || !!planItems[item.id];
     const toStored = (
       item: PlanItem,
       quarter: StoredPlanItem["quarter"],
@@ -626,7 +653,7 @@ export default function ClientDetailView({ id }: { id: string }) {
       const e = eff(item);
       return {
         id: e.id, quarter, year, month: e.month, type: e.type, icon: e.icon, title: e.title, meta: e.meta,
-        done: isDone(item),
+        done: isPlanDone(item),
         impact: e.impact || undefined,
         responsable: e.responsable || undefined,
         detail: e.detail || undefined,
@@ -638,7 +665,7 @@ export default function ClientDetailView({ id }: { id: string }) {
       q1: "Q1", q2: "Q2", q3: "Q3", q4: "Q4",
       "next-q1": "Q1", "next-q2": "Q2", "next-q3": "Q3", "next-q4": "Q4",
     };
-    planStore.setState({
+    const next = {
       themes: { Q1: currentThemes.q1, Q2: currentThemes.q2, Q3: currentThemes.q3, Q4: currentThemes.q4 },
       nextThemes: { Q1: nextThemes.q1, Q2: nextThemes.q2, Q3: nextThemes.q3, Q4: nextThemes.q4 },
       items: [
@@ -653,13 +680,29 @@ export default function ClientDetailView({ id }: { id: string }) {
             toStored(i, qMap[i.quarter] ?? "Q2", i.quarter.startsWith("next-") ? "next" : "current"),
           ),
       ],
-    });
+    };
+    // Debounced: a burst of edits (toggles, typing…) yields a single write.
+    const timer = setTimeout(() => planStore.setState(next), 400);
+    return () => clearTimeout(timer);
     // `detail`, `planBase` and `planTargetFilter` are intentionally omitted:
     // `planBase` is set once on load, and re-running on `detail` (an unstable
     // derived object) would resync on every render.
   }, [planOverrides, deletedPlanIds, extraPlanItems, currentThemes, nextThemes, planItems, itemTargets, planLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getEffective = (item: PlanItem): PlanItem => planOverrides[item.id] ?? item;
+
+  // Effective items of a quarter (base + extras − deletions) — for the overview KPIs.
+  const quarterPlanItems = (q: "Q1" | "Q2" | "Q3" | "Q4"): PlanItem[] => {
+    const base =
+      q === "Q1" ? planBase.planQ1
+      : q === "Q2" ? [...planBase.planQ2Done, ...planBase.planQ2Upcoming]
+      : q === "Q3" ? planBase.planQ3
+      : planBase.planQ4;
+    const extras = extraPlanItems.filter((i) => i.quarter === q.toLowerCase());
+    return [...base, ...extras]
+      .filter((i) => !deletedPlanIds.has(i.id))
+      .map(getEffective);
+  };
 
   const openPlanEdit = (item: PlanItem) => {
     const eff = getEffective(item);
@@ -669,6 +712,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     setEditPlanImpact(eff.impact ?? "");
     setEditPlanType(eff.type);
     setEditPlanIcon(eff.icon);
+    setEditPlanMonth(eff.month);
     setEditPlanTargets(itemTargets[eff.id] ?? []);
     setPlanItemComments(commentsStore.getByThread(String(eff.id)));
     setCommentDraft("");
@@ -700,6 +744,7 @@ export default function ClientDetailView({ id }: { id: string }) {
         impact: editPlanImpact.trim() || undefined,
         type: editPlanType,
         icon: editPlanIcon || PLAN_ITEM_DEFAULT_ICONS[editPlanType],
+        month: editPlanMonth,
       },
     }));
     setEditingPlanItem(null);
@@ -929,6 +974,17 @@ export default function ClientDetailView({ id }: { id: string }) {
     [localDetail.contractStart],
   );
 
+  // Once the client (hence the real contract start) is loaded, jump the plan
+  // to the current/upcoming quarter — once. A guarded setState during render
+  // (the documented "adjust state on a change" pattern), not an effect.
+  if (!planQAutoPicked && storedClient) {
+    setPlanQAutoPicked(true);
+    const target =
+      planQuarters.find((q) => q.status === "current") ??
+      planQuarters.find((q) => q.status === "upcoming");
+    if (target) setActivePlanQ(target.id);
+  }
+
   if (storeLoading) {
     return <ClientDetailSkeleton />;
   }
@@ -942,10 +998,10 @@ export default function ClientDetailView({ id }: { id: string }) {
     mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const togglePlanItem = (itemId: number) =>
-    setPlanItems((p) => ({ ...p, [itemId]: !p[itemId] }));
-
-  const isPlanDone = (item: PlanItem) => item.done || !!planItems[item.id];
+  // Toggle relative to the EFFECTIVE done state (so a stored-done item can be
+  // un-checked). isPlanDone is defined once near the planItems state.
+  const togglePlanItem = (item: PlanItem) =>
+    setPlanItems((p) => ({ ...p, [item.id]: !(p[item.id] ?? item.done) }));
 
   const allPlanItems = [
     ...planBase.planQ2Done,
@@ -1685,9 +1741,9 @@ export default function ClientDetailView({ id }: { id: string }) {
                 const label = allPast ? "Terminé" : hasCurrent ? "En cours" : "À venir";
                 const isNow = hasCurrent;
                 const isDone = allPast;
-                const baseItems = (detail as { planCurrent?: Record<string, PlanItem[]> })?.planCurrent?.[qKey] ?? [];
-                const total = baseItems.length;
-                const done = baseItems.filter((i) => planItems[i.id]).length;
+                const qItems = quarterPlanItems(q);
+                const total = qItems.length;
+                const done = qItems.filter(isPlanDone).length;
                 const pct = total > 0 ? Math.round((done / total) * 100) : 0;
                 return (
                   <button
@@ -2146,7 +2202,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                                 <PlanItemRow
                                   key={item.id}
                                   item={item}
-                                  onToggle={() => togglePlanItem(item.id)}
+                                  onToggle={() => togglePlanItem(item)}
                                   onEdit={() => openPlanEdit(item)}
                                   labels={clientLabels}
                                   assignedTargets={itemTargets[item.id] ?? []}
@@ -2224,7 +2280,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                             </div>
                             <button
                               type="button"
-                              onClick={() => setExtraPlanItems((prev) => prev.filter((x) => x.id !== it.id))}
+                              onClick={() => deletePlanItem(it.id)}
                               className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-[12px] text-[#94a8a0] transition-colors hover:bg-[rgba(230,170,153,0.15)] hover:text-[#E6AA99]"
                               aria-label="Retirer ce jalon"
                             >
@@ -2594,6 +2650,21 @@ export default function ClientDetailView({ id }: { id: string }) {
                 placeholder="Intervenant · date · nombre de places..."
                 className="w-full rounded-[9px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef] placeholder-[rgba(232,245,239,0.3)] outline-none focus:border-[rgba(94,234,212,0.5)]"
               />
+            </div>
+
+            {/* Month */}
+            <div>
+              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Mois</label>
+              <select
+                value={editPlanMonth ?? ""}
+                onChange={(e) => setEditPlanMonth(e.target.value === "" ? undefined : Number(e.target.value))}
+                className="w-full rounded-[9px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef] outline-none focus:border-[rgba(94,234,212,0.5)]"
+              >
+                <option value="">— Non défini —</option>
+                {getPQ(activePlanQ).months.map((m) => (
+                  <option key={m.num} value={m.num}>{m.label}</option>
+                ))}
+              </select>
             </div>
 
             {/* Impact */}
