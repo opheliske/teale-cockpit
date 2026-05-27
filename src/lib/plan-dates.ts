@@ -26,6 +26,22 @@ export function dayFromMeta(meta: string | undefined): number {
 }
 
 /**
+ * Extracts the calendar year from a plan item's meta text when it embeds
+ * a full date like "24 mai 2026 · 10:00". Requires day + month + year to
+ * appear together (not just any "20XX" somewhere in the text) — otherwise
+ * we'd grab the year out of e.g. "Voir QBR Q2 2024" and mis-resolve dates.
+ *
+ * When present, this overrides the year derived from the relative
+ * `year: "current" | "next"` flag — the human-typed full date is the
+ * authoritative source.
+ */
+export function yearFromMeta(meta: string | undefined): number | undefined {
+  if (!meta) return undefined;
+  const m = meta.match(/\b\d{1,2}\s+(?:janv|fév|mars|avr|mai|juin|juil|ao[uû]t|sept|oct|nov|déc)\S*\s+(20\d{2})\b/i);
+  return m ? parseInt(m[1], 10) : undefined;
+}
+
+/**
  * Returns the [start, end) window of the contract year currently in
  * progress — i.e. the rolling 12-month window anchored on contractStart's
  * anniversary. Returns null when the start date can't be parsed.
@@ -79,7 +95,11 @@ export function countAtelierConsumed(
     if (it.type !== "atelier") continue;
     if (it.cancelled) continue;
     if (it.month == null) continue;
-    const d = new Date(it.calendarYear, it.month, dayFromMeta(it.meta));
+    // A full date in meta ("24 mai 2026 · 10:00") wins over the relative
+    // year flag — the user-typed date is authoritative and avoids the
+    // current/next ambiguity entirely.
+    const cy = yearFromMeta(it.meta) ?? it.calendarYear;
+    const d = new Date(cy, it.month, dayFromMeta(it.meta));
     if (d.getTime() >= today.getTime()) continue;        // not yet passed
     if (d < win.start || d >= win.end) continue;         // outside the contract year
     count++;
