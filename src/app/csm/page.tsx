@@ -390,12 +390,9 @@ export default function CsmHomePage() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-1.5">
-                    <span className="text-[32px] font-semibold leading-none tracking-[-0.02em]">{renewalARR}</span>
-                    <span className="text-[14px] text-[#6B7585]">k€ ARR concerné</span>
+                    <span className="text-[32px] font-semibold leading-none tracking-[-0.02em]">{renewals.length}</span>
+                    <span className="text-[14px] text-[#6B7585]">contrat{renewals.length > 1 ? "s" : ""} à fermer d&apos;ici 90 jours sur {total} compte{total > 1 ? "s" : ""}.</span>
                   </div>
-                  <p className="m-0 mt-2 text-[12px] text-[#6B7585]">
-                    {renewals.length} contrat{renewals.length > 1 ? "s" : ""} à fermer d&apos;ici 90 jours sur {total} compte{total > 1 ? "s" : ""}.
-                  </p>
                 </div>
               </div>
               <div className="mt-3.5 border-t border-dashed border-[#1F2832] pt-3.5 text-[12px] text-[#6B7585]">
