@@ -673,17 +673,39 @@ export default function ClientDetailView({ id }: { id: string }) {
     return healthStore.subscribe(() => setHealthEntries(healthStore.getEntries(id)));
   }, [id]);
 
-  function submitHealthEntry() {
+  // Push the statut of the most-recent health entry (by isoDate) to
+  // csm_clients.statut so the CSM home card and the greeting line stay in
+  // sync with the score that's been recorded here.
+  async function syncCanonicalStatutToLatest() {
+    if (!storedClient) return;
+    const latest = healthStore.getEntries(id).at(-1);
+    if (!latest) return;
+    const dbStatut =
+      latest.statut === "SAIN" ? "green" :
+      latest.statut === "VIGILANCE" ? "amber" : "danger";
+    if (storedClient.statut === dbStatut) return;
+    await csmClientsStore.add({ ...storedClient, statut: dbStatut });
+  }
+
+  async function submitHealthEntry() {
     const dateFr = formatDateFr(healthDate);
-    healthStore.addEntry(id, {
+    await healthStore.addEntry(id, {
       date: dateFr,
       isoDate: healthDate,
       statut: healthStatut,
       note: healthNote.trim() || undefined,
     });
+    await syncCanonicalStatutToLatest();
     setShowHealthModal(false);
     setHealthNote("");
     setHealthDate(new Date().toISOString().split("T")[0]);
+  }
+
+  async function removeHealthEntry(entryId: number) {
+    await healthStore.removeEntry(id, entryId);
+    // If we just removed the latest entry, the new "latest" should become
+    // canonical. If there are no entries left, leave the canonical alone.
+    await syncCanonicalStatutToLatest();
   }
 
   // Sync the effective plan to plan_state so the client "Suivi projet" view
@@ -1545,7 +1567,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                               </span>
                               <span className="ml-auto text-[10px] text-[#6b7c75]">{entry.date}</span>
                               <button
-                                onClick={() => healthStore.removeEntry(id, entry.id)}
+                                onClick={() => { void removeHealthEntry(entry.id); }}
                                 className="text-[10px] text-[#6b7c75] opacity-0 transition hover:text-[#E6AA99] group-hover:opacity-100"
                                 aria-label="Supprimer"
                               >×</button>
