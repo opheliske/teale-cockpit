@@ -15,6 +15,9 @@ export type StoredPlanItem = {
   month?: number;
   // QBR / atelier — slide deck has been prepared by the CSM.
   deckCreated?: boolean;
+  // Atelier marked as cancelled — kept on the plan but not deducted from
+  // the contract's atelier quota.
+  cancelled?: boolean;
   type: StoredPlanItemType;
   icon: string;
   title: string;

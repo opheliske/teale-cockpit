@@ -75,6 +75,9 @@ export type PlanItem = {
   done: boolean;
   month?: number; // 0-11 — explicit month placement within the quarter
   deckCreated?: boolean; // QBR / atelier — slide deck has been prepared
+  // Atelier marked as cancelled — kept on the timeline but not consumed
+  // from the contract's atelier quota.
+  cancelled?: boolean;
   responsable?: string;
   detail?: string;
   impact?: string;

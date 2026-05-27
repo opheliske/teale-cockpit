@@ -313,12 +313,46 @@ function storedToPlanItem(s: StoredPlanItem): PlanItem {
     done: s.done,
     month: s.month ?? monthFromMeta(s.meta),
     deckCreated: s.deckCreated,
+    cancelled: s.cancelled,
     impact: s.impact,
     responsable: s.responsable,
     detail: s.detail,
     files: s.files,
     targets: s.targets,
   };
+}
+
+// Best-effort day-of-month parsed from a plan item's meta text (e.g.
+// "15 juin · 14:00"). Falls back to 15 when no day is found, so the date
+// lands roughly in the middle of the month rather than on the 1st.
+function dayFromMeta(meta: string | undefined): number {
+  if (!meta) return 15;
+  const m = meta.match(/(?:^|\s)(\d{1,2})\s+(?:janv|fév|mars|avr|mai|juin|juil|ao[uû]t|sept|oct|nov|déc)/i);
+  if (!m) return 15;
+  const d = parseInt(m[1], 10);
+  return Number.isFinite(d) && d >= 1 && d <= 31 ? d : 15;
+}
+
+// Returns the [start, end) window of the contract year currently in
+// progress — i.e. the rolling 12-month window anchored on contractStart's
+// anniversary. Used to scope the atelier-consumption count to "this year
+// of the contract" rather than the calendar year.
+function currentContractYearWindow(
+  contractStartIso: string,
+  now: Date = new Date(),
+): { start: Date; end: Date } | null {
+  if (!contractStartIso) return null;
+  const start = new Date(contractStartIso);
+  if (Number.isNaN(start.getTime())) return null;
+  let cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  // Walk yearly anniversaries until the next one would land in the future.
+  while (true) {
+    const next = new Date(cursor.getFullYear() + 1, cursor.getMonth(), cursor.getDate());
+    if (next.getTime() > now.getTime()) break;
+    cursor = next;
+  }
+  const end = new Date(cursor.getFullYear() + 1, cursor.getMonth(), cursor.getDate());
+  return { start: cursor, end };
 }
 
 // Rebuilds the current-year per-quarter plan from the saved plan_state items,
@@ -381,6 +415,7 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [editPlanIcon, setEditPlanIcon] = useState("");
   const [editPlanMonth, setEditPlanMonth] = useState<number | undefined>(undefined);
   const [editPlanTargets, setEditPlanTargets] = useState<string[]>([]);
+  const [editPlanCancelled, setEditPlanCancelled] = useState(false);
   const [planFilter, setPlanFilter] = useState<string>("Tous");
   const [activeSection, setActiveSection] = useState<Section>("big-picture");
   const [planYear, setPlanYear] = useState<"prev" | "current" | "next">("current");
@@ -725,6 +760,7 @@ export default function ClientDetailView({ id }: { id: string }) {
         id: e.id, quarter, year, month: e.month, type: e.type, icon: e.icon, title: e.title, meta: e.meta,
         done: isPlanDone(item),
         deckCreated: e.deckCreated,
+        cancelled: e.cancelled,
         impact: e.impact || undefined,
         responsable: e.responsable || undefined,
         detail: e.detail || undefined,
@@ -785,6 +821,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     setEditPlanIcon(eff.icon);
     setEditPlanMonth(eff.month);
     setEditPlanTargets(itemTargets[eff.id] ?? []);
+    setEditPlanCancelled(eff.cancelled ?? false);
     setPlanItemComments(commentsStore.getByThread(String(eff.id)));
     setCommentDraft("");
   };
@@ -816,6 +853,9 @@ export default function ClientDetailView({ id }: { id: string }) {
         type: editPlanType,
         icon: editPlanIcon || PLAN_ITEM_DEFAULT_ICONS[editPlanType],
         month: editPlanMonth,
+        // Only ateliers carry a cancelled flag; clearing it on other types
+        // keeps the persisted shape clean.
+        cancelled: editPlanType === "atelier" ? editPlanCancelled : undefined,
       },
     }));
     setEditingPlanItem(null);
@@ -1043,6 +1083,43 @@ export default function ClientDetailView({ id }: { id: string }) {
     [localDetail.contractStart],
   );
 
+  // Atelier quota usage: count plan items of type "atelier" that fell within
+  // the current contract year AND whose date has passed AND that weren't
+  // cancelled. That's the canonical "ateliers consommés cette année" — the
+  // raw stored `atelierRemaining` is ignored.
+  const atelierConsumedThisYear = useMemo(() => {
+    const win = currentContractYearWindow(localDetail.contractStart);
+    if (!win) return 0;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yearNow = today.getFullYear();
+    const all: Array<{ item: PlanItem; calendarYear: number }> = [];
+    if (planBase) {
+      for (const q of [planBase.planQ1, planBase.planQ2Done, planBase.planQ2Upcoming, planBase.planQ3, planBase.planQ4]) {
+        for (const it of q) all.push({ item: it, calendarYear: yearNow });
+      }
+    }
+    for (const it of extraPlanItems) {
+      const y = it.quarter.startsWith("next-") ? yearNow + 1 : yearNow;
+      all.push({ item: it, calendarYear: y });
+    }
+    let count = 0;
+    for (const { item, calendarYear } of all) {
+      if (deletedPlanIds.has(item.id)) continue;
+      const eff = planOverrides[item.id] ?? item;
+      if (eff.type !== "atelier") continue;
+      if (eff.cancelled) continue;
+      if (eff.month == null) continue;
+      const d = new Date(calendarYear, eff.month, dayFromMeta(eff.meta));
+      if (d.getTime() >= today.getTime()) continue;            // not passed yet
+      if (d < win.start || d >= win.end) continue;             // outside contract year
+      count++;
+    }
+    return count;
+  }, [localDetail.contractStart, planBase, extraPlanItems, planOverrides, deletedPlanIds]);
+
+  const atelierRemainingDerived = Math.max(0, localDetail.atelierTotal - atelierConsumedThisYear);
+
   // Once the client (hence the real contract start) is loaded, jump the plan
   // to the current/upcoming quarter — once. A guarded setState during render
   // (the documented "adjust state on a change" pattern), not an effect.
@@ -1256,7 +1333,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                 <span className="opacity-40">·</span>
                 <span>CSM <strong className="text-[#e8f5ef]">{csmProfiles.find((p) => p.id === localDetail.ownerCsmId)?.full_name ?? "Non assigné"}</strong></span>
                 {localDetail.contractStart && (<><span className="opacity-40">·</span><span>Contrat <strong className="text-[#e8f5ef]">{localDetail.contractStart} → {localDetail.contractEnd}</strong></span></>)}
-                {localDetail.atelierTotal > 0 && (<><span className="opacity-40">·</span><span><strong className="text-[#e8f5ef]">{localDetail.atelierRemaining}</strong> ateliers restants / {localDetail.atelierTotal}</span></>)}
+                {localDetail.atelierTotal > 0 && (<><span className="opacity-40">·</span><span><strong className="text-[#e8f5ef]">{atelierRemainingDerived}</strong> ateliers restants / {localDetail.atelierTotal}</span></>)}
               </p>
             </div>
 
@@ -1347,7 +1424,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                 </div>
                 <div className="flex flex-col gap-1">
                   <dt className="text-[10px] font-semibold uppercase tracking-[1.1px] text-[#94a8a0]">Ateliers consommés</dt>
-                  <dd className="m-0 text-[13px] font-medium text-[#e8f5ef]">{localDetail.atelierTotal - localDetail.atelierRemaining} / {localDetail.atelierTotal}</dd>
+                  <dd className="m-0 text-[13px] font-medium text-[#e8f5ef]">{atelierConsumedThisYear} / {localDetail.atelierTotal}</dd>
                 </div>
                 <div className="col-span-2 flex flex-col gap-1">
                   <dt className="text-[10px] font-semibold uppercase tracking-[1.1px] text-[#94a8a0]">Produits déployés</dt>
@@ -2742,6 +2819,23 @@ export default function ClientDetailView({ id }: { id: string }) {
               </select>
             </div>
 
+            {/* Annulé — uniquement pour les ateliers. Un atelier annulé reste
+                visible sur le plan mais n'est pas décompté du quota contrat. */}
+            {editPlanType === "atelier" && (
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-[9px] border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.02)] px-3 py-2.5 transition-colors hover:bg-[rgba(255,255,255,0.04)]">
+                <input
+                  type="checkbox"
+                  checked={editPlanCancelled}
+                  onChange={(e) => setEditPlanCancelled(e.target.checked)}
+                  className="mt-[3px] h-[14px] w-[14px] shrink-0 accent-[#E6AA99]"
+                />
+                <span className="flex flex-col gap-0.5">
+                  <span className="text-[12.5px] font-medium text-[#e8f5ef]">Atelier annulé</span>
+                  <span className="text-[11px] text-[#6b7c75]">N&apos;est pas décompté du quota d&apos;ateliers du contrat.</span>
+                </span>
+              </label>
+            )}
+
             {/* Impact */}
             <div>
               <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">
@@ -3005,7 +3099,9 @@ export default function ClientDetailView({ id }: { id: string }) {
                   ["Collaborateurs", "collab"],
                   ["ARR (€)", "arr"],
                   ["Ateliers au contrat (total)", "atelierTotal"],
-                  ["Ateliers restants", "atelierRemaining"],
+                  // "Ateliers restants" is now computed from the plan
+                  // (ateliers passed and not cancelled in the current
+                  // contract year) — no longer a manually-editable field.
                 ] as [string, keyof LocalDetail][]).map(([label, key]) => (
                   <div key={key}>
                     <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.8px] text-[rgba(232,245,239,0.45)]">{label}</label>
