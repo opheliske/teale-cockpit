@@ -386,7 +386,7 @@ export default function CsmHomePage() {
       {activeTab === "Portfolio" && (
         <>
           {/* KPI cards */}
-          <div className="mb-7 grid grid-cols-3 gap-4">
+          <div className="mb-7 grid grid-cols-2 gap-4">
             {/* Santé du portefeuille */}
             <div className="rounded-[14px] border border-[#1F2832] bg-[rgba(255,255,255,0.02)] p-5 transition-colors hover:border-[#2A3441]">
               <div className="mb-4 flex items-center justify-between">
@@ -446,35 +446,6 @@ export default function CsmHomePage() {
               </div>
             </div>
 
-            {/* Actions CSM */}
-            <div className="rounded-[14px] border border-[#1F2832] bg-[rgba(255,255,255,0.02)] p-5 transition-colors hover:border-[#2A3441]">
-              <div className="mb-4 flex items-center justify-between">
-                <p className="m-0 text-[12px] font-medium uppercase tracking-[0.06em] text-[#A7B0BC]">Actions CSM</p>
-                <span className={`rounded-full px-[7px] py-0.5 text-[11px] font-semibold ${
-                  overdueActionsCount > 0
-                    ? "bg-[rgba(255,107,107,0.12)] text-[#FF6B6B]"
-                    : "bg-[rgba(94,234,176,0.12)] text-[#5EEAB0]"
-                }`}>
-                  {overdueActionsCount > 0 ? `${overdueActionsCount} en retard` : "à jour"}
-                </span>
-              </div>
-              <div className="flex items-center gap-[18px]">
-                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-[#1A2129]">
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#5EEAB0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-[32px] font-semibold leading-none tracking-[-0.02em]">{pendingActionsCount}</span>
-                    <span className="text-[14px] text-[#6B7585]">à traiter</span>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-3.5 border-t border-dashed border-[#1F2832] pt-3.5 text-[12px] text-[#6B7585]">
-                {overdueActionsCount > 0 ? `${overdueActionsCount} action${overdueActionsCount > 1 ? "s" : ""} en retard` : "Keep going 💪"}
-              </div>
-            </div>
           </div>
 
           {/* Content grid */}
