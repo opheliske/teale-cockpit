@@ -68,8 +68,6 @@ type AgendaEvent = {
   type: "call" | "atelier" | "csm" | "qbr" | "kit";
 };
 
-const AGENDA_EVENTS: AgendaEvent[] = [];
-
 function eventStyle(type: AgendaEvent["type"]) {
   switch (type) {
     case "call":    return { icon: "📞", color: "#ef4444", bg: "rgba(239,68,68,0.12)" };
@@ -79,10 +77,6 @@ function eventStyle(type: AgendaEvent["type"]) {
     case "kit":     return { icon: "📢", color: "#f59e0b", bg: "rgba(245,158,11,0.12)" };
   }
 }
-
-type RecentActivity = { clientId: string; initials: string; color: string; name: string; ago: string; action: string };
-
-const RECENT_ACTIVITY: RecentActivity[] = [];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -682,7 +676,7 @@ export default function CsmHomePage() {
 
       {/* ── Activités et RDV tab ── */}
       {activeTab === "Activites" && (
-        <div className="grid grid-cols-[1fr_320px] gap-4">
+        <div>
 
           {/* Agenda */}
           {(() => {
@@ -696,7 +690,7 @@ export default function CsmHomePage() {
               clientColor: e.clientColor,
               type: "csm" as const,
             }));
-            const allEvents = [...AGENDA_EVENTS, ...dynamicCsm];
+            const allEvents = dynamicCsm;
             return (
               <div className="rounded-[14px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.02)]">
                 <div className="flex items-center justify-between border-b border-[rgba(255,255,255,0.06)] px-4 py-3">
@@ -740,40 +734,6 @@ export default function CsmHomePage() {
               </div>
             );
           })()}
-
-          {/* Activité récente */}
-          <div className="rounded-[14px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.02)]">
-            <div className="border-b border-[rgba(255,255,255,0.06)] px-4 py-3">
-              <h3 className="text-[13px] font-semibold text-brand-cream">Activité récente</h3>
-              <p className="mt-0.5 text-[10px] text-[rgba(232,245,239,0.4)]">Clients connectés à leur espace</p>
-            </div>
-            <ul className="divide-y divide-[rgba(255,255,255,0.04)]">
-              {RECENT_ACTIVITY.map((a) => (
-                <li key={a.clientId}
-                  onClick={() => router.push(`/csm/clients/${a.clientId}`)}
-                  className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-[rgba(255,255,255,0.02)]">
-                  <ClientAvatar initials={a.initials} color={a.color} size={28} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="text-[12px] font-semibold text-brand-cream">{a.name}</span>
-                      <span className="shrink-0 text-[10px] text-[rgba(232,245,239,0.35)]">{a.ago}</span>
-                    </div>
-                    <p className="mt-0.5 text-[10px] text-[rgba(232,245,239,0.5)]">{a.action}</p>
-                  </div>
-                  <div className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: a.ago.includes("h") ? "#22c55e" : "rgba(255,255,255,0.2)" }} />
-                </li>
-              ))}
-              {RECENT_ACTIVITY.length === 0 && (
-                <li className="px-4 py-8 text-center text-[12px] text-[rgba(232,245,239,0.3)]">Aucune activité récente.</li>
-              )}
-            </ul>
-            <div className="border-t border-[rgba(255,255,255,0.06)] px-4 py-2.5 text-[10px] text-[rgba(232,245,239,0.3)]">
-              <span className="inline-flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#22c55e]" />
-                Vert = connecté dans les dernières 24h
-              </span>
-            </div>
-          </div>
 
         </div>
       )}

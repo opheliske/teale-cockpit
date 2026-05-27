@@ -1458,7 +1458,7 @@ function KitModal({
               { label: active.data.language, style: "bg-brand-cream/10 text-brand-cream" },
             ]}
             title={active.data.title}
-            body={mockLancementBody(active.data)}
+            body={defaultLancementTemplate(active.data)}
             copied={copied}
             setCopied={setCopied}
           />
@@ -1471,7 +1471,7 @@ function KitModal({
               { label: active.data.language, style: "bg-brand-cream/10 text-brand-cream" },
             ]}
             title={active.data.title}
-            body={mockEmailBody(active.data)}
+            body={defaultEmailTemplate(active.data)}
             copied={copied}
             setCopied={setCopied}
           />
@@ -1495,7 +1495,7 @@ function KitModal({
               },
             ]}
             title={active.workshop.title}
-            body={mockWorkshopKitBody(
+            body={defaultWorkshopKitTemplate(
               active.workshop,
               active.kitType,
               active.language
@@ -1717,7 +1717,7 @@ function ResourceGroup({
   );
 }
 
-function mockWorkshopKitBody(
+function defaultWorkshopKitTemplate(
   w: Workshop,
   kit: WorkshopKitType,
   lang: "FR" | "EN"
@@ -1830,7 +1830,7 @@ function mockWorkshopKitBody(
   ].join("\n");
 }
 
-function mockLancementBody(k: LancementKit): string {
+function defaultLancementTemplate(k: LancementKit): string {
   const stepIntro: Record<string, string> = {
     before:
       "Dans quelques jours, nous lançons teale, notre nouveau partenaire pour prendre soin de la santé mentale au travail.",
@@ -1885,7 +1885,7 @@ function mockLancementBody(k: LancementKit): string {
   ].join("\n");
 }
 
-function mockEmailBody(k: EmailTopicKit): string {
+function defaultEmailTemplate(k: EmailTopicKit): string {
   const isEnglish = k.language === "EN";
   const topicFr = topicLabel(k.topic);
   if (isEnglish) {

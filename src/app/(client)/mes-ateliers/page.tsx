@@ -27,11 +27,11 @@ type ScheduledAtelier = {
   cancellationReason?: string;
 };
 
-const TODAY_ISO = "2026-05-14";
-
 function dayDiff(iso: string): number {
-  const today = new Date(TODAY_ISO);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
   const target = new Date(iso);
+  target.setHours(0, 0, 0, 0);
   return Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
@@ -253,7 +253,7 @@ export default function MesAteliersPage() {
   const showAnnule   = filter === "all" || filter === "annule";
   const showFeedback = filter === "feedback";
 
-  const currentMonthIdx = new Date(TODAY_ISO).getMonth();
+  const currentMonthIdx = new Date().getMonth();
 
   return (
     <div className="px-9 py-8">

@@ -22,9 +22,15 @@ import { useActiveClient } from "@/lib/client-context";
 import { buildPlanQuarters } from "@/lib/plan-quarters";
 import { csmClientsStore } from "@/lib/csm-clients-store";
 
-const TODAY_MONTH = "May";
-const TODAY_YEAR = 2026;
-const AVAILABLE_YEARS = [2025, 2026, 2027] as const;
+// Today, computed once at module load — derives the month status (past /
+// current / upcoming) and the default active year of the planning view.
+const TODAY_DATE = new Date();
+const TODAY_YEAR = TODAY_DATE.getFullYear();
+const TODAY_MONTH = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+][TODAY_DATE.getMonth()];
+const AVAILABLE_YEARS = [TODAY_YEAR - 1, TODAY_YEAR, TODAY_YEAR + 1] as const;
 type Year = (typeof AVAILABLE_YEARS)[number];
 
 const allMonths = [
