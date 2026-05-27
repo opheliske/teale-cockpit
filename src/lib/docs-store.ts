@@ -83,18 +83,35 @@ export const docsStore = {
     }
   },
 
+  updateDoc: async (doc: StoredDocument) => {
+    if (!_clientId) return;
+    const { data } = await supabase
+      .from("documents")
+      .update({
+        title: doc.title,
+        type: doc.type,
+        size: doc.size,
+        date: doc.date,
+        author: doc.author,
+        files: doc.files ?? [],
+      })
+      .eq("id", doc.id)
+      .eq("client_id", _clientId)
+      .select()
+      .single();
+    if (data) {
+      _docs = _docs.map((d) => (d.id === doc.id ? fromRow(data) : d));
+      _listeners.forEach((l) => l());
+      notifyChange("documents");
+    }
+  },
+
   removeDoc: async (docId: string) => {
     if (!_clientId) return;
     await supabase.from("documents").delete().eq("id", docId).eq("client_id", _clientId);
     _docs = _docs.filter((d) => d.id !== docId);
     _listeners.forEach((l) => l());
     notifyChange("documents");
-  },
-
-  // Legacy setter used by existing components (local state only, no DB sync)
-  setDocs(docs: StoredDocument[]): void {
-    _docs = docs;
-    _listeners.forEach((l) => l());
   },
 
   subscribe(listener: () => void): () => void {

@@ -935,16 +935,23 @@ export default function ClientDetailView({ id }: { id: string }) {
     }
   };
 
-  const saveDoc = () => {
+  const saveDoc = async () => {
     if (!docTitle.trim()) return;
     const today = new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
     if (editingDoc) {
-      docsStore.setDocs(localDocs.map((d) => d.id === editingDoc.id
-        ? { ...d, title: docTitle.trim(), type: docType, size: docSize.trim() || d.size, date: docDate ? formatDateFr(docDate) : d.date, author: docAuthor.trim() || d.author, files: docFiles }
-        : d
-      ));
+      // updateDoc persists to Supabase and broadcasts via Realtime —
+      // the client's "Suivi projet" view receives the change immediately.
+      await docsStore.updateDoc({
+        ...editingDoc,
+        title: docTitle.trim(),
+        type: docType,
+        size: docSize.trim() || editingDoc.size,
+        date: docDate ? formatDateFr(docDate) : editingDoc.date,
+        author: docAuthor.trim() || editingDoc.author,
+        files: docFiles,
+      });
     } else {
-      docsStore.setDocs([...localDocs, {
+      await docsStore.addDoc({
         id: Date.now().toString(),
         title: docTitle.trim(),
         type: docType,
@@ -952,13 +959,13 @@ export default function ClientDetailView({ id }: { id: string }) {
         date: docDate ? formatDateFr(docDate) : today,
         author: docAuthor.trim() || "CSM",
         files: docFiles,
-      }]);
+      });
     }
     setShowDocModal(false);
   };
 
-  const deleteDoc = (id: string) => {
-    docsStore.setDocs(localDocs.filter((d) => d.id !== id));
+  const deleteDoc = async (id: string) => {
+    await docsStore.removeDoc(id);
     setShowDocModal(false);
   };
 
