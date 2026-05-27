@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabase, ensureSession } from "@/lib/supabase";
 import { notifyChange, watchChanges } from "@/lib/sync";
 
 export type CsmEvent = {
@@ -34,17 +34,23 @@ let _loaded = false;
 const _listeners = new Set<() => void>();
 
 async function fetchEvents() {
+  // Skip when the session is unusable rather than wiping the cache with an
+  // RLS-anonymous empty list (see supabase.ts for the rationale).
+  if (!(await ensureSession())) {
+    _loaded = false; // allow a later ensureLoaded() to retry
+    return;
+  }
   const { data } = await supabase
     .from("csm_events")
     .select("*")
     .order("created_at");
   _events = data ? data.map(fromRow) : [];
+  _loaded = true;
   _listeners.forEach((l) => l());
 }
 
 async function ensureLoaded() {
   if (_loaded) return;
-  _loaded = true;
   await fetchEvents();
 }
 

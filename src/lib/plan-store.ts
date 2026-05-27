@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabase, ensureSession } from "@/lib/supabase";
 import { notifyChange, watchChanges } from "@/lib/sync";
 import type { PlanItemFile } from "@/lib/clients-data";
 
@@ -39,6 +39,7 @@ let _clientId: string | null = null;
 const _listeners = new Set<() => void>();
 
 async function fetchPlan(clientId: string) {
+  if (!(await ensureSession())) return;
   const { data } = await supabase
     .from("plan_state")
     .select("*")

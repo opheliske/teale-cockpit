@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabase, ensureSession } from "@/lib/supabase";
 import { notifyChange, watchChanges } from "@/lib/sync";
 
 export type TargetLabel = { id: string; name: string; color: string };
@@ -27,6 +27,7 @@ function notify() {
 
 // Re-fetch a client's labels + assignments (no seeding — used on reload).
 async function reloadClient(clientId: string) {
+  if (!(await ensureSession())) return;
   const [{ data: labelRows }, { data: assignRows }] = await Promise.all([
     supabase.from("target_labels").select("*").eq("client_id", clientId),
     supabase.from("target_item_assignments").select("*").eq("client_id", clientId),
@@ -55,12 +56,10 @@ export const targetsStore = {
   load: async (clientId: string) => {
     if (_loadedClients.has(clientId)) return;
 
-    // Wait for the session before the RLS-scoped reads — otherwise they can
-    // go out unauthenticated, come back empty, and trigger a bogus re-seed.
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return; // not ready — a later call will retry
+    // Validate (and refresh if needed) the session before the RLS-scoped
+    // reads — otherwise they can go out unauthenticated, come back empty,
+    // and trigger a bogus re-seed.
+    if (!(await ensureSession())) return; // a later call will retry
 
     _loadedClients.add(clientId);
 

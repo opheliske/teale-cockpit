@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabase, ensureSession } from "@/lib/supabase";
 import { notifyChange, watchChanges } from "@/lib/sync";
 
 export type StoredDocumentFile = {
@@ -37,6 +37,7 @@ let _clientId: string | null = null;
 const _listeners = new Set<() => void>();
 
 async function fetchDocs(clientId: string) {
+  if (!(await ensureSession())) return;
   const { data } = await supabase
     .from("documents")
     .select("*")

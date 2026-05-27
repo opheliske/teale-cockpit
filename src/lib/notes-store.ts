@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabase, ensureSession } from "@/lib/supabase";
 import { notifyChange, watchChanges } from "@/lib/sync";
 import type { Note, NoteType } from "@/lib/clients-data";
 
@@ -22,6 +22,7 @@ function notify() {
 }
 
 async function fetchNotes(clientId: string) {
+  if (!(await ensureSession())) return;
   const { data } = await supabase
     .from("client_notes")
     .select("*")

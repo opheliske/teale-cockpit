@@ -51,9 +51,11 @@ export function useKitsStore() {
     // just yields an empty list. Catalogue seeding is an admin script.
     let alive = true;
     const load = async () => {
-      // Wait for the session, otherwise the queries go out anonymous and RLS
-      // returns empty kit lists (intermittently).
-      await ensureSession();
+      // Validate (and refresh if needed) the session before the queries —
+      // otherwise they go out anonymous and RLS returns empty kit lists.
+      // If the session can't be made usable, skip rather than blanking the
+      // current lists (see supabase.ts for the rationale).
+      if (!(await ensureSession())) return;
       const [lancement, animation, emails] = await Promise.all([
         supabase.from("kits_lancement").select("*").order("id"),
         supabase.from("kits_animation").select("*").order("id"),

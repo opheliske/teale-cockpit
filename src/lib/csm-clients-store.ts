@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { supabase, ensureSession } from "./supabase";
 import { notifyChange, watchChanges } from "./sync";
 import type { ContractFormule, ProduitTeale, Client, ClientDetail, Statut } from "./clients-data";
 
@@ -90,9 +90,15 @@ function notify() { _listeners.forEach((l) => l()); }
 
 // Fetches the clients from Supabase and notifies subscribers.
 async function fetchClients(): Promise<void> {
-  // Wait for the session before querying — otherwise the request can go
-  // out unauthenticated and RLS returns an empty client list.
-  await supabase.auth.getUser();
+  // Validate (and refresh if needed) the session before querying. If the
+  // session can't be made usable we skip — overwriting the cache with an
+  // RLS-anonymous empty list would wipe the UI until a hard refresh.
+  if (!(await ensureSession())) {
+    // Allow the next ensureLoaded() to retry instead of returning the
+    // cached resolved promise.
+    _loadPromise = null;
+    return;
+  }
   const { data, error } = await supabase
     .from("clients")
     .select("*")

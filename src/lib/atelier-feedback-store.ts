@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabase, ensureSession } from "@/lib/supabase";
 import { notifyChange, watchChanges } from "@/lib/sync";
 
 export type AtelierFeedback = {
@@ -24,6 +24,7 @@ function notify() {
 }
 
 async function fetchFeedback(clientId: string) {
+  if (!(await ensureSession())) return;
   const { data } = await supabase
     .from("client_atelier_feedback")
     .select("*")

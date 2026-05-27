@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, ensureSession } from "@/lib/supabase";
 import { forceReloadAll } from "@/lib/sync";
 
 /**
@@ -35,11 +35,14 @@ export default function SessionWatchdog() {
 
     const validateSession = async () => {
       try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+        // ensureSession also forces a refresh when the token is near expiry,
+        // so coming back to the tab after a long absence revives the in-memory
+        // JWT. Its TOKEN_REFRESHED side-effect triggers forceReloadAll() via
+        // the onAuthStateChange handler below, so we don't have to call it
+        // here.
+        const ok = await ensureSession();
         if (!mounted) return;
-        if (!user) goToLogin();
+        if (!ok) goToLogin();
       } catch {
         // network blip — leave it; the next event/visibility will retry
       }

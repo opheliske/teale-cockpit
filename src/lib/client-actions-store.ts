@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabase, ensureSession } from "@/lib/supabase";
 import { notifyChange, watchChanges } from "@/lib/sync";
 import type { HomeAction } from "./clients-data";
 
@@ -19,6 +19,8 @@ function fromRow(row: Record<string, unknown>): HomeAction {
 
 async function ensureLoaded() {
   if (_loaded) return;
+  // Skip on unusable session — see supabase.ts.
+  if (!(await ensureSession())) return;
   _loaded = true;
   const { data } = await supabase
     .from("client_actions")
@@ -32,6 +34,7 @@ async function ensureLoaded() {
 
 // Plain re-fetch (no seeding) when an action changed elsewhere.
 async function reloadActions() {
+  if (!(await ensureSession())) return;
   const { data } = await supabase
     .from("client_actions")
     .select("*")

@@ -44,9 +44,11 @@ export function useWorkshops() {
   useEffect(() => {
     let alive = true;
     const load = async () => {
-      // Wait for the session to be loaded, otherwise the query goes out
-      // anonymous and RLS returns an empty catalogue (intermittently).
-      await ensureSession();
+      // Validate (and refresh if needed) the session before the query —
+      // otherwise it can go out anonymous and RLS returns an empty catalogue.
+      // If the session can't be made usable, skip rather than wiping the
+      // current list (see supabase.ts for the rationale).
+      if (!(await ensureSession())) return;
       const { data, error } = await supabase
         .from("workshops")
         .select("*")

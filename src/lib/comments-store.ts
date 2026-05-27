@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabase, ensureSession } from "@/lib/supabase";
 import { notifyChange, watchChanges } from "@/lib/sync";
 
 export type PlanComment = {
@@ -27,6 +27,7 @@ const _listeners = new Set<() => void>();
 
 // Re-fetch every loaded thread when a comment changed elsewhere.
 async function reloadThreads() {
+  if (!(await ensureSession())) return;
   for (const threadId of _loadedThreads) {
     const { data } = await supabase
       .from("plan_comments")
@@ -56,6 +57,7 @@ export const commentsStore = {
 
   load: async (threadId: string) => {
     if (_loadedThreads.has(threadId)) return;
+    if (!(await ensureSession())) return;
     _loadedThreads.add(threadId);
     const { data } = await supabase
       .from("plan_comments")
