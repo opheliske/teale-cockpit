@@ -222,6 +222,7 @@ function planItemsToScheduled(
       intervenant: { name: it.responsable ?? "" },
       audiences: [],
       clientFeedback: fb ? { rating: fb.rating, comment: fb.comment } : undefined,
+      cancelled: it.cancelled || undefined,
     });
   }
   return result;

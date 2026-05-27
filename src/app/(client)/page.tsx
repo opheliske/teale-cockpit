@@ -8,6 +8,7 @@ import { planStore, type StoredPlanState } from "@/lib/plan-store";
 import { csmEventsStore, type CsmEvent } from "@/lib/csm-events-store";
 import { docsStore, type StoredDocument } from "@/lib/docs-store";
 import { openClientFile } from "@/lib/storage";
+import { countAtelierConsumed } from "@/lib/plan-dates";
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -84,12 +85,27 @@ export default function ClientHomePage() {
       .sort((a, b) => a.when.getTime() - b.when.getTime());
   }, [events, today, CLIENT_ID]);
 
-  const planItems = plan?.items ?? [];
+  // Memo so its identity is stable across renders — otherwise the
+  // useMemo deriving `ateliersConsommes` below would re-run every render.
+  const planItems = useMemo(() => plan?.items ?? [], [plan]);
   const planDone = planItems.filter((i) => i.done).length;
   const planPct = planItems.length > 0 ? Math.round((planDone / planItems.length) * 100) : 0;
 
   const atelierTotal = company?.atelierTotal ?? 0;
-  const ateliersConsommes = planItems.filter((i) => i.type === "atelier" && i.done).length;
+  // Same semantics as the CSM detail view: an atelier counts as consumed
+  // only when its date has passed AND it wasn't cancelled, scoped to the
+  // current contract year. `done` is not used as a criterion any more.
+  const ateliersConsommes = useMemo(() => {
+    const yearNow = today.getFullYear();
+    const adapted = planItems.map((i) => ({
+      type: i.type,
+      month: i.month,
+      meta: i.meta,
+      cancelled: i.cancelled,
+      calendarYear: i.year === "next" ? yearNow + 1 : yearNow,
+    }));
+    return countAtelierConsumed(adapted, company?.contractStart ?? "", today);
+  }, [planItems, company?.contractStart, today]);
 
   const currentQuarter = QUARTER_OF_MONTH[new Date().getMonth()];
   const quarterItems = planItems.filter((i) => i.quarter === currentQuarter);

@@ -30,6 +30,7 @@ import { healthStore, type HealthEntry, type HealthStatut } from "@/lib/health-s
 import { targetsStore, type TargetLabel, LABEL_COLORS } from "@/lib/targets-store";
 import { commentsStore, type PlanComment } from "@/lib/comments-store";
 import { buildPlanQuarters } from "@/lib/plan-quarters";
+import { dayFromMeta, currentContractYearWindow } from "@/lib/plan-dates";
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -322,38 +323,6 @@ function storedToPlanItem(s: StoredPlanItem): PlanItem {
   };
 }
 
-// Best-effort day-of-month parsed from a plan item's meta text (e.g.
-// "15 juin · 14:00"). Falls back to 15 when no day is found, so the date
-// lands roughly in the middle of the month rather than on the 1st.
-function dayFromMeta(meta: string | undefined): number {
-  if (!meta) return 15;
-  const m = meta.match(/(?:^|\s)(\d{1,2})\s+(?:janv|fév|mars|avr|mai|juin|juil|ao[uû]t|sept|oct|nov|déc)/i);
-  if (!m) return 15;
-  const d = parseInt(m[1], 10);
-  return Number.isFinite(d) && d >= 1 && d <= 31 ? d : 15;
-}
-
-// Returns the [start, end) window of the contract year currently in
-// progress — i.e. the rolling 12-month window anchored on contractStart's
-// anniversary. Used to scope the atelier-consumption count to "this year
-// of the contract" rather than the calendar year.
-function currentContractYearWindow(
-  contractStartIso: string,
-  now: Date = new Date(),
-): { start: Date; end: Date } | null {
-  if (!contractStartIso) return null;
-  const start = new Date(contractStartIso);
-  if (Number.isNaN(start.getTime())) return null;
-  let cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-  // Walk yearly anniversaries until the next one would land in the future.
-  while (true) {
-    const next = new Date(cursor.getFullYear() + 1, cursor.getMonth(), cursor.getDate());
-    if (next.getTime() > now.getTime()) break;
-    cursor = next;
-  }
-  const end = new Date(cursor.getFullYear() + 1, cursor.getMonth(), cursor.getDate());
-  return { start: cursor, end };
-}
 
 // Rebuilds the current-year per-quarter plan from the saved plan_state items,
 // so the CSM plan tab reloads exactly what was persisted instead of a static
