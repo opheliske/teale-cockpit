@@ -63,8 +63,8 @@ const PLAN_ITEM_DEFAULT_ICONS: Record<string, string> = {
   atelier: "🎓", kit: "📢", csm: "📞", qbr: "📊", custom: "⚡",
 };
 
-const CHIP_TYPE_MAP: Record<string, "atelier" | "kit" | "csm" | "custom"> = {
-  "🎓 Atelier": "atelier", "📢 Kit": "kit", "📞 Point CSM": "csm", "⚡ Custom": "custom",
+const CHIP_TYPE_MAP: Record<string, "atelier" | "kit" | "qbr" | "custom"> = {
+  "🎓 Atelier": "atelier", "📢 Kit": "kit", "📊 QBR": "qbr", "⚡ Custom": "custom",
 };
 
 const PLAN_STYLE: Record<string, { border: string; bg: string; hoverBg: string }> = {
@@ -461,7 +461,7 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [newActionTitle, setNewActionTitle] = useState("");
   const [newActionDue, setNewActionDue] = useState("");
   const [newActionStatus, setNewActionStatus] = useState<"normal" | "warn" | "late">("normal");
-  const [addPlanCtx, setAddPlanCtx] = useState<{ quarter: string; type: "atelier" | "kit" | "csm" | "custom"; month?: number } | null>(null);
+  const [addPlanCtx, setAddPlanCtx] = useState<{ quarter: string; type: "atelier" | "kit" | "qbr" | "custom"; month?: number } | null>(null);
   const [selectedCatalogId, setSelectedCatalogId] = useState<string | null>(null);
   const [addPlanDate, setAddPlanDate] = useState("");
   const [addPlanCustomTitle, setAddPlanCustomTitle] = useState("");
@@ -933,7 +933,7 @@ export default function ClientDetailView({ id }: { id: string }) {
 
   const openAddPlan = (
     quarter: string,
-    type: "atelier" | "kit" | "csm" | "custom",
+    type: "atelier" | "kit" | "qbr" | "custom",
     month?: number,
   ) => {
     setAddPlanCtx({ quarter, type, month });
@@ -985,7 +985,7 @@ export default function ClientDetailView({ id }: { id: string }) {
         detail: addPlanDetail.trim() || undefined,
         files: addPlanCustomFiles.length > 0 ? [...addPlanCustomFiles] : undefined,
       }]);
-      if (addPlanCtx.type === "csm" && client) {
+      if (addPlanCtx.type === "qbr" && client) {
         csmEventsStore.add({
           clientId: client.id,
           clientName: client.name,
@@ -1060,7 +1060,6 @@ export default function ClientDetailView({ id }: { id: string }) {
     { key: "Tous", count: allPlanItems.length },
     { key: "🎓 Ateliers", count: allPlanItems.filter((i) => i.type === "atelier").length },
     { key: "📢 Kits", count: allPlanItems.filter((i) => i.type === "kit").length },
-    { key: "📞 Points CSM", count: allPlanItems.filter((i) => i.type === "csm").length },
     { key: "📊 QBR", count: allPlanItems.filter((i) => i.type === "qbr").length },
     { key: "⚡ Custom", count: allPlanItems.filter((i) => i.type === "custom").length },
   ].filter((o) => o.count > 0);
@@ -1071,7 +1070,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     const active = items.filter((i) => !deletedPlanIds.has(i.id)).map(getEffective);
     if (planFilter === "Tous") return active;
     const typeMap: Record<string, string> = {
-      "🎓 Ateliers": "atelier", "📢 Kits": "kit", "📞 Points CSM": "csm",
+      "🎓 Ateliers": "atelier", "📢 Kits": "kit",
       "📊 QBR": "qbr", "⚡ Custom": "custom",
     };
     return active.filter((i) => i.type === typeMap[planFilter]);
@@ -1145,7 +1144,7 @@ export default function ClientDetailView({ id }: { id: string }) {
   const hasCatalog = addPlanCtx?.type === "atelier" || addPlanCtx?.type === "kit";
   const canAddToPlan =
     addPlanCtx?.type === "atelier" ? (!!selectedCatalogId && !!addPlanDate && !!addPlanTime) :
-    addPlanCtx?.type === "csm"    ? (!!addPlanCustomTitle.trim() && !!addPlanDate && !!addPlanTime) :
+    addPlanCtx?.type === "qbr"    ? (!!addPlanCustomTitle.trim() && !!addPlanDate && !!addPlanTime) :
     hasCatalog                    ? !!selectedCatalogId :
     !!addPlanCustomTitle.trim();
 
@@ -2266,7 +2265,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                           )}
                         </div>
                         <div className="flex flex-wrap justify-center gap-1.5 pt-1">
-                          {(["🎓 Atelier", "📢 Kit", "📞 Point CSM", "⚡ Custom"] as const).map((chip) => (
+                          {(["🎓 Atelier", "📢 Kit", "📊 QBR", "⚡ Custom"] as const).map((chip) => (
                             <button
                               key={chip}
                               onClick={() => openAddPlan(qLower, CHIP_TYPE_MAP[chip], month.num)}
@@ -2345,7 +2344,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                       );
                     })()}
                     <div className="mt-1 flex flex-wrap justify-center gap-1.5">
-                      {(["🎓 Atelier", "📢 Kit", "📞 Point CSM", "⚡ Custom"] as const).map((chip) => (
+                      {(["🎓 Atelier", "📢 Kit", "📊 QBR", "⚡ Custom"] as const).map((chip) => (
                         <button key={chip} onClick={() => openAddPlan(`next-${q}`, CHIP_TYPE_MAP[chip])} className="rounded-full border border-dashed border-[#1a3530] px-[10px] py-[5px] text-[11px] text-[#94a8a0] transition-all hover:border-[#84d4a6] hover:bg-[rgba(132,212,166,0.05)] hover:text-[#84d4a6]">{chip}</button>
                       ))}
                     </div>
@@ -3475,7 +3474,7 @@ export default function ClientDetailView({ id }: { id: string }) {
               <h3 className="text-[15px] font-semibold text-[#e8f5ef]">
                 {addPlanCtx.type === "atelier" ? "🎓 Ajouter un atelier"
                   : addPlanCtx.type === "kit" ? "📢 Ajouter un kit de communication"
-                  : addPlanCtx.type === "csm" ? "📞 Nouveau point CSM"
+                  : addPlanCtx.type === "qbr" ? "📊 Nouvelle QBR"
                   : "⚡ Nouvel élément custom"}
               </h3>
               <p className="mt-0.5 text-[11px] text-[#94a8a0]">
@@ -3548,7 +3547,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                   type="text"
                   value={addPlanCustomTitle}
                   onChange={(e) => setAddPlanCustomTitle(e.target.value)}
-                  placeholder={addPlanCtx.type === "csm" ? "Ex : Point CSM mensuel…" : "Ex : Webinar bien-être…"}
+                  placeholder={addPlanCtx.type === "qbr" ? "Ex : QBR Q2…" : "Ex : Webinar bien-être…"}
                   className="w-full rounded-[10px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef] placeholder-[rgba(232,245,239,0.3)] outline-none focus:border-[rgba(94,234,212,0.5)]"
                 />
               </div>
@@ -3556,7 +3555,7 @@ export default function ClientDetailView({ id }: { id: string }) {
               {/* Date + Time (CSM) or Date + Responsable (custom) */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Date {addPlanCtx.type === "csm" ? "*" : "(optionnel)"}</label>
+                  <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Date {addPlanCtx.type === "qbr" ? "*" : "(optionnel)"}</label>
                   <input
                     type="date"
                     value={addPlanDate}
@@ -3565,7 +3564,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                     className="w-full rounded-[10px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef] outline-none focus:border-[rgba(94,234,212,0.5)]"
                   />
                 </div>
-                {addPlanCtx.type === "csm" ? (
+                {addPlanCtx.type === "qbr" ? (
                   <div>
                     <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Heure *</label>
                     <input
@@ -3590,8 +3589,8 @@ export default function ClientDetailView({ id }: { id: string }) {
                 )}
               </div>
 
-              {/* Responsable (CSM only — separate row) */}
-              {addPlanCtx.type === "csm" && (
+              {/* Responsable (QBR only — separate row) */}
+              {addPlanCtx.type === "qbr" && (
                 <div>
                   <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Responsable</label>
                   <input
