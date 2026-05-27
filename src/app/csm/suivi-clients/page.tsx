@@ -412,7 +412,7 @@ export default function SuiviClientsPage() {
               border: 0,
             }}
           >
-            Tous statuts
+            Tous
           </button>
 
           {(["green", "amber", "danger", "new"] as const).map((s) => {
