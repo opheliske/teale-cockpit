@@ -430,7 +430,7 @@ export default function CsmHomePage() {
                 </div>
               </div>
               <div className="mt-3.5 border-t border-dashed border-[#1F2832] pt-3.5 text-[12px] text-[#6B7585]">
-                {overdueActionsCount > 0 ? `${overdueActionsCount} action${overdueActionsCount > 1 ? "s" : ""} en retard` : "Tu es à jour. Bravo 🌿"}
+                {overdueActionsCount > 0 ? `${overdueActionsCount} action${overdueActionsCount > 1 ? "s" : ""} en retard` : "Keep going 💪"}
               </div>
             </div>
           </div>

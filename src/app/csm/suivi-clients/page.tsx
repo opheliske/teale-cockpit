@@ -736,20 +736,6 @@ function ClientCard({ card, onClick }: { card: CardData; onClick: () => void }) 
           <StatusTag status={card.status} label={card.statusLabel} />
         </div>
 
-        {/* Empty message */}
-        <div
-          className="rounded-[10px] p-3.5 text-[13px] leading-[1.5]"
-          style={{
-            background: "rgba(94,234,212,0.06)",
-            border: "1px solid rgba(94,234,212,0.15)",
-            color: "#94a8a0",
-          }}
-        >
-          <strong style={{ color: "#ffffff" }}>Pas encore de suivi projet.</strong>
-          <br />
-          Configure le one-year plan, les actions prioritaires et les notes pour démarrer l&apos;accompagnement.
-        </div>
-
         {/* Info rows */}
         <div className="flex flex-col gap-2 border-t pt-3.5" style={{ borderColor: "#1a2c28" }}>
           <InfoRow label={card.row1Label} val={card.row1Val} />
