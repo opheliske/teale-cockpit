@@ -426,7 +426,6 @@ export default function CsmHomePage() {
                     <span className="text-[32px] font-semibold leading-none tracking-[-0.02em]">{pendingActionsCount}</span>
                     <span className="text-[14px] text-[#6B7585]">à traiter</span>
                   </div>
-                  <p className="m-0 mt-2 text-[12px] text-[#6B7585]">Tâches cross-clients en cours.</p>
                 </div>
               </div>
               <div className="mt-3.5 border-t border-dashed border-[#1F2832] pt-3.5 text-[12px] text-[#6B7585]">

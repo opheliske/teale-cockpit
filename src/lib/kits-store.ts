@@ -50,7 +50,7 @@ export function useKitsStore() {
     // No front-side seeding (avoids concurrent re-seed races): an empty table
     // just yields an empty list. Catalogue seeding is an admin script.
     let alive = true;
-    (async () => {
+    const load = async () => {
       // Wait for the session, otherwise the queries go out anonymous and RLS
       // returns empty kit lists (intermittently).
       await ensureSession();
@@ -68,9 +68,16 @@ export function useKitsStore() {
       setLancementKits((lancement.data ?? []) as LancementKit[]);
       setAnimationItems((animation.data ?? []).map(animationFromRow));
       setEmailTopicKits((emails.data ?? []) as EmailTopicKit[]);
-    })();
+    };
+    void load();
+    // Re-fetch after a token refresh — the initial load may have raced an
+    // expired token and returned RLS-empty lists.
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "TOKEN_REFRESHED" && session) void load();
+    });
     return () => {
       alive = false;
+      sub.subscription.unsubscribe();
     };
   }, []);
 

@@ -65,6 +65,15 @@ export function watchChanges(tables: string[], onChange: ChangeListener): () => 
 }
 
 /**
+ * Triggers every registered watchChanges callback. Used by SessionWatchdog
+ * after a successful token refresh — the previous fetch may have raced an
+ * expired token and cached empty data, so we ask every store to re-fetch.
+ */
+export function forceReloadAll() {
+  for (const entry of entries) entry.cb();
+}
+
+/**
  * Tears down every Realtime channel and the BroadcastChannel. Call it on
  * sign-out so the WebSocket and channel aren't left open across sessions.
  */

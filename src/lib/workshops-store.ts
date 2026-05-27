@@ -43,7 +43,7 @@ export function useWorkshops() {
 
   useEffect(() => {
     let alive = true;
-    (async () => {
+    const load = async () => {
       // Wait for the session to be loaded, otherwise the query goes out
       // anonymous and RLS returns an empty catalogue (intermittently).
       await ensureSession();
@@ -62,9 +62,16 @@ export function useWorkshops() {
       // The catalogue is seeded once via `npm run seed-catalog` (admin script).
       setWorkshops((data ?? []).map(fromRow));
       setLoading(false);
-    })();
+    };
+    void load();
+    // Re-fetch after a token refresh — the initial load may have raced an
+    // expired token and returned an RLS-empty result.
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "TOKEN_REFRESHED" && session) void load();
+    });
     return () => {
       alive = false;
+      sub.subscription.unsubscribe();
     };
   }, []);
 
