@@ -2106,13 +2106,21 @@ export default function ClientDetailView({ id }: { id: string }) {
 
           {/* ── Current year ── */}
           {planYear === "current" && (() => {
+            // `done: isPlanDone(i)` must be applied on every bucket — that's
+            // how a session toggle reaches PlanItemRow (which reads item.done
+            // directly). Forgetting it on a bucket means the checkbox state
+            // only updates after a page refresh (the value gets persisted by
+            // the debounced sync and re-arrives via plan_state).
             const allItemsByQ: Record<"Q1" | "Q2" | "Q3" | "Q4", PlanItem[]> = {
               Q1: planBase.planQ1
                 .filter((i) => !deletedPlanIds.has(i.id))
                 .filter((i) => !planTargetFilter || (itemTargets[i.id] ?? []).includes(planTargetFilter))
-                .map(getEffective),
+                .map(getEffective)
+                .map((i) => ({ ...i, done: isPlanDone(i) })),
               Q2: [
-                ...q2DoneFiltered.map((i) => ({ ...i, done: true })),
+                // q2DoneFiltered items were stored as done — still must go
+                // through isPlanDone so the user can un-check them in-session.
+                ...q2DoneFiltered.map((i) => ({ ...i, done: isPlanDone(i) })),
                 ...q2UpcomingFiltered.map((i) => ({ ...i, done: isPlanDone(i) })),
                 ...extraQ2Filtered.map((i) => ({ ...i, done: isPlanDone(i) })),
               ],
