@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { notifyChange, watchChanges } from "@/lib/sync";
-import { HOME_ACTIONS, type HomeAction } from "./clients-data";
+import type { HomeAction } from "./clients-data";
 
 let _actions: HomeAction[] = [];
 let _loaded = false;
@@ -24,20 +24,9 @@ async function ensureLoaded() {
     .from("client_actions")
     .select("*")
     .order("created_at");
-  if (data && data.length > 0) {
-    _actions = data.map(fromRow);
-  } else {
-    // Seed with static home actions on first run
-    const toInsert = HOME_ACTIONS.map(({ text, clients, echeance, overdue, done }) => ({
-      text,
-      clients,
-      echeance,
-      overdue: overdue ?? false,
-      done: done ?? false,
-    }));
-    const { data: seeded } = await supabase.from("client_actions").insert(toInsert).select();
-    _actions = seeded ? seeded.map(fromRow) : HOME_ACTIONS;
-  }
+  // No front-side seeding (consistent with workshops/kits stores) — an empty
+  // table just yields an empty action list.
+  _actions = (data ?? []).map(fromRow);
   _listeners.forEach((l) => l());
 }
 

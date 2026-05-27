@@ -16,8 +16,6 @@ export type Client = {
   arr: number;
 };
 
-export const CLIENTS: Client[] = [];
-
 export type RenewalItem = {
   initials: string;
   color: string;
@@ -26,8 +24,6 @@ export type RenewalItem = {
   arr: number;
   status: string;
 };
-
-export const RENEWALS: RenewalItem[] = [];
 
 export type ChurnNoticeItem = {
   id: string;
@@ -40,8 +36,6 @@ export type ChurnNoticeItem = {
   statut: Statut;
 };
 
-export const CHURN_NOTICES: ChurnNoticeItem[] = [];
-
 export type HomeAction = {
   id: number;
   text: string;
@@ -50,8 +44,6 @@ export type HomeAction = {
   echeance: string;
   done?: boolean;
 };
-
-export const HOME_ACTIONS: HomeAction[] = [];
 
 // ─── Detail types ─────────────────────────────────────────────────────────────
 
@@ -160,5 +152,3 @@ export type ClientDetail = {
   history: HistoryEvent[];
   prevYear?: YearSummary;
 };
-
-export const CLIENT_DETAILS: Record<string, ClientDetail> = {};

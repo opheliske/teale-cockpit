@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter, notFound } from "next/navigation";
 import Link from "next/link";
 import { impersonationStore } from "@/lib/impersonation-store";
-import { CLIENTS, CLIENT_DETAILS, type PlanItem, type PlanItemFile, type PlanItemType, type Note, type PrioAction, type HistoryEvent, type ContractFormule, type ProduitTeale, type Statut } from "@/lib/clients-data";
+import { type PlanItem, type PlanItemFile, type PlanItemType, type Note, type PrioAction, type HistoryEvent, type ContractFormule, type ProduitTeale, type Statut } from "@/lib/clients-data";
 import { csmClientsStore, toClient, toClientDetail } from "@/lib/csm-clients-store";
 import { useCsmProfiles } from "@/lib/use-csm-profiles";
 import ClientDetailSkeleton from "./ClientDetailSkeleton";
@@ -359,8 +359,8 @@ export default function ClientDetailView({ id }: { id: string }) {
     });
   }, [id]);
 
-  const client = CLIENTS.find((c) => c.id === id) ?? (storedClient ? toClient(storedClient) : undefined);
-  const detail = CLIENT_DETAILS[id] ?? (storedClient ? toClientDetail(storedClient) : undefined);
+  const client = storedClient ? toClient(storedClient) : undefined;
+  const detail = storedClient ? toClientDetail(storedClient) : undefined;
 
   const [showHeroExpanded, setShowHeroExpanded] = useState(false);
   const [doneActions, setDoneActions] = useState<Set<number>>(new Set());

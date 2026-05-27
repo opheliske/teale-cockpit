@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { CLIENTS, HOME_ACTIONS, type Statut, type HomeAction, type Client } from "@/lib/clients-data";
+import { type Statut, type HomeAction, type Client } from "@/lib/clients-data";
 import { clientActionsStore } from "@/lib/client-actions-store";
 import { csmEventsStore, type CsmEvent } from "@/lib/csm-events-store";
 import { csmClientsStore, type StoredCsmClient } from "@/lib/csm-clients-store";
@@ -162,13 +162,8 @@ export default function CsmHomePage() {
   const [activeTab, setActiveTab] = useState<"Portfolio" | "Activites" | "Alertes">("Portfolio");
   const [filter, setFilter] = useState<Filter>("Tous");
   const [search, setSearch] = useState("");
-  const [doneIds, setDoneIds] = useState<Set<number>>(
-    () => new Set(HOME_ACTIONS.filter((a) => a.done).map((a) => a.id))
-  );
-  const [actions, setActions] = useState<HomeAction[]>(() => [
-    ...HOME_ACTIONS,
-    ...clientActionsStore.getExtra(),
-  ]);
+  const [doneIds, setDoneIds] = useState<Set<number>>(() => new Set());
+  const [actions, setActions] = useState<HomeAction[]>(() => clientActionsStore.getExtra());
   const [showAddModal, setShowAddModal] = useState(false);
   const [newText, setNewText] = useState("");
   const [newEcheance, setNewEcheance] = useState("");
@@ -198,7 +193,7 @@ export default function CsmHomePage() {
     });
   }, []);
 
-  const allClients = useMemo(() => [...CLIENTS, ...storeClients], [storeClients]);
+  const allClients = useMemo<Client[]>(() => storeClients, [storeClients]);
 
   // Contracts renewing within 90 days, derived from the real client list.
   const renewals = useMemo(
