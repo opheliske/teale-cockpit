@@ -214,7 +214,6 @@ export default function CsmHomePage() {
   const sainCount = allClients.filter((c) => c.statut === "SAIN").length;
   const vigilanceCount = allClients.filter((c) => c.statut === "VIGILANCE").length;
   const risqueCount = allClients.filter((c) => c.statut === "À RISQUE").length;
-  const renewalARR = renewals.reduce((s, r) => s + (r.arr || 0), 0);
   const pendingActionsCount = actions.filter((a) => !doneIds.has(a.id)).length;
   const overdueActionsCount = actions.filter((a) => !!a.overdue && !doneIds.has(a.id)).length;
   const healthPct = total > 0 ? Math.round((sainCount / total) * 100) : 0;
@@ -385,13 +384,12 @@ export default function CsmHomePage() {
                   <DonutChart pct={total > 0 ? renewals.length / total : 0} color="#FFB547" size={80} />
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
                     <span className="text-[20px] font-semibold leading-none text-[#F2F5F8]">{renewals.length}/{total}</span>
-                    <span className="mt-0.5 text-[11px] text-[#6B7585]">à fermer</span>
                   </div>
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-1.5">
                     <span className="text-[32px] font-semibold leading-none tracking-[-0.02em]">{renewals.length}</span>
-                    <span className="text-[14px] text-[#6B7585]">contrat{renewals.length > 1 ? "s" : ""} à fermer d&apos;ici 90 jours sur {total} compte{total > 1 ? "s" : ""}.</span>
+                    <span className="text-[14px] text-[#6B7585]">contrat{renewals.length > 1 ? "s" : ""} à fermer d&apos;ici 90 jours parmi {total} client{total > 1 ? "s" : ""}.</span>
                   </div>
                 </div>
               </div>
@@ -483,48 +481,39 @@ export default function CsmHomePage() {
               {/* Column headers */}
               <div
                 className="grid items-center gap-4 px-3 pb-2 pt-1"
-                style={{ gridTemplateColumns: "1.6fr 0.9fr 1.1fr 1.4fr 0.9fr" }}
+                style={{ gridTemplateColumns: "1.6fr 0.9fr 1.1fr 0.9fr" }}
               >
-                {["Client", "Statut", "Conso ateliers", "Action prioritaire", "Renouvellement"].map((h, i) => (
-                  <div key={h} className={`text-[11px] font-medium uppercase tracking-[0.06em] text-[#4A5260] ${i === 4 ? "text-right" : ""}`}>
+                {["Client", "Statut", "Conso ateliers", "Renouvellement"].map((h, i) => (
+                  <div key={h} className={`text-[11px] font-medium uppercase tracking-[0.06em] text-[#4A5260] ${i === 3 ? "text-right" : ""}`}>
                     {h}
                   </div>
                 ))}
               </div>
 
               {/* Client rows */}
-              {filtered.map((c) => {
-                const hasAction = c.action && c.action !== "—";
-                return (
-                  <div key={c.id} onClick={() => router.push(`/csm/clients/${c.id}`)}
-                    className="grid cursor-pointer items-center gap-4 rounded-[10px] border border-transparent px-3 py-3.5 transition-colors hover:border-[#1F2832] hover:bg-[#1A2129]"
-                    style={{ gridTemplateColumns: "1.6fr 0.9fr 1.1fr 1.4fr 0.9fr" }}>
-                    <div className="flex items-center gap-3">
-                      <ClientAvatar initials={c.initials} color={c.color} size={38} />
-                      <div className="min-w-0">
-                        <div className="truncate text-[14px] font-medium leading-tight">{c.name}</div>
-                        <div className="mt-0.5 text-[12px] leading-tight text-[#6B7585]">
-                          {c.collab.toLocaleString("fr")} collaborateurs
-                        </div>
-                      </div>
-                    </div>
-                    <div><StatutBadge statut={c.statut} /></div>
-                    <div><ConsoBar value={c.consoAteliers[0]} max={c.consoAteliers[1]} /></div>
-                    <div className={`text-[12.5px] leading-tight ${hasAction ? "text-[#F2F5F8]" : "italic text-[#4A5260]"}`}>
-                      {hasAction ? c.action : "Aucune action urgente"}
-                      {hasAction && c.actionDate && (
-                        <div className="mt-0.5 text-[11px] text-[#6B7585]">{c.actionDate}</div>
-                      )}
-                    </div>
-                    <div className="text-right">
-                      <div className="text-[12.5px] font-medium text-[#F2F5F8]">{c.arr > 0 ? `${c.arr} k€` : "— k€"}</div>
-                      <div className="mt-0.5 text-[11px] text-[#6B7585]">
-                        {c.renouvDate && c.renouvDate !== "—" ? formatIsoFr(c.renouvDate) : "À configurer"}
+              {filtered.map((c) => (
+                <div key={c.id} onClick={() => router.push(`/csm/clients/${c.id}`)}
+                  className="grid cursor-pointer items-center gap-4 rounded-[10px] border border-transparent px-3 py-3.5 transition-colors hover:border-[#1F2832] hover:bg-[#1A2129]"
+                  style={{ gridTemplateColumns: "1.6fr 0.9fr 1.1fr 0.9fr" }}>
+                  <div className="flex items-center gap-3">
+                    <ClientAvatar initials={c.initials} color={c.color} size={38} />
+                    <div className="min-w-0">
+                      <div className="truncate text-[14px] font-medium leading-tight">{c.name}</div>
+                      <div className="mt-0.5 text-[12px] leading-tight text-[#6B7585]">
+                        {c.collab.toLocaleString("fr")} collaborateurs
                       </div>
                     </div>
                   </div>
-                );
-              })}
+                  <div><StatutBadge statut={c.statut} /></div>
+                  <div><ConsoBar value={c.consoAteliers[0]} max={c.consoAteliers[1]} /></div>
+                  <div className="text-right">
+                    <div className="text-[12.5px] font-medium text-[#F2F5F8]">{c.arr > 0 ? `${c.arr} k€` : "— k€"}</div>
+                    <div className="mt-0.5 text-[11px] text-[#6B7585]">
+                      {c.renouvDate && c.renouvDate !== "—" ? formatIsoFr(c.renouvDate) : "À configurer"}
+                    </div>
+                  </div>
+                </div>
+              ))}
               {filtered.length === 0 && (
                 <div className="px-3 py-10 text-center text-[13px] text-[#6B7585]">
                   Aucun client ne correspond à ce filtre.
