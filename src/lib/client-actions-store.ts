@@ -57,6 +57,11 @@ export const clientActionsStore = {
   add: async (action: Omit<HomeAction, "id">) => {
     await ensureLoaded();
     if (!(await ensureSession())) return;
+    // owner_csm_id must match auth.uid() (RLS WITH CHECK). We read it from
+    // the live session rather than caching, so impersonation / re-login
+    // are reflected immediately.
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
     const { data } = await supabase
       .from("client_actions")
       .insert({
@@ -65,6 +70,7 @@ export const clientActionsStore = {
         echeance: action.echeance,
         overdue: action.overdue ?? false,
         done: action.done ?? false,
+        owner_csm_id: user.id,
       })
       .select()
       .single();
@@ -79,16 +85,21 @@ export const clientActionsStore = {
   addLegacy: (action: HomeAction) => {
     _actions = [..._actions, action];
     _listeners.forEach((l) => l());
-    supabase
-      .from("client_actions")
-      .insert({
-        text: action.text,
-        clients: action.clients,
-        echeance: action.echeance,
-        overdue: action.overdue ?? false,
-        done: action.done ?? false,
-      })
-      .then(() => notifyChange("client_actions"));
+    void (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      await supabase
+        .from("client_actions")
+        .insert({
+          text: action.text,
+          clients: action.clients,
+          echeance: action.echeance,
+          overdue: action.overdue ?? false,
+          done: action.done ?? false,
+          owner_csm_id: user.id,
+        });
+      notifyChange("client_actions");
+    })();
   },
 
   update: async (id: number, patch: Partial<Omit<HomeAction, "id">>) => {

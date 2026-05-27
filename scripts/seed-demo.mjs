@@ -149,7 +149,11 @@ async function main() {
 
   // 4. CSM actions — replace only the "[DÉMO]" ones.
   await supabase.from("client_actions").delete().like("text", `${DEMO_PREFIX}%`);
-  const { error: actionsErr } = await supabase.from("client_actions").insert(ACTIONS);
+  // owner_csm_id is mandatory under the per-CSM RLS — orphan rows are
+  // invisible to everyone. Attach demo actions to the first CSM.
+  const { error: actionsErr } = await supabase.from("client_actions").insert(
+    ACTIONS.map((a) => ({ ...a, owner_csm_id: ownerCsmId })),
+  );
   if (actionsErr) console.error("✗ client_actions:", actionsErr.message);
   else console.log(`✓ ${ACTIONS.length} actions CSM`);
 

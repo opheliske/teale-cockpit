@@ -74,16 +74,19 @@ create table if not exists kits_email (
   language text not null check (language in ('FR', 'EN'))
 );
 
--- ─── Client actions (CSM home to-do list) ────────────────────────────────────
+-- ─── Client actions (CSM home to-do list, per-CSM ownership) ────────────────
 create table if not exists client_actions (
-  id        bigint primary key generated always as identity,
-  text      text not null,
-  clients   jsonb not null default '[]',  -- [{ name, color }]
-  echeance  text not null,
-  overdue   boolean not null default false,
-  done      boolean not null default false,
-  created_at timestamptz not null default now()
+  id            bigint primary key generated always as identity,
+  text          text not null,
+  clients       jsonb not null default '[]',  -- [{ name, color }]
+  echeance      text not null,
+  overdue       boolean not null default false,
+  done          boolean not null default false,
+  owner_csm_id  uuid references auth.users(id) on delete cascade,
+  created_at    timestamptz not null default now()
 );
+create index if not exists client_actions_owner_csm_id_idx
+  on client_actions (owner_csm_id);
 
 -- ─── CSM events (agenda) ─────────────────────────────────────────────────────
 create table if not exists csm_events (
