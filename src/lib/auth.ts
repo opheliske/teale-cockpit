@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, ensureSession } from "@/lib/supabase";
 import { impersonationStore } from "@/lib/impersonation-store";
 import { closeSync } from "@/lib/sync";
 
@@ -27,6 +27,17 @@ export function useAuth() {
     let active = true;
 
     async function load() {
+      // Same guard as every other store fetch: a silently-expired JWT
+      // (auth-js LockManager deadlock) would otherwise send the SELECT out
+      // anonymous, RLS would return zero rows, and `profile` would be stuck
+      // at null — leaving the home page rendering "Bonjour" without name.
+      if (!(await ensureSession())) {
+        if (active) {
+          setProfile(null);
+          setLoading(false);
+        }
+        return;
+      }
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -37,11 +48,14 @@ export function useAuth() {
         }
         return;
       }
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("profiles")
         .select("id, role, client_id, full_name, email")
         .eq("id", user.id)
         .single();
+      if (error) {
+        console.error("[useAuth] profile fetch failed:", error);
+      }
       if (active) {
         setProfile((data as Profile) ?? null);
         setLoading(false);

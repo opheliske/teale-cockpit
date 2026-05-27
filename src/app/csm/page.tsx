@@ -313,17 +313,8 @@ export default function CsmHomePage() {
       <section className="mb-7 flex items-end justify-between gap-6 border-b border-[#1F2832] pb-6">
         <div>
           <h1 className="m-0 mb-1.5 text-[28px] font-semibold tracking-[-0.02em]">
-            Bonjour{firstName ? <> <span className="text-[#5EEAB0]">{firstName}</span></> : ""}
+            Bonjour{firstName ? <> <span className="text-[#5EEAB0]">{firstName}</span></> : ""} 👋
           </h1>
-          <p className="m-0 max-w-[560px] text-[14px] leading-relaxed text-[#A7B0BC]">
-            Voici l&apos;état de votre portefeuille de {total} compte{total > 1 ? "s" : ""} Teale.{" "}
-            {vigilanceCount + risqueCount > 0
-              ? `${vigilanceCount + risqueCount} client${vigilanceCount + risqueCount > 1 ? "s" : ""} demandent votre attention`
-              : "Tous les clients sont en bonne santé"}
-            {urgentRenewals.length > 0
-              ? `, et vous avez ${urgentRenewals.length} renouvellement${urgentRenewals.length > 1 ? "s" : ""} à prioriser ce mois-ci.`
-              : "."}
-          </p>
         </div>
         <button
           onClick={() => router.push("/csm/suivi-clients")}
