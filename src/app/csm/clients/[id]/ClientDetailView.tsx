@@ -9,6 +9,7 @@ import { csmClientsStore, toClient, toClientDetail } from "@/lib/csm-clients-sto
 import { useCsmProfiles } from "@/lib/use-csm-profiles";
 import ClientDetailSkeleton from "./ClientDetailSkeleton";
 import { clientActionsStore } from "@/lib/client-actions-store";
+import { notesStore } from "@/lib/notes-store";
 import { useWorkshops, themes as workshopThemes } from "@/lib/workshops-store";
 import { useKitsStore } from "@/lib/kits-store";
 
@@ -389,8 +390,10 @@ export default function ClientDetailView({ id }: { id: string }) {
       ?? qs.find((q) => q.status === "upcoming")?.id
       ?? "Q1";
   });
-  const [localNotes, setLocalNotes] = useState<Note[]>(() => detail?.notes ?? []);
-  const deleteNote = (id: number) => setLocalNotes((prev) => prev.filter((n) => n.id !== id));
+  const [localNotes, setLocalNotes] = useState<Note[]>(() => notesStore.getNotes());
+  const deleteNote = (noteId: number) => {
+    void notesStore.removeNote(noteId);
+  };
   const [noteModal, setNoteModal] = useState<{ mode: "create" | "edit"; noteId?: number } | null>(null);
   const [noteDraft, setNoteDraft] = useState<{ type: import("@/lib/clients-data").NoteType; date: string; text: string }>({ type: "csm", date: "", text: "" });
 
@@ -406,10 +409,19 @@ export default function ClientDetailView({ id }: { id: string }) {
     if (!noteDraft.text.trim()) return;
     const dateFr = formatDateFr(noteDraft.date) || new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
     if (noteModal?.mode === "edit" && noteModal.noteId != null) {
-      setLocalNotes((prev) => prev.map((n) => n.id === noteModal.noteId ? { ...n, type: noteDraft.type, date: dateFr, text: noteDraft.text.trim() } : n));
+      void notesStore.updateNote(noteModal.noteId, {
+        type: noteDraft.type,
+        date: dateFr,
+        text: noteDraft.text.trim(),
+      });
     } else {
-      const newId = localNotes.length > 0 ? Math.max(...localNotes.map((n) => n.id)) + 1 : 1;
-      setLocalNotes((prev) => [...prev, { id: newId, type: noteDraft.type, date: dateFr, text: noteDraft.text.trim(), ctaLabel: "", ctaVariant: "default" as const }]);
+      void notesStore.addNote({
+        type: noteDraft.type,
+        date: dateFr,
+        text: noteDraft.text.trim(),
+        ctaLabel: "",
+        ctaVariant: "default",
+      });
     }
     setNoteModal(null);
   };
@@ -423,7 +435,24 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [nextThemes, setNextThemes] = useState({ q1: "", q2: "", q3: "", q4: "" });
   const [editingQ, setEditingQ] = useState<string | null>(null);
   const [editingVal, setEditingVal] = useState("");
-  const [localActions, setLocalActions] = useState<PrioAction[]>(() => detail?.actions ?? []);
+  // Personal actions for THIS client come from clientActionsStore (filtered
+  // by client name) and are merged with the static seed (`detail.actions`).
+  const personalActions = (name: string | undefined): PrioAction[] => {
+    if (!name) return [];
+    return clientActionsStore
+      .getExtra()
+      .filter((a) => a.clients.some((c) => c.name === name))
+      .map<PrioAction>((a) => ({
+        id: a.id,
+        title: a.text,
+        dueLabel: a.echeance,
+        status: a.done ? "done" : a.overdue ? "late" : "normal",
+      }));
+  };
+  const [localActions, setLocalActions] = useState<PrioAction[]>(() => [
+    ...(detail?.actions ?? []),
+    ...personalActions(storedClient?.name),
+  ]);
   const [showNotes, setShowNotes] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [historyFilter, setHistoryFilter] = useState("Tout");
@@ -577,6 +606,24 @@ export default function ClientDetailView({ id }: { id: string }) {
     docsStore.load(id);
     return docsStore.subscribe(() => setLocalDocs(docsStore.getDocs()));
   }, [id]);
+
+  useEffect(() => {
+    notesStore.load(id);
+    return notesStore.subscribe(() => setLocalNotes(notesStore.getNotes()));
+  }, [id]);
+
+  // Refresh the per-client priority actions when the store changes (e.g. an
+  // action added from the home page, or persisted on this page).
+  useEffect(() => {
+    const name = storedClient?.name;
+    if (!name) return;
+    const refresh = () => {
+      setLocalActions([...(detail?.actions ?? []), ...personalActions(name)]);
+    };
+    refresh();
+    return clientActionsStore.subscribe(refresh);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storedClient?.name]);
 
   // Target labels
   const [clientLabels, setClientLabels] = useState<TargetLabel[]>(() => targetsStore.getLabels(id));
@@ -769,11 +816,9 @@ export default function ClientDetailView({ id }: { id: string }) {
 
   const handleCreateAction = () => {
     if (!newActionTitle.trim() || !client) return;
-    const newId = Date.now();
     const dueLabel = newActionDue ? formatDateFr(newActionDue) : "Sans échéance";
-    const prioAction: PrioAction = { id: newId, title: newActionTitle.trim(), dueLabel, status: newActionStatus };
-    setLocalActions((prev) => [...prev, prioAction]);
-    clientActionsStore.add({
+    // The store subscription refreshes localActions automatically.
+    void clientActionsStore.add({
       text: newActionTitle.trim(),
       clients: [{ name: client.name, color: client.color }],
       echeance: dueLabel,
@@ -1150,7 +1195,14 @@ export default function ClientDetailView({ id }: { id: string }) {
                       {(Object.entries(STATUT_CONFIG) as [Statut, typeof STATUT_CONFIG[Statut]][]).map(([key, cfg]) => (
                         <button
                           key={key}
-                          onClick={() => { setLocalStatut(key); setShowStatutDropdown(false); }}
+                          onClick={() => {
+                            setLocalStatut(key);
+                            setShowStatutDropdown(false);
+                            if (storedClient) {
+                              const dbStatut = key === "SAIN" ? "green" : key === "VIGILANCE" ? "amber" : "danger";
+                              void csmClientsStore.add({ ...storedClient, statut: dbStatut });
+                            }
+                          }}
                           className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-[12px] transition-colors hover:bg-[#1a3530]"
                         >
                           <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: cfg.dot }} />

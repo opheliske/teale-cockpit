@@ -167,6 +167,21 @@ create table if not exists plan_comments (
 
 create index if not exists plan_comments_thread_id_idx on plan_comments (thread_id);
 
+-- ─── Client notes (CSM-internal per-client notes) ────────────────────────────
+create table if not exists public.client_notes (
+  id          bigint primary key generated always as identity,
+  client_id   text not null references public.clients (id) on delete cascade,
+  type        text not null,
+  date        text not null,
+  text        text not null,
+  cta_label   text not null default '',
+  cta_variant text not null default 'default',
+  alert       boolean not null default false,
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists client_notes_client_id_idx on public.client_notes (client_id);
+
 -- ─── Urgencies (emergency intervention declarations) ─────────────────────────
 create table if not exists public.urgencies (
   id                 text primary key,
