@@ -7,6 +7,10 @@ import { clientActionsStore } from "@/lib/client-actions-store";
 import { csmEventsStore, type CsmEvent } from "@/lib/csm-events-store";
 import { csmClientsStore, type StoredCsmClient } from "@/lib/csm-clients-store";
 import { useAuth } from "@/lib/auth";
+import { supabase, ensureSession } from "@/lib/supabase";
+import { watchChanges } from "@/lib/sync";
+import { countAtelierConsumed } from "@/lib/plan-dates";
+import type { StoredPlanItem } from "@/lib/plan-store";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -169,6 +173,9 @@ export default function CsmHomePage() {
   const [newEcheance, setNewEcheance] = useState("");
   const [extraCsmEvents, setExtraCsmEvents] = useState<CsmEvent[]>(() => csmEventsStore.getEvents());
   const [storeClients, setStoreClients] = useState<Client[]>(() => csmClientsStore.getAll().map(storeToClient));
+  // Raw plan items per client, used to compute the "Conso ateliers" column.
+  // Re-fetched whenever a plan_state row changes anywhere (Realtime).
+  const [planItemsByClient, setPlanItemsByClient] = useState<Record<string, StoredPlanItem[]>>({});
 
   useEffect(() => {
     return csmClientsStore.subscribe(() => {
@@ -193,7 +200,48 @@ export default function CsmHomePage() {
     });
   }, []);
 
-  const allClients = useMemo<Client[]>(() => storeClients, [storeClients]);
+  // Load every client's plan items so the portfolio's "Conso ateliers"
+  // column reflects real consumption (otherwise it would stay hardcoded
+  // at 0 in storeToClient). RLS keeps each CSM scoped to their clients.
+  useEffect(() => {
+    const load = async () => {
+      if (!(await ensureSession())) return;
+      const { data, error } = await supabase.from("plan_state").select("client_id, items");
+      if (error || !data) return;
+      const out: Record<string, StoredPlanItem[]> = {};
+      for (const row of data) {
+        out[row.client_id as string] = (row.items as StoredPlanItem[]) ?? [];
+      }
+      setPlanItemsByClient(out);
+    };
+    void load();
+    return watchChanges(["plan_state"], () => { void load(); });
+  }, []);
+
+  // Inject the actual consumed-atelier count into each client's
+  // consoAteliers[0]. Uses countAtelierConsumed so the maths are
+  // identical to the CSM detail view and the client portal.
+  const allClients = useMemo<Client[]>(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yearNow = today.getFullYear();
+    return storeClients.map((c) => {
+      const stored = csmClientsStore.get(c.id);
+      const contractStart = stored?.contractStart ?? "";
+      const planItems = planItemsByClient[c.id] ?? [];
+      const adapted = planItems.map((i) => ({
+        type: i.type,
+        month: i.month,
+        meta: i.meta,
+        cancelled: i.cancelled,
+        calendarYear: i.year === "next" ? yearNow + 1 : yearNow,
+      }));
+      const consumed = contractStart
+        ? countAtelierConsumed(adapted, contractStart, today)
+        : 0;
+      return { ...c, consoAteliers: [consumed, c.consoAteliers[1]] };
+    });
+  }, [storeClients, planItemsByClient]);
 
   // Contracts renewing within 90 days, derived from the real client list.
   const renewals = useMemo(
