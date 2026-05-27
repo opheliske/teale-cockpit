@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { workshops, themes, type Workshop } from "@/app/(client)/catalogue-ateliers/data";
+import { useActiveClient } from "@/lib/client-context";
+import { planStore, type StoredPlanItem } from "@/lib/plan-store";
+import { atelierFeedbackStore, type AtelierFeedback } from "@/lib/atelier-feedback-store";
 
 type Format = "presentiel" | "distanciel" | "hybride";
 type Audience = "RH" | "Elus" | "Managers" | "Collaborateurs" | "Codir";
@@ -173,7 +176,56 @@ function groupByMonth(items: ScheduledAtelier[]): { label: string; count: number
 const workshopById = Object.fromEntries(workshops.map((w) => [w.id, w]));
 const themeNameById = Object.fromEntries(themes.map((t) => [t.id, t.name]));
 
-const scheduled: ScheduledAtelier[] = [];
+const FR_MONTHS_LC = [
+  "janvier", "février", "mars", "avril", "mai", "juin",
+  "juillet", "août", "septembre", "octobre", "novembre", "décembre",
+];
+
+function parseDayFromMeta(meta: string): number | undefined {
+  const m = meta.match(/(?:^|\s)(\d{1,2})\s+(?:janv|fév|mars|avr|mai|juin|juil|ao[uû]t|sept|oct|nov|déc)/i);
+  if (!m) return undefined;
+  const d = parseInt(m[1], 10);
+  return Number.isFinite(d) && d >= 1 && d <= 31 ? d : undefined;
+}
+
+function parseTimeFromMeta(meta: string): string | undefined {
+  const m = meta.match(/(\d{1,2}:\d{2})/);
+  return m?.[1];
+}
+
+// Build the client's scheduled-atelier list from their plan_state items.
+// Rich fields not stored on the plan (audiences, attendees, satisfaction…)
+// are left empty or omitted — the UI handles missing values gracefully.
+function planItemsToScheduled(
+  items: StoredPlanItem[],
+  feedbacks: Record<number, AtelierFeedback>,
+): ScheduledAtelier[] {
+  const yearNow = new Date().getFullYear();
+  const result: ScheduledAtelier[] = [];
+  for (const it of items) {
+    if (it.type !== "atelier") continue;
+    if (it.month == null) continue;
+    const year = it.year === "next" ? yearNow + 1 : yearNow;
+    const day = parseDayFromMeta(it.meta) ?? 15;
+    const isoDate = `${year}-${String(it.month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const monthName = FR_MONTHS_LC[it.month];
+    const dateLabel = `${day} ${monthName} ${year}`;
+    const timeLabel = parseTimeFromMeta(it.meta) ?? "";
+    const fb = feedbacks[it.id];
+    result.push({
+      id: String(it.id),
+      workshopId: String(it.id),
+      dateLabel,
+      timeLabel,
+      isoDate,
+      format: "presentiel",
+      intervenant: { name: it.responsable ?? "" },
+      audiences: [],
+      clientFeedback: fb ? { rating: fb.rating, comment: fb.comment } : undefined,
+    });
+  }
+  return result;
+}
 
 type FilterId = "all" | "upcoming" | "realise" | "annule" | "feedback";
 type ViewMode = "liste" | "cartes";
@@ -182,36 +234,58 @@ export default function MesAteliersPage() {
   const [filter, setFilter] = useState<FilterId>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("liste");
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [feedbacks, setFeedbacks] = useState<Record<string, { rating: number; comment: string }>>(() => {
-    const init: Record<string, { rating: number; comment: string }> = {};
-    for (const s of scheduled) {
-      if (s.clientFeedback) init[s.id] = s.clientFeedback;
-    }
-    return init;
-  });
+  // Active client (via the (client) route guard) — every list below is scoped
+  // to this client.
+  const { clientId } = useActiveClient();
+  // List of scheduled ateliers, derived from the client's plan_state items.
+  const [scheduled, setScheduled] = useState<ScheduledAtelier[]>([]);
+  // Feedbacks keyed by ScheduledAtelier.id (string). Synced from the store.
+  const [feedbacks, setFeedbacks] = useState<Record<string, { rating: number; comment: string }>>({});
+
+  // Load plan + feedback for this client, rebuild scheduled on any change.
+  useEffect(() => {
+    const refresh = () => {
+      const items = planStore.getState()?.items ?? [];
+      const fbMap = atelierFeedbackStore.getAll();
+      setScheduled(planItemsToScheduled(items, fbMap));
+      const stringKeyed: Record<string, { rating: number; comment: string }> = {};
+      for (const fb of Object.values(fbMap)) {
+        stringKeyed[String(fb.itemId)] = { rating: fb.rating, comment: fb.comment };
+      }
+      setFeedbacks(stringKeyed);
+    };
+    void planStore.load(clientId).then(refresh);
+    void atelierFeedbackStore.load(clientId).then(refresh);
+    const unsubPlan = planStore.subscribe(refresh);
+    const unsubFb = atelierFeedbackStore.subscribe(refresh);
+    return () => {
+      unsubPlan();
+      unsubFb();
+    };
+  }, [clientId]);
 
   const counts = useMemo(() => {
     const out = { realise: 0, annule: 0, upcoming: 0, all: scheduled.length };
     for (const s of scheduled) out[scheduledStatus(s)] += 1;
     return out;
-  }, []);
+  }, [scheduled]);
 
   const pendingFeedbackItems = useMemo(
     () => scheduled.filter((s) => scheduledStatus(s) === "realise" && !feedbacks[s.id]),
-    [feedbacks]
+    [scheduled, feedbacks]
   );
 
   const upcomingItems = useMemo(
     () => scheduled.filter((s) => scheduledStatus(s) === "upcoming").sort((a, b) => dayDiff(a.isoDate) - dayDiff(b.isoDate)),
-    []
+    [scheduled]
   );
   const realiseItems = useMemo(
     () => scheduled.filter((s) => scheduledStatus(s) === "realise").sort((a, b) => dayDiff(b.isoDate) - dayDiff(a.isoDate)),
-    []
+    [scheduled]
   );
   const annuleItems = useMemo(
     () => scheduled.filter((s) => s.cancelled),
-    []
+    [scheduled]
   );
 
   const nextUpcoming = upcomingItems[0] ?? null;
@@ -222,7 +296,7 @@ export default function MesAteliersPage() {
       if (!s.cancelled) arr[new Date(s.isoDate).getMonth()]++;
     }
     return arr;
-  }, []);
+  }, [scheduled]);
 
   const upcomingByMonth = useMemo(() => groupByMonth(upcomingItems), [upcomingItems]);
 
@@ -245,8 +319,11 @@ export default function MesAteliersPage() {
   }, [upcomingItems]);
 
   const active = activeId ? scheduled.find((s) => s.id === activeId) ?? null : null;
-  const submitFeedback = (id: string, rating: number, comment: string) =>
+  const submitFeedback = (id: string, rating: number, comment: string) => {
+    // Optimistic UI update; store subscription will re-confirm.
     setFeedbacks((prev) => ({ ...prev, [id]: { rating, comment } }));
+    void atelierFeedbackStore.upsert(Number(id), rating, comment);
+  };
 
   const showUpcoming = filter === "all" || filter === "upcoming";
   const showRealise  = filter === "all" || filter === "realise";

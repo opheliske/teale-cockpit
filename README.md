@@ -61,6 +61,7 @@ Run the SQL in the Supabase SQL editor, **in this exact order** — the result i
    10. `…20260522150000_plan_state_next_themes.sql` — adds `plan_state.next_themes` (next-year quarter themes).
    11. `…20260527120000_client_notes.sql` — `client_notes` table (CSM-internal notes per client) + RLS + Realtime.
    12. `…20260527130000_storage_kit_files.sql` — private `kit-files` Storage bucket + RLS (CSM writes, all authenticated read).
+   13. `…20260527140000_client_atelier_feedback.sql` — `client_atelier_feedback` table (client rating + comment on each scheduled atelier) + RLS + Realtime.
 
 > ⚠️ Running `schema.sql` **alone** leaves the tables without RLS. The migrations (step 2) are mandatory — they are what secures the database.
 
