@@ -59,6 +59,7 @@ export const healthStore = {
   },
 
   addEntry: async (clientId: string, entry: Omit<HealthEntry, "id">) => {
+    if (!(await ensureSession())) return;
     const { data } = await supabase
       .from("health_entries")
       .insert({
@@ -78,6 +79,7 @@ export const healthStore = {
   },
 
   removeEntry: async (clientId: string, entryId: number) => {
+    if (!(await ensureSession())) return;
     await supabase.from("health_entries").delete().eq("id", entryId);
     state = {
       ...state,

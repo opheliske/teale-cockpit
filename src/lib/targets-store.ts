@@ -106,6 +106,7 @@ export const targetsStore = {
       "-" +
       Date.now().toString(36);
     const newLabel: TargetLabel = { id, name, color };
+    if (!(await ensureSession())) return id;
     const { error } = await supabase
       .from("target_labels")
       .insert({ id, client_id: clientId, name, color });
@@ -120,6 +121,7 @@ export const targetsStore = {
   },
 
   removeLabel: async (clientId: string, labelId: string) => {
+    if (!(await ensureSession())) return;
     await supabase.from("target_labels").delete().eq("id", labelId);
     labels = { ...labels, [clientId]: (labels[clientId] ?? []).filter((l) => l.id !== labelId) };
     const ca = assigns[clientId] ?? {};
@@ -134,6 +136,7 @@ export const targetsStore = {
   },
 
   toggleItemTarget: async (clientId: string, itemId: number, labelId: string) => {
+    if (!(await ensureSession())) return;
     const cur = assigns[clientId]?.[itemId] ?? [];
     if (cur.includes(labelId)) {
       await supabase
@@ -160,6 +163,7 @@ export const targetsStore = {
   },
 
   setItemTargets: async (clientId: string, itemId: number, labelIds: string[]) => {
+    if (!(await ensureSession())) return;
     await supabase
       .from("target_item_assignments")
       .delete()

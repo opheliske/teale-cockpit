@@ -1,4 +1,5 @@
 import { createBrowserClient } from "@supabase/ssr";
+import { sessionStatusStore } from "./session-status-store";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -41,7 +42,10 @@ export async function ensureSession(): Promise<boolean> {
     if (data.session) { session = data.session; break; }
     await new Promise((r) => setTimeout(r, 100));
   }
-  if (!session) return false;
+  if (!session) {
+    sessionStatusStore.set("lost");
+    return false;
+  }
 
   // 2) If the token expires within the margin, force a refresh — bounded
   // by REFRESH_TIMEOUT_MS so a deadlocked LockManager can't hang us.
@@ -52,10 +56,15 @@ export async function ensureSession(): Promise<boolean> {
         supabase.auth.refreshSession().then(({ data }) => data.session),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), REFRESH_TIMEOUT_MS)),
       ]);
-      if (!fresh) return false;
+      if (!fresh) {
+        sessionStatusStore.set("lost");
+        return false;
+      }
     } catch {
+      sessionStatusStore.set("lost");
       return false;
     }
   }
+  sessionStatusStore.set("ok");
   return true;
 }

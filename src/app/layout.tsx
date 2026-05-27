@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { DM_Sans } from "next/font/google";
 import "./globals.css";
 import SessionWatchdog from "@/components/SessionWatchdog";
+import SessionStatusBanner from "@/components/SessionStatusBanner";
 
 const dmSans = DM_Sans({
   variable: "--font-dm-sans",
@@ -22,6 +23,7 @@ export default function RootLayout({
     <html lang="fr" className={`${dmSans.variable} h-full antialiased`}>
       <body className="h-full text-brand-cream">
         <SessionWatchdog />
+        <SessionStatusBanner />
         {children}
       </body>
     </html>

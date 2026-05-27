@@ -137,6 +137,7 @@ export const csmClientsStore = {
   // way an upsert's candidate INSERT row would. Returns the error message
   // (or null) so the caller can surface a failure.
   add: async (client: StoredCsmClient): Promise<{ error: string | null }> => {
+    if (!(await ensureSession())) return { error: "Session expirée" };
     const exists = _clients.some((c) => c.id === client.id);
     const { error } = exists
       ? await supabase.from("clients").update(toRow(client)).eq("id", client.id)
@@ -155,6 +156,7 @@ export const csmClientsStore = {
   // ON DELETE CASCADE, so this single statement atomically removes the client
   // and all its dependent rows — no manual (non-atomic) multi-delete needed.
   remove: async (id: string): Promise<{ error: string | null }> => {
+    if (!(await ensureSession())) return { error: "Session expirée" };
     const { error } = await supabase.from("clients").delete().eq("id", id);
     if (error) {
       console.error("[csm-clients-store] remove", error);

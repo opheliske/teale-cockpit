@@ -47,6 +47,7 @@ export const notesStore = {
 
   addNote: async (note: Omit<Note, "id">): Promise<void> => {
     if (!_clientId) return;
+    if (!(await ensureSession())) return;
     const { data } = await supabase
       .from("client_notes")
       .insert({
@@ -68,6 +69,7 @@ export const notesStore = {
   },
 
   updateNote: async (id: number, patch: Partial<Omit<Note, "id">>): Promise<void> => {
+    if (!(await ensureSession())) return;
     const row: Record<string, unknown> = {};
     if (patch.type !== undefined) row.type = patch.type;
     if (patch.date !== undefined) row.date = patch.date;
@@ -89,6 +91,7 @@ export const notesStore = {
   },
 
   removeNote: async (id: number): Promise<void> => {
+    if (!(await ensureSession())) return;
     await supabase.from("client_notes").delete().eq("id", id);
     _notes = _notes.filter((n) => n.id !== id);
     notify();

@@ -56,6 +56,7 @@ export const clientActionsStore = {
 
   add: async (action: Omit<HomeAction, "id">) => {
     await ensureLoaded();
+    if (!(await ensureSession())) return;
     const { data } = await supabase
       .from("client_actions")
       .insert({
@@ -92,6 +93,7 @@ export const clientActionsStore = {
 
   update: async (id: number, patch: Partial<Omit<HomeAction, "id">>) => {
     await ensureLoaded();
+    if (!(await ensureSession())) return;
     const { data } = await supabase
       .from("client_actions")
       .update(patch)
@@ -106,6 +108,7 @@ export const clientActionsStore = {
   },
 
   remove: async (id: number) => {
+    if (!(await ensureSession())) return;
     await supabase.from("client_actions").delete().eq("id", id);
     _actions = _actions.filter((a) => a.id !== id);
     _listeners.forEach((l) => l());

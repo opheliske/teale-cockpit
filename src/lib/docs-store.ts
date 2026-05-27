@@ -62,6 +62,7 @@ export const docsStore = {
 
   addDoc: async (doc: StoredDocument) => {
     if (!_clientId) return;
+    if (!(await ensureSession())) return;
     const { data } = await supabase
       .from("documents")
       .insert({
@@ -85,6 +86,7 @@ export const docsStore = {
 
   updateDoc: async (doc: StoredDocument) => {
     if (!_clientId) return;
+    if (!(await ensureSession())) return;
     const { data } = await supabase
       .from("documents")
       .update({
@@ -108,6 +110,7 @@ export const docsStore = {
 
   removeDoc: async (docId: string) => {
     if (!_clientId) return;
+    if (!(await ensureSession())) return;
     await supabase.from("documents").delete().eq("id", docId).eq("client_id", _clientId);
     _docs = _docs.filter((d) => d.id !== docId);
     _listeners.forEach((l) => l());

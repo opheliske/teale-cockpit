@@ -54,6 +54,7 @@ export const atelierFeedbackStore = {
   /** Inserts or updates the feedback for one atelier (upsert by composite PK). */
   upsert: async (itemId: number, rating: number, comment: string): Promise<void> => {
     if (!_clientId) return;
+    if (!(await ensureSession())) return;
     const { data } = await supabase
       .from("client_atelier_feedback")
       .upsert({

@@ -66,6 +66,7 @@ export const csmEventsStore = {
 
   add: async (event: Omit<CsmEvent, "id">) => {
     await ensureLoaded();
+    if (!(await ensureSession())) return;
     const { data } = await supabase
       .from("csm_events")
       .insert({
@@ -89,6 +90,7 @@ export const csmEventsStore = {
   },
 
   remove: async (id: number) => {
+    if (!(await ensureSession())) return;
     await supabase.from("csm_events").delete().eq("id", id);
     _events = _events.filter((e) => e.id !== id);
     _listeners.forEach((l) => l());

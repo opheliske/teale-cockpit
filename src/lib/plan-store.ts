@@ -75,6 +75,7 @@ export const planStore = {
     _state = state;
     _listeners.forEach((l) => l());
     if (!_clientId) return;
+    if (!(await ensureSession())) return;
     await supabase.from("plan_state").upsert({
       client_id: _clientId,
       themes: state.themes,

@@ -82,6 +82,7 @@ export const commentsStore = {
     author: "client" | "csm",
     text: string,
   ) => {
+    if (!(await ensureSession())) return;
     const { data } = await supabase
       .from("plan_comments")
       .insert({ thread_id: threadId, client_id: clientId, author, text })
