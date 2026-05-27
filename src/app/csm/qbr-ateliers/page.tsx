@@ -6,6 +6,7 @@ import { csmEventsStore, type CsmEvent } from "@/lib/csm-events-store";
 import { supabase, ensureSession } from "@/lib/supabase";
 import { csmClientsStore } from "@/lib/csm-clients-store";
 import type { StoredPlanItem } from "@/lib/plan-store";
+import { useAuth } from "@/lib/auth";
 
 type QbrItem = {
   id: number;
@@ -71,14 +72,22 @@ async function persistDeckCreated(clientId: string, itemId: number, deckCreated:
 }
 
 export default function QbrAteliersPage() {
+  const { profile } = useAuth();
+  const myId = profile?.id;
   const [qbrItems, setQbrItems] = useState<QbrItem[]>([]);
   const [atelierItems, setAtelierItems] = useState<AtelierItem[]>([]);
   // External-store subscription (no setState-in-effect).
-  const csmEvents = useSyncExternalStore<CsmEvent[]>(
+  const allCsmEvents = useSyncExternalStore<CsmEvent[]>(
     csmEventsStore.subscribe,
     csmEventsStore.getEvents,
     csmEventsStore.getEvents,
   );
+  // Per-CSM scoping: with the collaborative RLS, csmEvents/plan_state come
+  // back for every client. The Home / QBR pages must filter to the rows
+  // attached to the connected CSM's clients (auth.uid() === owner_csm_id).
+  const csmEvents = myId
+    ? allCsmEvents.filter((ev) => csmClientsStore.get(ev.clientId)?.ownerCsmId === myId)
+    : [];
 
   // Load upcoming QBR/atelier items from plan_state across every client. The
   // CSM RLS permits the SELECT; client info is taken from the loaded store.
@@ -94,6 +103,10 @@ export default function QbrAteliersPage() {
     for (const row of data as Array<{ client_id: string; items: StoredPlanItem[] | null }>) {
       const client = csmClientsStore.get(row.client_id);
       if (!client) continue;
+      // Scoping: only show QBR / atelier items for clients owned by the
+      // connected CSM. RLS lets us read everything (collaborative model),
+      // the filter is enforced here.
+      if (client.ownerCsmId !== myId) continue;
       for (const it of row.items ?? []) {
         if (it.type !== "qbr" && it.type !== "atelier") continue;
         if (it.month == null) continue;
@@ -128,7 +141,7 @@ export default function QbrAteliersPage() {
     atelier.sort((a, b) => a.daysUntil - b.daysUntil);
     setQbrItems(qbr);
     setAtelierItems(atelier);
-  }, []);
+  }, [myId]);
 
   /* eslint-disable react-hooks/set-state-in-effect --
      setState in loadPlanItems happens AFTER an async Supabase fetch (and on

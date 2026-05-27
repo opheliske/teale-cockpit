@@ -160,16 +160,27 @@ export default function CsmHomePage() {
   const [doneIds, setDoneIds] = useState<Set<number>>(() => new Set());
   const [actions, setActions] = useState<HomeAction[]>(() => clientActionsStore.getExtra());
   const [extraCsmEvents, setExtraCsmEvents] = useState<CsmEvent[]>(() => csmEventsStore.getEvents());
-  const [storeClients, setStoreClients] = useState<Client[]>(() => csmClientsStore.getAll().map(storeToClient));
+  const myId = profile?.id;
+  // Per-CSM scoping: the home only shows clients the connected CSM owns.
+  // RLS lets every CSM read every client (collaborative model) — the filter
+  // is enforced here so the Suivi page can still show the full portfolio.
+  const [storeClients, setStoreClients] = useState<Client[]>([]);
   // Raw plan items per client, used to compute the "Conso ateliers" column.
   // Re-fetched whenever a plan_state row changes anywhere (Realtime).
   const [planItemsByClient, setPlanItemsByClient] = useState<Record<string, StoredPlanItem[]>>({});
 
   useEffect(() => {
-    return csmClientsStore.subscribe(() => {
-      setStoreClients(csmClientsStore.getAll().map(storeToClient));
-    });
-  }, []);
+    const apply = () => {
+      if (!myId) { setStoreClients([]); return; }
+      setStoreClients(
+        csmClientsStore.getAll()
+          .filter((s) => s.ownerCsmId === myId)
+          .map(storeToClient),
+      );
+    };
+    apply();
+    return csmClientsStore.subscribe(apply);
+  }, [myId]);
 
   useEffect(() => {
     return clientActionsStore.subscribe(() => {
@@ -594,16 +605,20 @@ export default function CsmHomePage() {
 
           {/* Agenda */}
           {(() => {
-            const dynamicCsm: AgendaEvent[] = extraCsmEvents.map((e) => ({
-              date: e.date,
-              weekday: e.weekday,
-              time: e.time,
-              title: e.title,
-              client: e.clientName,
-              clientId: e.clientId,
-              clientColor: e.clientColor,
-              type: "csm" as const,
-            }));
+            // Scope to events attached to clients owned by the connected CSM.
+            const ownedClientIds = new Set(storeClients.map((c) => c.id));
+            const dynamicCsm: AgendaEvent[] = extraCsmEvents
+              .filter((e) => ownedClientIds.has(e.clientId))
+              .map((e) => ({
+                date: e.date,
+                weekday: e.weekday,
+                time: e.time,
+                title: e.title,
+                client: e.clientName,
+                clientId: e.clientId,
+                clientColor: e.clientColor,
+                type: "csm" as const,
+              }));
             const allEvents = dynamicCsm;
             return (
               <div className="rounded-[14px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.02)]">
