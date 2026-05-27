@@ -28,15 +28,6 @@ function consoColor(ratio: number) {
   return "#FF6B6B";
 }
 
-const FR_MONTH_NAMES_FULL = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
-
-function formatDateFr(isoDate: string): string {
-  if (!isoDate) return "";
-  const [year, month, day] = isoDate.split("-");
-  if (!year || !month || !day) return isoDate;
-  return `${parseInt(day)} ${FR_MONTH_NAMES_FULL[parseInt(month) - 1]} ${year}`;
-}
-
 function daysUntilDate(d: Date): number {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -168,9 +159,6 @@ export default function CsmHomePage() {
   const [search, setSearch] = useState("");
   const [doneIds, setDoneIds] = useState<Set<number>>(() => new Set());
   const [actions, setActions] = useState<HomeAction[]>(() => clientActionsStore.getExtra());
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newText, setNewText] = useState("");
-  const [newEcheance, setNewEcheance] = useState("");
   const [extraCsmEvents, setExtraCsmEvents] = useState<CsmEvent[]>(() => csmEventsStore.getEvents());
   const [storeClients, setStoreClients] = useState<Client[]>(() => csmClientsStore.getAll().map(storeToClient));
   // Raw plan items per client, used to compute the "Conso ateliers" column.
@@ -262,7 +250,6 @@ export default function CsmHomePage() {
   const sainCount = allClients.filter((c) => c.statut === "SAIN").length;
   const vigilanceCount = allClients.filter((c) => c.statut === "VIGILANCE").length;
   const risqueCount = allClients.filter((c) => c.statut === "À RISQUE").length;
-  const pendingActionsCount = actions.filter((a) => !doneIds.has(a.id)).length;
   const overdueActionsCount = actions.filter((a) => !!a.overdue && !doneIds.has(a.id)).length;
   const healthPct = total > 0 ? Math.round((sainCount / total) * 100) : 0;
 
@@ -296,20 +283,6 @@ export default function CsmHomePage() {
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
-  };
-
-  const handleAddAction = async () => {
-    if (!newText.trim()) return;
-    // Persist to Supabase; the clientActionsStore subscription merges the
-    // saved row back into `actions`.
-    await clientActionsStore.add({
-      text: newText.trim(),
-      clients: [],
-      echeance: newEcheance ? formatDateFr(newEcheance) : "Sans échéance",
-    });
-    setNewText("");
-    setNewEcheance("");
-    setShowAddModal(false);
   };
 
   const alertClients = allClients.filter((c) => c.statut === "À RISQUE" || c.statut === "VIGILANCE");
@@ -551,64 +524,6 @@ export default function CsmHomePage() {
 
             {/* Right column */}
             <div className="flex flex-col gap-4">
-              {/* Actions CSM */}
-              <div className="rounded-[14px] border border-[#1F2832] bg-[rgba(255,255,255,0.02)] p-[18px]">
-                <div className="mb-3.5 flex items-center justify-between">
-                  <h3 className="m-0 text-[14px] font-semibold">Actions CSM</h3>
-                  <span className="rounded-full bg-[#1A2129] px-2 py-0.5 text-[11px] font-semibold text-[#A7B0BC]">
-                    {pendingActionsCount} à traiter
-                  </span>
-                </div>
-                {actions.length === 0 ? (
-                  <div className="flex flex-col items-center gap-2.5 px-2 py-4 text-center">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#1A2129] text-[#6B7585]">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-                      </svg>
-                    </div>
-                    <p className="m-0 text-[12.5px] leading-relaxed text-[#A7B0BC]">
-                      Tu n&apos;as pas de tâche cross-clients en cours. Profite-en pour anticiper.
-                    </p>
-                  </div>
-                ) : (
-                  <ul className="m-0 list-none divide-y divide-[#1F2832] p-0">
-                    {actions.map((a) => {
-                      const isDone = doneIds.has(a.id);
-                      return (
-                        <li key={a.id} className="py-2.5 first:pt-0">
-                          <div className="flex gap-2.5">
-                            <button onClick={() => toggleDone(a.id)}
-                              className={`mt-0.5 h-3.5 w-3.5 shrink-0 rounded border transition-colors ${
-                                isDone ? "border-[#5EEAB0] bg-[rgba(94,234,176,0.2)]" : "border-[#2A3441] hover:border-[#4A5260]"
-                              }`}>
-                              {isDone && <svg viewBox="0 0 12 12" fill="none" className="h-full w-full p-0.5"><path d="M2 6l3 3 5-5" stroke="#5EEAB0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                            </button>
-                            <div className="min-w-0 flex-1">
-                              <p className={`m-0 text-[12.5px] leading-snug ${isDone ? "text-[#4A5260] line-through" : "text-[#F2F5F8]"}`}>{a.text}</p>
-                              <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                                {a.clients.slice(0, 3).map((cl) => (
-                                  <span key={cl.name} className="rounded px-1.5 py-0.5 text-[9px] font-semibold" style={{ backgroundColor: cl.color + "30", color: cl.color }}>{cl.name}</span>
-                                ))}
-                                {a.clients.length > 3 && <span className="rounded bg-[#1A2129] px-1.5 py-0.5 text-[9px] text-[#6B7585]">+{a.clients.length - 3}</span>}
-                                {a.overdue && !isDone && <span className="rounded bg-[rgba(255,107,107,0.12)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.04em] text-[#FF6B6B]">En retard</span>}
-                              </div>
-                              <p className="m-0 mt-1 text-[10px] text-[#4A5260]">{a.echeance}</p>
-                            </div>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-                <button onClick={() => setShowAddModal(true)}
-                  className="mt-3 flex w-full items-center gap-2 rounded-[10px] border border-dashed border-[#2A3441] bg-[#1A2129] px-3 py-2.5 text-[12.5px] font-medium text-[#A7B0BC] transition-colors hover:border-[rgba(94,234,176,0.25)] hover:text-[#5EEAB0]">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-                  </svg>
-                  Ajouter une action
-                </button>
-              </div>
-
               {/* Prochaines churn notices */}
               {(() => {
                 const sorted = allClients
@@ -866,39 +781,6 @@ export default function CsmHomePage() {
         </div>
       )}
 
-      {/* ── Add action modal ── */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowAddModal(false)}>
-          <div className="w-full max-w-md rounded-[16px] border border-[#1F2832] bg-[#131922] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="mb-4 text-[14px] font-semibold text-[#F2F5F8]">Nouvelle action CSM</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[#A7B0BC]">Action</label>
-                <input autoFocus type="text" value={newText} onChange={(e) => setNewText(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleAddAction()}
-                  placeholder="Décrivez l'action..."
-                  className="w-full rounded-[8px] border border-[#1F2832] bg-[#1A2129] px-3 py-2 text-[13px] text-[#F2F5F8] placeholder-[#6B7585] outline-none focus:border-[rgba(94,234,176,0.5)]" />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[#A7B0BC]">Échéance</label>
-                <input type="date" value={newEcheance} onChange={(e) => setNewEcheance(e.target.value)}
-                  style={{ colorScheme: "dark" }}
-                  className="w-full rounded-[8px] border border-[#1F2832] bg-[#1A2129] px-3 py-2 text-[13px] text-[#F2F5F8] outline-none focus:border-[rgba(94,234,176,0.5)]" />
-              </div>
-            </div>
-            <div className="mt-5 flex justify-end gap-2">
-              <button onClick={() => setShowAddModal(false)}
-                className="rounded-[8px] px-4 py-2 text-[12px] text-[#A7B0BC] hover:text-[#F2F5F8]">
-                Annuler
-              </button>
-              <button onClick={handleAddAction} disabled={!newText.trim()}
-                className="rounded-[8px] bg-[#5EEAB0] px-4 py-2 text-[12px] font-semibold text-[#0A2018] transition-[filter] hover:brightness-105 disabled:opacity-40">
-                Ajouter
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
