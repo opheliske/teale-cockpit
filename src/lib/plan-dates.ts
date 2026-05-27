@@ -121,22 +121,33 @@ export function countAtelierConsumed(
   const today = new Date(now);
   today.setHours(0, 0, 0, 0);
   let count = 0;
+  // TODO(debug): remove after diagnosing the Bonduelle "0 consommés" case.
+  const debugRows: Array<Record<string, unknown>> = [];
   for (const it of items) {
-    if (it.type !== "atelier") continue;
-    if (it.cancelled) continue;
+    const row: Record<string, unknown> = { type: it.type, cancelled: it.cancelled, month_raw: it.month, meta: it.meta, calendarYear_caller: it.calendarYear };
+    if (it.type !== "atelier") { row.skipped = "not-atelier"; debugRows.push(row); continue; }
+    if (it.cancelled) { row.skipped = "cancelled"; debugRows.push(row); continue; }
     // Month recovery: if the structured field is missing, parse the meta
     // text (an atelier created by typing the date in "Détails" without
     // touching the dropdown lands here).
     const month = it.month ?? monthFromMeta(it.meta);
-    if (month == null) continue;
+    row.month_resolved = month;
+    if (month == null) { row.skipped = "no-month"; debugRows.push(row); continue; }
     // A full date in meta ("24 mai 2026 · 10:00") wins over the relative
     // year flag — the user-typed date is authoritative and avoids the
     // current/next ambiguity entirely.
     const cy = yearFromMeta(it.meta) ?? it.calendarYear;
+    row.year_resolved = cy;
     const d = new Date(cy, month, dayFromMeta(it.meta));
-    if (d.getTime() >= today.getTime()) continue;        // not yet passed
-    if (d < win.start || d >= win.end) continue;         // outside the contract year
+    row.date_resolved = d.toISOString();
+    if (d.getTime() >= today.getTime()) { row.skipped = "not-passed"; debugRows.push(row); continue; }
+    if (d < win.start || d >= win.end) { row.skipped = `outside-window [${win.start.toISOString()} → ${win.end.toISOString()}[`; debugRows.push(row); continue; }
+    row.counted = true;
+    debugRows.push(row);
     count++;
+  }
+  if (typeof window !== "undefined" && debugRows.some((r) => r.type === "atelier")) {
+    console.warn("[debug atelier-consumed]", { contractStartIso, today: today.toISOString(), window: { start: win.start.toISOString(), end: win.end.toISOString() }, count, rows: debugRows });
   }
   return count;
 }
