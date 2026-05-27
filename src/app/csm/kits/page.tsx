@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useRef, type ReactNode } from "react";
 import { useKitsStore, type LancementKit, type AnimationItem, type EmailTopicKit } from "@/lib/kits-store";
+import { uploadKitFile } from "@/lib/storage";
 import { useWorkshops, themes as workshopThemes, type Workshop } from "@/lib/workshops-store";
 
 // ─── constants ───────────────────────────────────────────────────────────────
@@ -234,6 +235,9 @@ export default function CsmKitsPage() {
 
   // slide-over form
   const [editingKind, setEditingKind] = useState<EditingKind | null>(null);
+  // Pre-generated id for a kit being created — so uploads can target a stable
+  // path before the kit is actually saved.
+  const [kitDraftId, setKitDraftId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | "new" | null>(null);
   const [lancementForm, setLancementForm] = useState<LancementForm>(EMPTY_LANCEMENT);
   const [animationForm, setAnimationForm] = useState<AnimationForm>(EMPTY_ANIMATION);
@@ -304,6 +308,8 @@ export default function CsmKitsPage() {
     setEditingKind(kind);
     setEditingId("new");
     setFormError("");
+    const prefix = kind === "lancement" ? "lan" : kind === "animation" ? "ani" : "email";
+    setKitDraftId(`${prefix}-${Date.now().toString(36)}`);
     if (kind === "lancement") setLancementForm(EMPTY_LANCEMENT);
     if (kind === "animation") setAnimationForm(EMPTY_ANIMATION);
     if (kind === "email") setEmailForm(EMPTY_EMAIL);
@@ -338,7 +344,10 @@ export default function CsmKitsPage() {
       if (editingId === "new") addLancementKit(item); else updateLancementKit(item);
     } else if (editingKind === "animation") {
       if (!animationForm.title.trim()) { setFormError("Le titre est obligatoire."); return; }
-      const item = formToAnimation(animationForm, editingId === "new" ? undefined : editingId!);
+      const item = formToAnimation(
+        animationForm,
+        editingId === "new" ? kitDraftId ?? undefined : editingId!,
+      );
       if (editingId === "new") addAnimationItem(item); else updateAnimationItem(item);
     } else if (editingKind === "email") {
       if (!emailForm.title.trim()) { setFormError("Le titre est obligatoire."); return; }
@@ -491,6 +500,7 @@ export default function CsmKitsPage() {
         <KitsFormSlideOver
           kind={editingKind}
           isNew={editingId === "new"}
+          kitId={editingId === "new" ? kitDraftId ?? "" : editingId}
           lancementForm={lancementForm}
           setLancementForm={setLancementForm}
           animationForm={animationForm}
@@ -974,6 +984,7 @@ function QuarterTabComm({
 function KitsFormSlideOver({
   kind,
   isNew,
+  kitId,
   lancementForm,
   setLancementForm,
   animationForm,
@@ -986,6 +997,7 @@ function KitsFormSlideOver({
 }: {
   kind: EditingKind;
   isNew: boolean;
+  kitId: string;
   lancementForm: LancementForm;
   setLancementForm: React.Dispatch<React.SetStateAction<LancementForm>>;
   animationForm: AnimationForm;
@@ -996,6 +1008,24 @@ function KitsFormSlideOver({
   onSubmit: () => void;
   onClose: () => void;
 }) {
+  // Upload helper for the animation form file lists. Appends the stored path
+  // to the matching textarea (one path per line — the form parses lines).
+  const [uploadError, setUploadError] = useState("");
+  const handleKitUpload = async (
+    file: File,
+    field: "imagesFrText" | "imagesEnText" | "pdfFrText" | "pdfEnText",
+  ) => {
+    setUploadError("");
+    const { path, error: err } = await uploadKitFile("animation", kitId, file);
+    if (err || !path) {
+      setUploadError(err ?? "Échec de l'envoi du fichier.");
+      return;
+    }
+    setAnimationForm((f) => ({
+      ...f,
+      [field]: f[field] ? `${f[field]}\n${path}` : path,
+    }));
+  };
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1102,21 +1132,40 @@ function KitsFormSlideOver({
                 <input className={INPUT} type="url" value={animationForm.landing} onChange={(e) => setAnimationForm((f) => ({ ...f, landing: e.target.value }))} placeholder="https://..." />
               </div>
               <div>
-                <label className={LABEL}>Visuels FR <span className="text-[#6b7c75] normal-case font-normal">— un fichier par ligne</span></label>
-                <textarea className={TEXTAREA} rows={3} value={animationForm.imagesFrText} onChange={(e) => setAnimationForm((f) => ({ ...f, imagesFrText: e.target.value }))} placeholder={"image-fr-desktop.png\nimage-fr-square.png"} />
+                <label className={LABEL}>Visuels FR <span className="text-[#6b7c75] normal-case font-normal">— uploadez les fichiers (chemin par ligne)</span></label>
+                <textarea className={TEXTAREA} rows={3} value={animationForm.imagesFrText} onChange={(e) => setAnimationForm((f) => ({ ...f, imagesFrText: e.target.value }))} placeholder="Cliquez sur « Uploader un fichier » ci-dessous" />
+                <label className="mt-1 inline-flex cursor-pointer items-center gap-1 text-[10px] font-semibold text-[#5eead4] hover:text-[#84d4a6]">
+                  📤 Uploader un fichier
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { void handleKitUpload(f, "imagesFrText"); e.target.value = ""; } }} />
+                </label>
               </div>
               <div>
-                <label className={LABEL}>Visuels EN <span className="text-[#6b7c75] normal-case font-normal">— un fichier par ligne</span></label>
-                <textarea className={TEXTAREA} rows={3} value={animationForm.imagesEnText} onChange={(e) => setAnimationForm((f) => ({ ...f, imagesEnText: e.target.value }))} placeholder={"image-en-desktop.png\nimage-en-square.png"} />
+                <label className={LABEL}>Visuels EN <span className="text-[#6b7c75] normal-case font-normal">— uploadez les fichiers (chemin par ligne)</span></label>
+                <textarea className={TEXTAREA} rows={3} value={animationForm.imagesEnText} onChange={(e) => setAnimationForm((f) => ({ ...f, imagesEnText: e.target.value }))} placeholder="Cliquez sur « Uploader un fichier » ci-dessous" />
+                <label className="mt-1 inline-flex cursor-pointer items-center gap-1 text-[10px] font-semibold text-[#5eead4] hover:text-[#84d4a6]">
+                  📤 Uploader un fichier
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { void handleKitUpload(f, "imagesEnText"); e.target.value = ""; } }} />
+                </label>
               </div>
               <div>
-                <label className={LABEL}>PDF FR <span className="text-[#6b7c75] normal-case font-normal">— un fichier par ligne</span></label>
-                <textarea className={TEXTAREA} rows={2} value={animationForm.pdfFrText} onChange={(e) => setAnimationForm((f) => ({ ...f, pdfFrText: e.target.value }))} placeholder={"poster-fr.pdf"} />
+                <label className={LABEL}>PDF FR <span className="text-[#6b7c75] normal-case font-normal">— uploadez les fichiers (chemin par ligne)</span></label>
+                <textarea className={TEXTAREA} rows={2} value={animationForm.pdfFrText} onChange={(e) => setAnimationForm((f) => ({ ...f, pdfFrText: e.target.value }))} placeholder="Cliquez sur « Uploader un fichier » ci-dessous" />
+                <label className="mt-1 inline-flex cursor-pointer items-center gap-1 text-[10px] font-semibold text-[#5eead4] hover:text-[#84d4a6]">
+                  📤 Uploader un fichier
+                  <input type="file" accept="application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { void handleKitUpload(f, "pdfFrText"); e.target.value = ""; } }} />
+                </label>
               </div>
               <div>
-                <label className={LABEL}>PDF EN <span className="text-[#6b7c75] normal-case font-normal">— un fichier par ligne</span></label>
-                <textarea className={TEXTAREA} rows={2} value={animationForm.pdfEnText} onChange={(e) => setAnimationForm((f) => ({ ...f, pdfEnText: e.target.value }))} placeholder={"poster-en.pdf"} />
+                <label className={LABEL}>PDF EN <span className="text-[#6b7c75] normal-case font-normal">— uploadez les fichiers (chemin par ligne)</span></label>
+                <textarea className={TEXTAREA} rows={2} value={animationForm.pdfEnText} onChange={(e) => setAnimationForm((f) => ({ ...f, pdfEnText: e.target.value }))} placeholder="Cliquez sur « Uploader un fichier » ci-dessous" />
+                <label className="mt-1 inline-flex cursor-pointer items-center gap-1 text-[10px] font-semibold text-[#5eead4] hover:text-[#84d4a6]">
+                  📤 Uploader un fichier
+                  <input type="file" accept="application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { void handleKitUpload(f, "pdfEnText"); e.target.value = ""; } }} />
+                </label>
               </div>
+              {uploadError && (
+                <p className="rounded-[8px] bg-[rgba(239,68,68,0.1)] px-3 py-2 text-[11px] text-[#fca5a5]">{uploadError}</p>
+              )}
             </>
           )}
 

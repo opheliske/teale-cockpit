@@ -312,6 +312,7 @@ function storedToPlanItem(s: StoredPlanItem): PlanItem {
     meta: s.meta,
     done: s.done,
     month: s.month ?? monthFromMeta(s.meta),
+    deckCreated: s.deckCreated,
     impact: s.impact,
     responsable: s.responsable,
     detail: s.detail,
@@ -701,6 +702,7 @@ export default function ClientDetailView({ id }: { id: string }) {
       return {
         id: e.id, quarter, year, month: e.month, type: e.type, icon: e.icon, title: e.title, meta: e.meta,
         done: isPlanDone(item),
+        deckCreated: e.deckCreated,
         impact: e.impact || undefined,
         responsable: e.responsable || undefined,
         detail: e.detail || undefined,

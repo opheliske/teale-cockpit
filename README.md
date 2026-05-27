@@ -60,6 +60,7 @@ Run the SQL in the Supabase SQL editor, **in this exact order** — the result i
    9. `…20260522140000_client_id_foreign_keys.sql` — adds the missing `client_id` foreign keys (`ON DELETE CASCADE`).
    10. `…20260522150000_plan_state_next_themes.sql` — adds `plan_state.next_themes` (next-year quarter themes).
    11. `…20260527120000_client_notes.sql` — `client_notes` table (CSM-internal notes per client) + RLS + Realtime.
+   12. `…20260527130000_storage_kit_files.sql` — private `kit-files` Storage bucket + RLS (CSM writes, all authenticated read).
 
 > ⚠️ Running `schema.sql` **alone** leaves the tables without RLS. The migrations (step 2) are mandatory — they are what secures the database.
 

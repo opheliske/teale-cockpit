@@ -82,6 +82,7 @@ export type PlanItem = {
   meta: string;
   done: boolean;
   month?: number; // 0-11 — explicit month placement within the quarter
+  deckCreated?: boolean; // QBR / atelier — slide deck has been prepared
   responsable?: string;
   detail?: string;
   impact?: string;

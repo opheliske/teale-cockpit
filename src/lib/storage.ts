@@ -51,3 +51,49 @@ export async function openClientFile(path: string, downloadName?: string) {
   const url = await getClientFileUrl(path, downloadName);
   if (url) window.open(url, "_blank", "noopener");
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Kit assets — shared catalogue bucket "kit-files" (CSM writes, all read).
+// ─────────────────────────────────────────────────────────────────────────────
+const KIT_BUCKET = "kit-files";
+
+/** Uploads a kit asset under "<category>/<itemId>/…". Returns path or error. */
+export async function uploadKitFile(
+  category: "lancement" | "animation" | "email",
+  itemId: string,
+  file: File,
+): Promise<{ path: string | null; error: string | null }> {
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `${category}/${itemId}/${Date.now()}-${Math.random().toString(36).slice(2)}-${safeName}`;
+  const { error } = await supabase.storage.from(KIT_BUCKET).upload(path, file);
+  if (error) {
+    console.error("[storage] kit upload", error);
+    return {
+      path: null,
+      error: isBucketMissing(error.message)
+        ? "Le stockage de fichiers de kits n'est pas configuré (bucket « kit-files » absent — applique la migration storage_kit_files)."
+        : `Échec de l'envoi du fichier : ${error.message}`,
+    };
+  }
+  return { path, error: null };
+}
+
+/** Opens a kit asset in a new tab. Legacy filenames (no "/") are skipped. */
+export async function openKitFile(path: string, downloadName?: string) {
+  if (!path || !path.includes("/")) return; // legacy plain filename — nothing to fetch
+  const { data, error } = await supabase.storage
+    .from(KIT_BUCKET)
+    .createSignedUrl(path, 3600, downloadName ? { download: downloadName } : undefined);
+  if (error) {
+    console.error("[storage] kit signed url", error);
+    return;
+  }
+  window.open(data.signedUrl, "_blank", "noopener");
+}
+
+/** Friendly filename for a kit path. Strips the "<timestamp>-<rand>-" prefix. */
+export function kitFileLabel(path: string): string {
+  if (!path) return "";
+  const last = path.split("/").pop() ?? path;
+  return last.replace(/^\d+-[a-z0-9]+-/, "");
+}

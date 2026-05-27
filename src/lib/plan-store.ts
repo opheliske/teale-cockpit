@@ -13,6 +13,8 @@ export type StoredPlanItem = {
   year?: "current" | "next";
   // Month within the quarter (0-11). Absent on legacy rows.
   month?: number;
+  // QBR / atelier — slide deck has been prepared by the CSM.
+  deckCreated?: boolean;
   type: StoredPlanItemType;
   icon: string;
   title: string;

@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useSyncExternalStore } from "react";
 import { csmEventsStore, type CsmEvent } from "@/lib/csm-events-store";
+import { supabase, ensureSession } from "@/lib/supabase";
+import { csmClientsStore } from "@/lib/csm-clients-store";
+import type { StoredPlanItem } from "@/lib/plan-store";
 
 type QbrItem = {
   id: number;
@@ -13,13 +16,13 @@ type QbrItem = {
   title: string;
   dateLabel: string;
   daysUntil: number;
-  deckPct: number;
-  deckStatusLabel: string;
+  deckCreated: boolean;
   meta: string;
   monthGroup: string;
 };
 
 type AtelierItem = {
+  id: number;
   clientId: string;
   initials: string;
   color: string;
@@ -32,9 +35,17 @@ type AtelierItem = {
   monthGroup: string;
 };
 
-const QBR_EVENTS: QbrItem[] = [];
+const FR_MONTHS_LONG = [
+  "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+  "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre",
+];
 
-const ATELIER_EVENTS: AtelierItem[] = [];
+function parseDayFromMeta(meta: string): number | undefined {
+  const m = meta.match(/(?:^|\s)(\d{1,2})\s+(?:janv|fév|mars|avr|mai|juin|juil|ao[uû]t|sept|oct|nov|déc)/i);
+  if (!m) return undefined;
+  const d = parseInt(m[1], 10);
+  return Number.isFinite(d) && d >= 1 && d <= 31 ? d : undefined;
+}
 
 function qbrAccentColor(daysUntil: number) {
   if (daysUntil <= 14) return { bar: "#ef4444", badgeBg: "rgba(239,68,68,0.12)", badgeText: "#ef4444", cardBg: "rgba(239,68,68,0.04)", label: `dans ${daysUntil}j` };
@@ -42,23 +53,105 @@ function qbrAccentColor(daysUntil: number) {
   return { bar: "#5eead4", badgeBg: "rgba(94,234,212,0.1)", badgeText: "#5eead4", cardBg: "rgba(94,234,212,0.03)", label: daysUntil >= 230 ? "À planifier" : `dans ${daysUntil}j` };
 }
 
-export default function QbrAteliersPage() {
-  const [deckCreated, setDeckCreated] = useState<Set<number>>(new Set());
-  const [csmEvents, setCsmEvents] = useState<CsmEvent[]>(() => csmEventsStore.getEvents());
+// Persists the deckCreated flag on a single plan item, directly on plan_state.
+async function persistDeckCreated(clientId: string, itemId: number, deckCreated: boolean) {
+  const { data } = await supabase
+    .from("plan_state")
+    .select("items")
+    .eq("client_id", clientId)
+    .single();
+  if (!data) return;
+  const items = ((data.items as StoredPlanItem[]) ?? []).map((i) =>
+    i.id === itemId ? { ...i, deckCreated } : i,
+  );
+  await supabase
+    .from("plan_state")
+    .update({ items, updated_at: new Date().toISOString() })
+    .eq("client_id", clientId);
+}
 
-  useEffect(() => {
-    return csmEventsStore.subscribe(() => {
-      setCsmEvents([...csmEventsStore.getEvents()]);
-    });
+export default function QbrAteliersPage() {
+  const [qbrItems, setQbrItems] = useState<QbrItem[]>([]);
+  const [atelierItems, setAtelierItems] = useState<AtelierItem[]>([]);
+  // External-store subscription (no setState-in-effect).
+  const csmEvents = useSyncExternalStore<CsmEvent[]>(
+    csmEventsStore.subscribe,
+    csmEventsStore.getEvents,
+    csmEventsStore.getEvents,
+  );
+
+  // Load upcoming QBR/atelier items from plan_state across every client. The
+  // CSM RLS permits the SELECT; client info is taken from the loaded store.
+  const loadPlanItems = useCallback(async () => {
+    await ensureSession();
+    const { data } = await supabase.from("plan_state").select("*");
+    if (!data) return;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yearNow = today.getFullYear();
+    const qbr: QbrItem[] = [];
+    const atelier: AtelierItem[] = [];
+    for (const row of data as Array<{ client_id: string; items: StoredPlanItem[] | null }>) {
+      const client = csmClientsStore.get(row.client_id);
+      if (!client) continue;
+      for (const it of row.items ?? []) {
+        if (it.type !== "qbr" && it.type !== "atelier") continue;
+        if (it.month == null) continue;
+        const year = it.year === "next" ? yearNow + 1 : yearNow;
+        const day = parseDayFromMeta(it.meta) ?? 15;
+        const date = new Date(year, it.month, day);
+        date.setHours(0, 0, 0, 0);
+        if (date.getTime() < today.getTime()) continue;
+        const daysUntil = Math.max(0, Math.round((date.getTime() - today.getTime()) / 86_400_000));
+        const monthName = FR_MONTHS_LONG[it.month];
+        const monthGroup = `${monthName} ${year}`;
+        const dateLabel = `${day} ${monthName.toLowerCase()} ${year}`;
+        const base = {
+          id: it.id,
+          clientId: row.client_id,
+          clientName: client.name,
+          initials: client.initials,
+          color: client.color,
+          title: it.title,
+          dateLabel,
+          daysUntil,
+          monthGroup,
+        };
+        if (it.type === "qbr") {
+          qbr.push({ ...base, deckCreated: it.deckCreated ?? false, meta: it.meta });
+        } else {
+          atelier.push({ ...base });
+        }
+      }
+    }
+    qbr.sort((a, b) => a.daysUntil - b.daysUntil);
+    atelier.sort((a, b) => a.daysUntil - b.daysUntil);
+    setQbrItems(qbr);
+    setAtelierItems(atelier);
   }, []);
 
-  const qbrByMonth = QBR_EVENTS.reduce<Record<string, QbrItem[]>>((acc, item) => {
+  /* eslint-disable react-hooks/set-state-in-effect --
+     setState in loadPlanItems happens AFTER an async Supabase fetch (and on
+     a subsequent client-store notification); the linter can't see through
+     the await chain so it flags it. The pattern is intentional. */
+  useEffect(() => {
+    void loadPlanItems();
+    return csmClientsStore.subscribe(() => { void loadPlanItems(); });
+  }, [loadPlanItems]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  const onCreateDeck = async (item: QbrItem) => {
+    setQbrItems((prev) => prev.map((q) => (q.id === item.id ? { ...q, deckCreated: true } : q)));
+    await persistDeckCreated(item.clientId, item.id, true);
+  };
+
+  const qbrByMonth = qbrItems.reduce<Record<string, QbrItem[]>>((acc, item) => {
     if (!acc[item.monthGroup]) acc[item.monthGroup] = [];
     acc[item.monthGroup].push(item);
     return acc;
   }, {});
 
-  const ateliersByMonth = ATELIER_EVENTS.reduce<Record<string, AtelierItem[]>>((acc, item) => {
+  const ateliersByMonth = atelierItems.reduce<Record<string, AtelierItem[]>>((acc, item) => {
     if (!acc[item.monthGroup]) acc[item.monthGroup] = [];
     acc[item.monthGroup].push(item);
     return acc;
@@ -80,7 +173,7 @@ export default function QbrAteliersPage() {
             <div className="mb-5 flex items-center gap-3">
               <h2 className="text-[15px] font-semibold text-brand-cream">QBR à préparer</h2>
               <span className="rounded-full bg-[rgba(94,234,212,0.1)] px-2 py-0.5 text-[11px] font-semibold text-[#5eead4]">
-                {QBR_EVENTS.length}
+                {qbrItems.length}
               </span>
             </div>
 
@@ -96,7 +189,9 @@ export default function QbrAteliersPage() {
                   <div className="flex flex-col gap-3">
                     {items.map((item) => {
                       const accent = qbrAccentColor(item.daysUntil);
-                      const created = deckCreated.has(item.id);
+                      const created = item.deckCreated;
+                      const deckPct = created ? 100 : 0;
+                      const deckStatusLabel = created ? "Deck prêt" : "Deck à préparer";
                       return (
                         <div
                           key={item.id}
@@ -142,17 +237,17 @@ export default function QbrAteliersPage() {
                             <div className="mb-3">
                               <div className="mb-1.5 flex items-center justify-between">
                                 <span className="text-[11px] text-[rgba(232,245,239,0.45)]">
-                                  {item.deckStatusLabel}
+                                  {deckStatusLabel}
                                 </span>
                                 <span className="text-[11px] font-semibold text-brand-cream">
-                                  {item.deckPct}%
+                                  {deckPct}%
                                 </span>
                               </div>
                               <div className="h-1.5 overflow-hidden rounded-full bg-[rgba(94,234,212,0.1)]">
                                 <div
                                   className="h-full rounded-full transition-all duration-500"
                                   style={{
-                                    width: `${item.deckPct}%`,
+                                    width: `${deckPct}%`,
                                     backgroundColor: accent.bar,
                                     opacity: 0.8,
                                   }}
@@ -166,9 +261,7 @@ export default function QbrAteliersPage() {
                                 {item.meta}
                               </span>
                               <button
-                                onClick={() =>
-                                  setDeckCreated((prev) => new Set([...prev, item.id]))
-                                }
+                                onClick={() => void onCreateDeck(item)}
                                 disabled={created}
                                 className={`shrink-0 rounded-md px-3 py-1.5 text-[11px] font-semibold transition-colors ${
                                   created
@@ -194,7 +287,7 @@ export default function QbrAteliersPage() {
             <div className="mb-5 flex items-center gap-3">
               <h2 className="text-[15px] font-semibold text-brand-cream">Ateliers à venir</h2>
               <span className="rounded-full bg-[rgba(94,234,212,0.1)] px-2 py-0.5 text-[11px] font-semibold text-[#5eead4]">
-                {ATELIER_EVENTS.length}
+                {atelierItems.length}
               </span>
             </div>
 

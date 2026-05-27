@@ -7,6 +7,7 @@ import {
   type LancementKit,
 } from "./data";
 import { useKitsStore } from "@/lib/kits-store";
+import { openKitFile, kitFileLabel } from "@/lib/storage";
 import { useWorkshops, themes as workshopThemes, type Workshop } from "@/lib/workshops-store";
 
 const workshopThemeNameById = Object.fromEntries(
@@ -1698,13 +1699,14 @@ function ResourceGroup({
               {kind === "image" ? <ImageIcon /> : <PdfIcon />}
             </span>
             <span className="min-w-0 flex-1 truncate text-sm text-brand-cream">
-              {name}
+              {kitFileLabel(name) || name}
             </span>
             <button
               type="button"
-              disabled
-              title="Bientôt disponible"
-              className="inline-flex shrink-0 cursor-not-allowed items-center gap-1.5 rounded-full border border-brand-accent/40 px-3 py-1 text-[11px] font-medium text-brand-accent opacity-70"
+              onClick={() => void openKitFile(name, kitFileLabel(name) || name)}
+              disabled={!name.includes("/")}
+              title={name.includes("/") ? "Télécharger" : "Fichier hérité (re-uploader depuis le catalogue)"}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-brand-accent/40 px-3 py-1 text-[11px] font-medium text-brand-accent transition-colors hover:bg-brand-accent/10 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <DownloadIcon /> Télécharger
             </button>
