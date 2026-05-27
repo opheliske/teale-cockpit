@@ -147,7 +147,8 @@ export function countAtelierConsumed(
     count++;
   }
   if (typeof window !== "undefined" && debugRows.some((r) => r.type === "atelier")) {
-    console.warn("[debug atelier-consumed]", { contractStartIso, today: today.toISOString(), window: { start: win.start.toISOString(), end: win.end.toISOString() }, count, rows: debugRows });
+    const payload = { contractStartIso, today: today.toISOString(), window: { start: win.start.toISOString(), end: win.end.toISOString() }, count, rows: debugRows };
+    console.warn("[debug atelier-consumed]", JSON.stringify(payload, null, 2));
   }
   return count;
 }
