@@ -30,7 +30,7 @@ import { healthStore, type HealthEntry, type HealthStatut } from "@/lib/health-s
 import { targetsStore, type TargetLabel, LABEL_COLORS } from "@/lib/targets-store";
 import { commentsStore, type PlanComment } from "@/lib/comments-store";
 import { buildPlanQuarters } from "@/lib/plan-quarters";
-import { dayFromMeta, currentContractYearWindow } from "@/lib/plan-dates";
+import { countAtelierConsumed } from "@/lib/plan-dates";
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -1059,39 +1059,31 @@ export default function ClientDetailView({ id }: { id: string }) {
     [localDetail.contractStart],
   );
 
-  // Atelier quota usage: count plan items of type "atelier" that fell within
-  // the current contract year AND whose date has passed AND that weren't
-  // cancelled. That's the canonical "ateliers consommés cette année" — the
-  // raw stored `atelierRemaining` is ignored.
+  // Atelier quota usage: delegated to countAtelierConsumed so the maths are
+  // identical to the client portal. The shared helper handles missing-month
+  // recovery (parsed from meta) and lets a full date in meta override the
+  // current/next year flag — the user-typed date is authoritative.
   const atelierConsumedThisYear = useMemo(() => {
-    const win = currentContractYearWindow(localDetail.contractStart);
-    if (!win) return 0;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const yearNow = today.getFullYear();
-    const all: Array<{ item: PlanItem; calendarYear: number }> = [];
+    const items: Array<{ type: string; month?: number; meta?: string; cancelled?: boolean; calendarYear: number }> = [];
     if (planBase) {
       for (const q of [planBase.planQ1, planBase.planQ2Done, planBase.planQ2Upcoming, planBase.planQ3, planBase.planQ4]) {
-        for (const it of q) all.push({ item: it, calendarYear: yearNow });
+        for (const it of q) {
+          if (deletedPlanIds.has(it.id)) continue;
+          const eff = planOverrides[it.id] ?? it;
+          items.push({ type: eff.type, month: eff.month, meta: eff.meta, cancelled: eff.cancelled, calendarYear: yearNow });
+        }
       }
     }
     for (const it of extraPlanItems) {
-      const y = it.quarter.startsWith("next-") ? yearNow + 1 : yearNow;
-      all.push({ item: it, calendarYear: y });
+      if (deletedPlanIds.has(it.id)) continue;
+      const eff = planOverrides[it.id] ?? it;
+      const calendarYear = it.quarter.startsWith("next-") ? yearNow + 1 : yearNow;
+      items.push({ type: eff.type, month: eff.month, meta: eff.meta, cancelled: eff.cancelled, calendarYear });
     }
-    let count = 0;
-    for (const { item, calendarYear } of all) {
-      if (deletedPlanIds.has(item.id)) continue;
-      const eff = planOverrides[item.id] ?? item;
-      if (eff.type !== "atelier") continue;
-      if (eff.cancelled) continue;
-      if (eff.month == null) continue;
-      const d = new Date(calendarYear, eff.month, dayFromMeta(eff.meta));
-      if (d.getTime() >= today.getTime()) continue;            // not passed yet
-      if (d < win.start || d >= win.end) continue;             // outside contract year
-      count++;
-    }
-    return count;
+    return countAtelierConsumed(items, localDetail.contractStart, today);
   }, [localDetail.contractStart, planBase, extraPlanItems, planOverrides, deletedPlanIds]);
 
   const atelierRemainingDerived = Math.max(0, localDetail.atelierTotal - atelierConsumedThisYear);

@@ -13,6 +13,36 @@
 // both sides.
 // ─────────────────────────────────────────────────────────────────────────────
 
+const FR_MONTH_NUM: Record<string, number> = {
+  janv: 0, janvier: 0,
+  fév: 1, févr: 1, février: 1,
+  mars: 2,
+  avr: 3, avril: 3,
+  mai: 4,
+  juin: 5,
+  juil: 6, juillet: 6,
+  août: 7, aout: 7,
+  sept: 8, septembre: 8,
+  oct: 9, octobre: 9,
+  nov: 10, novembre: 10,
+  déc: 11, décembre: 11,
+};
+
+/**
+ * Best-effort month (0-11) parsed from a plan item's meta text. Used as a
+ * recovery path when the structured `month` field on the item is missing —
+ * e.g. an atelier created via the edit modal where the user typed the date
+ * into "Détails" but left the month dropdown untouched.
+ */
+export function monthFromMeta(meta: string | undefined): number | undefined {
+  if (!meta) return undefined;
+  const m = meta.match(/(janv|févr?|mars|avr|mai|juin|juil|ao[uû]t|sept|oct|nov|déc)/i);
+  if (!m) return undefined;
+  let raw = m[1].toLowerCase();
+  if (raw === "aout") raw = "août";
+  return FR_MONTH_NUM[raw];
+}
+
 /**
  * Best-effort day-of-month parsed from a plan item's meta text. Falls back
  * to 15 when no day is found, so a missing day lands roughly mid-month.
@@ -94,12 +124,16 @@ export function countAtelierConsumed(
   for (const it of items) {
     if (it.type !== "atelier") continue;
     if (it.cancelled) continue;
-    if (it.month == null) continue;
+    // Month recovery: if the structured field is missing, parse the meta
+    // text (an atelier created by typing the date in "Détails" without
+    // touching the dropdown lands here).
+    const month = it.month ?? monthFromMeta(it.meta);
+    if (month == null) continue;
     // A full date in meta ("24 mai 2026 · 10:00") wins over the relative
     // year flag — the user-typed date is authoritative and avoids the
     // current/next ambiguity entirely.
     const cy = yearFromMeta(it.meta) ?? it.calendarYear;
-    const d = new Date(cy, it.month, dayFromMeta(it.meta));
+    const d = new Date(cy, month, dayFromMeta(it.meta));
     if (d.getTime() >= today.getTime()) continue;        // not yet passed
     if (d < win.start || d >= win.end) continue;         // outside the contract year
     count++;
