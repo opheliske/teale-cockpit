@@ -444,17 +444,25 @@ export default function CsmKitsPage() {
         </div>
 
         {/* CONTENT */}
-        {totalVisible === 0 && activeTheme !== "kits-ateliers" ? (
+        {activeTheme === "kits-ateliers" && totalVisible === 0 ? (
           <EmptyState onReset={resetFilters} query={search} />
         ) : (
           <div className="space-y-12">
-            {activeTheme === "animation" && (
+            {activeTheme === "animation" && filteredAnimation.length > 0 && (
               <AdminAnimationSection
                 items={filteredAnimation}
                 onAdd={() => openNew("animation")}
                 onEdit={(id) => openEdit("animation", id)}
                 onDelete={(id) => setConfirmDelete({ kind: "animation", id })}
               />
+            )}
+            {activeTheme === "animation" && filteredAnimation.length === 0 && (
+              <div className="flex items-center justify-between">
+                <EmptyState onReset={resetFilters} query={search} />
+                <button type="button" onClick={() => openNew("animation")} className="ml-4 flex shrink-0 items-center gap-2 rounded-[10px] bg-[#5eead4] px-4 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#84d4a6]">
+                  <PlusIcon /> Ajouter
+                </button>
+              </div>
             )}
             {activeTheme === "kits-ateliers" && (
               <AdminWorkshopKitsSection workshops={filteredWorkshops} />
