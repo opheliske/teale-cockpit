@@ -130,19 +130,6 @@ function commQuarterProgress(q: CommQuarter): number {
   return Math.round((todayIdx - startIdx) * 33 + 15);
 }
 
-type UpcomingLetsTalk = {
-  id: string;
-  title: string;
-  dateLabel: string;
-  timeUntil: string;
-  duration: string;
-  language: "FR" | "EN";
-  url: string;
-};
-
-const upcomingLetsTalks: UpcomingLetsTalk[] = [];
-
-
 function typeStyle(t: string): string {
   if (t.toLowerCase().includes("let's talk")) return "bg-[#E6AA99]/15 text-[#E6AA99]";
   return "bg-brand-accent/15 text-brand-accent";
@@ -318,15 +305,13 @@ export default function KitsCommunicationPage() {
         <header className="mb-9 grid items-end gap-10 lg:grid-cols-[1fr_auto]">
           <div>
             <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-[2.5px] text-[#5eead4]">
-              Kits de communication
+              Espace client
             </p>
-            <h1 className="mt-3 text-[34px] font-semibold tracking-[-0.5px] text-brand-cream">
-              Votre bibliothèque de contenus prêts à l&apos;emploi
+            <h1 className="mt-3 text-[28px] font-semibold tracking-[-0.5px] text-brand-cream">
+              Kits de communication
             </h1>
             <p className="text-[13px] leading-relaxed text-[#94a8a0]">
-              Communiquez efficacement autour de Teale : kits de lancement,
-              actualités mensuelles, templates d&apos;emails par thématique.
-              Téléchargez ou copiez les ressources en un clic.
+              Bibliothèque partagée par votre CSM Teale. Téléchargez ou copiez les ressources en un clic.
             </p>
           </div>
           <div className="flex gap-3">
@@ -422,15 +407,6 @@ export default function KitsCommunicationPage() {
           <EmptyState onReset={resetFilters} query={search} />
         ) : (
           <div className="space-y-12">
-            {showAnimation && (
-              <FeaturedSection
-                items={filteredAnimation}
-                letsTalks={upcomingLetsTalks.filter(
-                  (lt) => lt.language === activeLanguage
-                )}
-                onOpen={(a) => setActiveCard({ kind: "animation", data: a })}
-              />
-            )}
             {showAnimation && filteredAnimation.length > 0 && (
               <AnimationSection
                 items={filteredAnimation}
@@ -551,244 +527,6 @@ function PillFilter({
   );
 }
 
-const COMM_GRADIENTS = [
-  "bg-gradient-to-br from-[#2d6b62] to-[#4cbfa6]",
-  "bg-gradient-to-br from-[#b3826b] to-[#efb8ad]",
-  "bg-gradient-to-br from-[#2a7d4a] to-[#a8e895]",
-  "bg-gradient-to-br from-[#4d6961] to-[#c2bbab]",
-  "bg-gradient-to-br from-[#8fb6c7] to-[#2d6b62]",
-  "bg-gradient-to-br from-[#163834] to-[#2a7d4a]",
-];
-
-function pickGradient(seed: string): string {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  return COMM_GRADIENTS[h % COMM_GRADIENTS.length];
-}
-
-function pickEmoji(title: string): string {
-  const t = title.toLowerCase();
-  if (/burnout|épuisement|epuisement|burn/.test(t)) return "🔥";
-  if (/stress.*financier|financ/.test(t)) return "💰";
-  if (/parcours pma|pma|fertility|amour|love|cerveau, amour/.test(t)) return "💞";
-  if (/sommeil|sleep|insomnie/.test(t)) return "😴";
-  if (/manager|gestion|charge|change/.test(t)) return "🧠";
-  if (/qvct|nature|jardin|méditation|meditation/.test(t)) return "🌿";
-  if (/ia |ai|intelligence/.test(t)) return "🤖";
-  if (/noël|noel|christmas/.test(t)) return "🎄";
-  if (/solitude|loneli/.test(t)) return "🎵";
-  if (/confiance|aide|cohésion|cohesion|aidant/.test(t)) return "💪";
-  if (/rumeur|ragot|gossip|protég/.test(t)) return "🛡️";
-  if (/hormonal|alimentation|nourriture/.test(t)) return "🍎";
-  if (/handicap|inclusion/.test(t)) return "🤝";
-  if (/tabac|smoke|alcool|addic/.test(t)) return "🚭";
-  if (/octobre rose|cancer/.test(t)) return "🎗️";
-  return "✨";
-}
-
-function FeaturedSection({
-  items,
-  letsTalks,
-  onOpen,
-}: {
-  items: AnimationItem[];
-  letsTalks: UpcomingLetsTalk[];
-  onOpen: (it: AnimationItem) => void;
-}) {
-  const featured = items.filter(
-    (a) => a.month === TODAY_MONTH && a.type !== "Let's talk"
-  );
-  const mainTalk = letsTalks[0];
-  const nextTalk = letsTalks[1];
-
-  return (
-    <section>
-      <header className="mb-5">
-        <h2 className="flex items-center gap-3 text-2xl font-medium tracking-tight text-brand-cream">
-          <span className="text-brand-green-bright" aria-hidden>
-            ✦
-          </span>
-          À la une
-        </h2>
-        <p className="mt-1.5 ml-1 text-sm text-brand-muted-on-dark">
-          À relayer dès maintenant — événements à venir et communications en
-          cours.
-        </p>
-      </header>
-
-      <div className="grid gap-5 lg:grid-cols-[1.1fr_1.4fr]">
-        {mainTalk && <LiveTalkFeaturedCard main={mainTalk} next={nextTalk} />}
-
-        {featured.length > 0 && (
-          <div>
-            <div className="mb-3 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.14em]">
-              <span className="text-brand-cream/80">
-                📢 Communications du mois — {monthLabel[TODAY_MONTH]?.toLowerCase()}
-              </span>
-              <span className="font-normal text-brand-muted-on-dark normal-case tracking-normal">
-                {featured.length} disponibles
-              </span>
-            </div>
-            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-              {featured.map((it) => (
-                <CommCoverCard
-                  key={it.id}
-                  item={it}
-                  onOpen={() => onOpen(it)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function LiveTalkFeaturedCard({
-  main,
-  next,
-}: {
-  main: UpcomingLetsTalk;
-  next?: UpcomingLetsTalk;
-}) {
-  return (
-    <article className="overflow-hidden rounded-3xl border border-brand-border-dark bg-brand-surface">
-      <div className="relative overflow-hidden bg-gradient-to-br from-[#2d6b62] to-[#163834] px-6 pb-14 pt-6">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -right-10 -top-10 h-44 w-44 rounded-full bg-brand-green-bright/25 blur-2xl"
-        />
-        <div className="relative">
-          <div className="inline-flex items-center gap-2 rounded-full bg-brand-green-bright/20 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-brand-green-bright">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-green-bright opacity-70" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-brand-green-bright" />
-            </span>
-            En direct bientôt
-          </div>
-          <h3 className="mt-3 text-2xl font-medium leading-tight tracking-tight text-brand-cream">
-            {main.title}
-          </h3>
-          <p className="mt-2 text-sm text-brand-cream/80">
-            {main.dateLabel} ·{" "}
-            {main.language === "FR" ? "En français 🇫🇷" : "En anglais 🇬🇧"}
-          </p>
-        </div>
-      </div>
-      <div className="relative -mt-9 px-6 pb-5 pt-6">
-        <div className="mb-4 flex items-center gap-4 text-[13px] text-brand-muted-on-dark">
-          <span className="inline-flex items-center gap-1.5">
-            <span aria-hidden>⏱</span> {main.duration}
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span aria-hidden>📅</span> {main.timeUntil}
-          </span>
-        </div>
-        <div className="flex gap-2.5">
-          <a
-            href={main.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 rounded-full bg-brand-green-bright px-4 py-3 text-center text-sm font-semibold text-[#142d24] transition-colors hover:bg-brand-green-bright/90"
-          >
-            S&apos;inscrire
-          </a>
-          <button
-            type="button"
-            className="rounded-full border border-brand-border-dark px-4 py-3 text-sm text-brand-cream transition-colors hover:bg-brand-surface"
-          >
-            Voir le kit de relais
-          </button>
-        </div>
-      </div>
-      {next && (
-        <div className="flex items-center gap-3.5 border-t border-brand-border-dark px-6 py-4">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-[#c4937a] to-[#8a5b48] font-medium text-white">
-            {next.title.trim().charAt(0).toUpperCase()}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-brand-muted-on-dark">
-              Prochaine session
-            </div>
-            <div className="truncate text-sm text-brand-cream">
-              {next.title}
-            </div>
-            <div className="truncate text-xs text-brand-muted-on-dark">
-              {next.timeUntil} ·{" "}
-              {next.language === "FR" ? "En français 🇫🇷" : "En anglais 🇬🇧"}
-            </div>
-          </div>
-          <a
-            href={next.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="shrink-0 rounded-full border border-brand-border-dark px-3 py-2 text-[11px] text-brand-cream hover:bg-brand-surface"
-          >
-            Détails
-          </a>
-        </div>
-      )}
-    </article>
-  );
-}
-
-function CommCoverCard({
-  item,
-  onOpen,
-}: {
-  item: AnimationItem;
-  onOpen: () => void;
-}) {
-  const gradient = pickGradient(item.id);
-  const emoji = pickEmoji(item.title);
-  const hasLanding = !!item.landing;
-  const totalVisuals = item.imagesFr.length + item.imagesEn.length;
-  const langLabel =
-    item.languages.length === 2
-      ? "FR/EN"
-      : item.languages[0] ?? "FR";
-
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className={`group flex flex-col overflow-hidden rounded-2xl border border-brand-border-dark text-left transition-all hover:-translate-y-0.5 hover:border-brand-green-bright/40 ${gradient}`}
-    >
-      <div className="relative h-20 shrink-0 overflow-hidden">
-        <span
-          className="absolute bottom-2.5 right-3 text-2xl text-white/80 drop-shadow-md"
-          aria-hidden
-        >
-          {emoji}
-        </span>
-      </div>
-      <div className="flex flex-1 flex-col bg-brand-surface px-4 pb-4 pt-3">
-        <div className="mb-2.5 flex gap-1.5">
-          <span className="rounded-full bg-brand-green-bright/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-brand-green-bright">
-            {item.type === "Let's talk" ? "Let's talk" : "Playlist"}
-          </span>
-          <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-brand-muted-on-dark">
-            {langLabel}
-          </span>
-        </div>
-        <h4 className="mb-auto text-sm leading-snug text-brand-cream">
-          {cleanTitle(item.title)}
-        </h4>
-        <div className="mt-3.5 flex items-center justify-between text-xs text-brand-muted-on-dark">
-          <span>
-            {totalVisuals > 0 && `${totalVisuals} visuel${totalVisuals > 1 ? "s" : ""}`}
-            {totalVisuals > 0 && hasLanding && " · "}
-            {hasLanding && "Landing"}
-          </span>
-          <span className="font-semibold text-brand-teal-bright">
-            Aperçu →
-          </span>
-        </div>
-      </div>
-    </button>
-  );
-}
 
 function LancementSection({
   items,
