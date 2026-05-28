@@ -357,7 +357,7 @@ export default function CatalogueAteliersPage() {
               </div>
               <div className="flex items-center gap-2 text-[11px] text-[#6b7c75]">
                 Trier par
-                <select className="rounded-[7px] border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] px-2.5 py-1.5 text-[11px] text-[#c1d4cc] [color-scheme:dark] focus:outline-none">
+                <select className="field-select rounded-[7px] border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] px-2.5 py-1.5 text-[11px] text-[#c1d4cc]">
                   <option>Thématique</option>
                   <option>Statut</option>
                   <option>Nom (A-Z)</option>

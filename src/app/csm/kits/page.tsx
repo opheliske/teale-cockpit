@@ -1077,7 +1077,7 @@ function KitsFormSlideOver({
               </div>
               <div>
                 <label className={LABEL}>Étape *</label>
-                <select className={INPUT} value={lancementForm.step} onChange={(e) => setLancementForm((f) => ({ ...f, step: e.target.value as Step }))}>
+                <select className={`${INPUT} field-select`} value={lancementForm.step} onChange={(e) => setLancementForm((f) => ({ ...f, step: e.target.value as Step }))}>
                   <option value="before">Avant le lancement</option>
                   <option value="dday">Jour J</option>
                   <option value="after">Après le lancement</option>
@@ -1085,7 +1085,7 @@ function KitsFormSlideOver({
               </div>
               <div>
                 <label className={LABEL}>Langue *</label>
-                <select className={INPUT} value={lancementForm.language} onChange={(e) => setLancementForm((f) => ({ ...f, language: e.target.value as EmailLanguage }))}>
+                <select className={`${INPUT} field-select`} value={lancementForm.language} onChange={(e) => setLancementForm((f) => ({ ...f, language: e.target.value as EmailLanguage }))}>
                   <option value="FR">FR — Français</option>
                   <option value="EN">EN — English</option>
                 </select>
@@ -1102,13 +1102,13 @@ function KitsFormSlideOver({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={LABEL}>Mois *</label>
-                  <select className={INPUT} value={animationForm.month} onChange={(e) => setAnimationForm((f) => ({ ...f, month: e.target.value }))}>
+                  <select className={`${INPUT} field-select`} value={animationForm.month} onChange={(e) => setAnimationForm((f) => ({ ...f, month: e.target.value }))}>
                     {allMonths.map((m) => <option key={m} value={m}>{m}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className={LABEL}>Type *</label>
-                  <select className={INPUT} value={animationForm.type} onChange={(e) => setAnimationForm((f) => ({ ...f, type: e.target.value }))}>
+                  <select className={`${INPUT} field-select`} value={animationForm.type} onChange={(e) => setAnimationForm((f) => ({ ...f, type: e.target.value }))}>
                     <option value="Playlist">Playlist</option>
                     <option value="Let's talk">Let&apos;s talk</option>
                   </select>
@@ -1116,7 +1116,7 @@ function KitsFormSlideOver({
               </div>
               <div>
                 <label className={LABEL}>Statut *</label>
-                <select className={INPUT} value={animationForm.status} onChange={(e) => setAnimationForm((f) => ({ ...f, status: e.target.value }))}>
+                <select className={`${INPUT} field-select`} value={animationForm.status} onChange={(e) => setAnimationForm((f) => ({ ...f, status: e.target.value }))}>
                   <option value="Archive">Archive</option>
                   <option value="Current / En ce moment">Current / En ce moment</option>
                   <option value="Upcoming / À venir">Upcoming / À venir</option>
@@ -1185,7 +1185,7 @@ function KitsFormSlideOver({
               </div>
               <div>
                 <label className={LABEL}>Thématique *</label>
-                <select className={INPUT} value={emailForm.topic} onChange={(e) => setEmailForm((f) => ({ ...f, topic: e.target.value }))}>
+                <select className={`${INPUT} field-select`} value={emailForm.topic} onChange={(e) => setEmailForm((f) => ({ ...f, topic: e.target.value }))}>
                   {EMAIL_TOPICS.map((t) => (
                     <option key={t} value={t}>{t}</option>
                   ))}
@@ -1193,7 +1193,7 @@ function KitsFormSlideOver({
               </div>
               <div>
                 <label className={LABEL}>Langue *</label>
-                <select className={INPUT} value={emailForm.language} onChange={(e) => setEmailForm((f) => ({ ...f, language: e.target.value as EmailLanguage }))}>
+                <select className={`${INPUT} field-select`} value={emailForm.language} onChange={(e) => setEmailForm((f) => ({ ...f, language: e.target.value as EmailLanguage }))}>
                   <option value="FR">FR — Français</option>
                   <option value="EN">EN — English</option>
                 </select>

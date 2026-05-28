@@ -572,6 +572,11 @@ export default function ClientDetailView({ id }: { id: string }) {
     planQ4: detail?.planQ4 ?? [],
   }));
   const [planLoaded, setPlanLoaded] = useState(false);
+  // Autosave feedback. `saveSeqRef` guards against races: only the latest
+  // pending save updates the indicator on completion (older requests still
+  // hit the server but their UI feedback is dropped).
+  const [planSaveState, setPlanSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const planSaveSeqRef = useRef(0);
 
   useEffect(() => {
     let alive = true;
@@ -766,7 +771,18 @@ export default function ClientDetailView({ id }: { id: string }) {
       ],
     };
     // Debounced: a burst of edits (toggles, typing…) yields a single write.
-    const timer = setTimeout(() => planStore.setState(next), 400);
+    // `saving` is flipped inside the timer (not eagerly) so a fast typist
+    // doesn't trigger a setState per keystroke — the badge only flashes
+    // once per actually-submitted save.
+    const mySeq = ++planSaveSeqRef.current;
+    const timer = setTimeout(async () => {
+      setPlanSaveState("saving");
+      const { error } = await planStore.setState(next);
+      // Drop the feedback if a newer save was already kicked off — the
+      // newer one will be the source of truth.
+      if (mySeq !== planSaveSeqRef.current) return;
+      setPlanSaveState(error ? "error" : "saved");
+    }, 400);
     return () => clearTimeout(timer);
     // `detail`, `planBase` and `planTargetFilter` are intentionally omitted:
     // `planBase` is set once on load, and re-running on `detail` (an unstable
@@ -2010,6 +2026,29 @@ export default function ClientDetailView({ id }: { id: string }) {
                   : "Survolez le titre d'un trimestre pour modifier l'objectif."}
               </p>
             </div>
+            {planSaveState !== "idle" && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold"
+                style={
+                  planSaveState === "saving"
+                    ? { background: "rgba(94,234,212,0.12)", color: "#5eead4" }
+                  : planSaveState === "saved"
+                    ? { background: "rgba(168,232,149,0.14)", color: "#a8e895" }
+                    : { background: "rgba(239,68,68,0.14)", color: "#fca5a5" }
+                }
+              >
+                {planSaveState === "saving" && (
+                  <>
+                    <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-current" />
+                    Enregistrement…
+                  </>
+                )}
+                {planSaveState === "saved" && <>✓ Modifications enregistrées</>}
+                {planSaveState === "error" && <>⚠ Échec — réessaie</>}
+              </div>
+            )}
           </header>
 
           {/* ── Target filter bar ── */}
@@ -2353,11 +2392,23 @@ export default function ClientDetailView({ id }: { id: string }) {
                             {mItems.length > 0 ? `${mItems.length} événement${mItems.length > 1 ? "s" : ""}` : "—"}
                           </span>
                         </div>
+                        {/* Add-chips just above the items list: faster to
+                            reach (no scroll past the items) and earlier in
+                            the keyboard tab order. */}
+                        <div className="mb-3 flex flex-wrap justify-center gap-1.5">
+                          {(["🎓 Atelier", "📢 Kit", "📊 QBR", "⚡ Custom"] as const).map((chip) => (
+                            <button
+                              key={chip}
+                              onClick={() => openAddPlan(qLower, CHIP_TYPE_MAP[chip], month.num)}
+                              className="rounded-full border border-dashed border-[#1a3530] px-[11px] py-[5px] text-[11px] text-[#e8f5ef] transition-all hover:border-[#84d4a6] hover:bg-[rgba(132,212,166,0.05)] hover:text-[#84d4a6]"
+                            >{chip}</button>
+                          ))}
+                        </div>
                         <div className={mStatus === "past" ? "opacity-50" : ""}>
                           {mItems.length === 0 ? (
                             <p className="py-5 text-center text-[11px] italic text-[#6b7c75]">Pas d&apos;événement programmé.</p>
                           ) : (
-                            <ul className="mb-3 flex flex-col gap-1.5">
+                            <ul className="flex flex-col gap-1.5">
                               {mItems.map((item) => (
                                 <PlanItemRow
                                   key={item.id}
@@ -2370,15 +2421,6 @@ export default function ClientDetailView({ id }: { id: string }) {
                               ))}
                             </ul>
                           )}
-                        </div>
-                        <div className="flex flex-wrap justify-center gap-1.5 pt-1">
-                          {(["🎓 Atelier", "📢 Kit", "📊 QBR", "⚡ Custom"] as const).map((chip) => (
-                            <button
-                              key={chip}
-                              onClick={() => openAddPlan(qLower, CHIP_TYPE_MAP[chip], month.num)}
-                              className="rounded-full border border-dashed border-[#1a3530] px-[11px] py-[5px] text-[11px] text-[#e8f5ef] transition-all hover:border-[#84d4a6] hover:bg-[rgba(132,212,166,0.05)] hover:text-[#84d4a6]"
-                            >{chip}</button>
-                          ))}
                         </div>
                       </div>
                     );
@@ -2421,6 +2463,13 @@ export default function ClientDetailView({ id }: { id: string }) {
                     )}
                   </div>
                   <div className="flex flex-col gap-2 p-5">
+                    {/* Add-chips before the items so they sit just above the
+                        dynamic content (faster to reach, earlier in Tab order). */}
+                    <div className="flex flex-wrap justify-center gap-1.5">
+                      {(["🎓 Atelier", "📢 Kit", "📊 QBR", "⚡ Custom"] as const).map((chip) => (
+                        <button key={chip} onClick={() => openAddPlan(`next-${q}`, CHIP_TYPE_MAP[chip])} className="rounded-full border border-dashed border-[#1a3530] px-[10px] py-[5px] text-[11px] text-[#94a8a0] transition-all hover:border-[#84d4a6] hover:bg-[rgba(132,212,166,0.05)] hover:text-[#84d4a6]">{chip}</button>
+                      ))}
+                    </div>
                     {(() => {
                       const nextItems = extraPlanItems.filter(
                         (it) => it.quarter === `next-${q}` && !deletedPlanIds.has(it.id),
@@ -2450,11 +2499,6 @@ export default function ClientDetailView({ id }: { id: string }) {
                         ))
                       );
                     })()}
-                    <div className="mt-1 flex flex-wrap justify-center gap-1.5">
-                      {(["🎓 Atelier", "📢 Kit", "📊 QBR", "⚡ Custom"] as const).map((chip) => (
-                        <button key={chip} onClick={() => openAddPlan(`next-${q}`, CHIP_TYPE_MAP[chip])} className="rounded-full border border-dashed border-[#1a3530] px-[10px] py-[5px] text-[11px] text-[#94a8a0] transition-all hover:border-[#84d4a6] hover:bg-[rgba(132,212,166,0.05)] hover:text-[#84d4a6]">{chip}</button>
-                      ))}
-                    </div>
                   </div>
                 </article>
               ))}
@@ -2818,7 +2862,7 @@ export default function ClientDetailView({ id }: { id: string }) {
               <select
                 value={editPlanMonth ?? ""}
                 onChange={(e) => setEditPlanMonth(e.target.value === "" ? undefined : Number(e.target.value))}
-                className="w-full rounded-[9px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef] outline-none focus:border-[rgba(94,234,212,0.5)]"
+                className="field-select w-full rounded-[9px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef]"
               >
                 <option value="">— Non défini —</option>
                 {getPQ(activePlanQ).months.map((m) => (
@@ -3071,7 +3115,7 @@ export default function ClientDetailView({ id }: { id: string }) {
               <select
                 value={editDraft.ownerCsmId ?? ""}
                 onChange={(e) => setEditDraft((d) => d && { ...d, ownerCsmId: e.target.value || null })}
-                className="w-full rounded-[9px] border border-[rgba(255,255,255,0.1)] bg-[#0e2520] px-3 py-2.5 text-[13px] text-[#e8f5ef] outline-none focus:border-[rgba(94,234,212,0.5)]"
+                className="field-select w-full rounded-[9px] border border-[rgba(255,255,255,0.1)] bg-[#0e2520] px-3 py-2.5 text-[13px] text-[#e8f5ef]"
               >
                 <option value="">— Non assigné —</option>
                 {csmProfiles.map((p) => (
@@ -3693,7 +3737,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                     <select
                       value={addPlanThemeId}
                       onChange={(e) => setAddPlanThemeId(e.target.value)}
-                      className="w-full rounded-[10px] border border-[rgba(255,255,255,0.1)] bg-[#0e2520] px-3 py-2.5 text-[13px] text-[#e8f5ef] outline-none focus:border-[rgba(94,234,212,0.5)]"
+                      className="field-select w-full rounded-[10px] border border-[rgba(255,255,255,0.1)] bg-[#0e2520] px-3 py-2.5 text-[13px] text-[#e8f5ef]"
                     >
                       <option value="">— Aucun —</option>
                       {workshopThemes.map((t) => (

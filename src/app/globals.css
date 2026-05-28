@@ -55,3 +55,53 @@ summary {
 summary::-webkit-details-marker {
   display: none;
 }
+
+/* ─── Native <select> styling ────────────────────────────────────────────────
+   Native <select> popups use the OS palette by default — on light-themed
+   systems the dropdown shows up bright white with dark text, which is
+   unreadable next to the dark UI. `color-scheme: dark` forces the browser
+   to render the popup in its dark palette. We also draw a custom chevron
+   so the trigger lines up with the rest of the dark UI.
+   Compose with the existing Tailwind classes (bg / border / padding) — this
+   only adds the popup-fix + chevron + focus/hover, not the box styling.
+   ────────────────────────────────────────────────────────────────────────── */
+.field-select {
+  color-scheme: dark;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%2394a8a0' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M1.5 1.5 6 6 10.5 1.5'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 0.7rem 0.45rem;
+  padding-right: 2rem;
+  cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.field-select:hover:not(:disabled):not(:focus) {
+  border-color: rgba(94, 234, 212, 0.35);
+}
+
+.field-select:focus {
+  outline: none;
+  border-color: rgba(94, 234, 212, 0.6);
+  box-shadow: 0 0 0 3px rgba(94, 234, 212, 0.18);
+}
+
+.field-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* `option` is partially restyleable across browsers (Firefox honors more
+   than Chromium). These rules degrade gracefully where ignored. */
+.field-select option {
+  background-color: #0e2520;
+  color: var(--brand-cream);
+}
+
+.field-select option:checked {
+  background-color: rgba(94, 234, 212, 0.18);
+  color: var(--teal-bright);
+  font-weight: 600;
+}

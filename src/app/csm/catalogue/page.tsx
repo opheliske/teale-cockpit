@@ -532,7 +532,7 @@ function WorkshopFormModal({
           <div>
             <label className={LABEL}>Thème *</label>
             <select
-              className={`${INPUT} [color-scheme:dark]`}
+              className={`${INPUT} field-select`}
               value={form.themeId}
               onChange={(e) => setField("themeId", e.target.value)}
             >

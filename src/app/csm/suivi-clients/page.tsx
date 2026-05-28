@@ -195,6 +195,10 @@ export default function SuiviClientsPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [createError, setCreateError] = useState("");
   const [creating, setCreating] = useState(false);
+  // Short-lived "✓ Client créé !" acknowledgement shown after a successful
+  // create — gives the CSM a beat to see the success before the modal
+  // closes and the router pushes to the new client.
+  const [created, setCreated] = useState(false);
 
   const set = <K extends keyof typeof EMPTY_FORM>(k: K, v: (typeof EMPTY_FORM)[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -202,7 +206,7 @@ export default function SuiviClientsPage() {
   const toggleProduit = (p: ProduitTeale) =>
     set("produits", form.produits.includes(p) ? form.produits.filter((x) => x !== p) : [...form.produits, p]);
 
-  const openCreate = () => { setForm({ ...EMPTY_FORM, csm: profile?.id ?? "" }); setCreateError(""); setShowCreate(true); };
+  const openCreate = () => { setForm({ ...EMPTY_FORM, csm: profile?.id ?? "" }); setCreateError(""); setCreated(false); setShowCreate(true); };
 
   const formValid = form.name.trim().length > 0 && form.collab.trim().length > 0;
 
@@ -233,9 +237,14 @@ export default function SuiviClientsPage() {
       setCreateError(`La création a échoué : ${error}`);
       return;
     }
+    setCreated(true);
     impersonationStore.set({ mode: "csm-preview", clientId: id, clientName: form.name.trim(), color: form.color });
-    setShowCreate(false);
-    router.push(`/csm/clients/${id}`);
+    // Brief pause so the CSM sees the "✓ Client créé" acknowledgement
+    // before the modal closes and the router navigates away.
+    setTimeout(() => {
+      setShowCreate(false);
+      router.push(`/csm/clients/${id}`);
+    }, 700);
   };
 
   const filtered = cards.filter((c) => {
@@ -340,9 +349,9 @@ export default function SuiviClientsPage() {
               onClick={() => setCsmFilter("all")}
               className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-[7px] text-[13px] font-medium transition-all"
               style={{
-                background: csmFilter === "all" ? "#2a1d52" : "transparent",
-                border: `1px solid ${csmFilter === "all" ? "#84d4a6" : "#1a2c28"}`,
-                color: csmFilter === "all" ? "#ffffff" : "#e8f5ef",
+                background: csmFilter === "all" ? "rgba(94,234,212,0.16)" : "transparent",
+                border: `1px solid ${csmFilter === "all" ? "rgba(94,234,212,0.55)" : "#1a2c28"}`,
+                color: csmFilter === "all" ? "#5eead4" : "#e8f5ef",
               }}
             >
               Tous{" "}
@@ -360,9 +369,9 @@ export default function SuiviClientsPage() {
                   onClick={() => setCsmFilter(p.id)}
                   className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-[7px] text-[13px] font-medium transition-all"
                   style={{
-                    background: active ? "#2a1d52" : "transparent",
-                    border: `1px solid ${active ? "#84d4a6" : "#1a2c28"}`,
-                    color: active ? "#ffffff" : "#e8f5ef",
+                    background: active ? "rgba(94,234,212,0.16)" : "transparent",
+                    border: `1px solid ${active ? "rgba(94,234,212,0.55)" : "#1a2c28"}`,
+                    color: active ? "#5eead4" : "#e8f5ef",
                   }}
                 >
                   <span
@@ -392,15 +401,17 @@ export default function SuiviClientsPage() {
           </div>
         </div>
 
-        {/* Status sub-filter */}
+        {/* Status sub-filter — active state uses each status' own accent so
+            both the meaning (green/amber/red/new) AND the selected state
+            stay legible at a glance. */}
         <div className="mb-6 flex flex-wrap items-center gap-1.5">
           <button
             onClick={() => setStatusFilter("all")}
             className="rounded-[8px] px-[11px] py-[5px] text-[13px] font-medium transition-all"
             style={{
-              background: statusFilter === "all" ? "#161f1c" : "transparent",
-              color: statusFilter === "all" ? "#ffffff" : "#94a8a0",
-              border: 0,
+              background: statusFilter === "all" ? "rgba(94,234,212,0.14)" : "transparent",
+              color: statusFilter === "all" ? "#5eead4" : "#94a8a0",
+              border: `1px solid ${statusFilter === "all" ? "rgba(94,234,212,0.45)" : "transparent"}`,
             }}
           >
             Tous
@@ -412,20 +423,20 @@ export default function SuiviClientsPage() {
               new: "Sans suivi",
             };
             const active = statusFilter === s;
+            const accent = STATUS_TAG_STYLES[s];
             return (
               <button
                 key={s}
                 onClick={() => setStatusFilter(s)}
                 className="inline-flex items-center gap-1.5 rounded-[8px] px-[11px] py-[5px] text-[13px] font-medium transition-all"
-                style={{
-                  background: active ? "#161f1c" : "transparent",
-                  color: active ? "#ffffff" : "#94a8a0",
-                  border: 0,
-                }}
+                style={active
+                  ? { background: accent.bg, color: accent.text, border: `1px solid ${accent.dot}66` }
+                  : { background: "transparent", color: "#94a8a0", border: "1px solid transparent" }
+                }
               >
                 <span
                   className="inline-block h-[7px] w-[7px] rounded-full"
-                  style={{ background: STATUS_TAG_STYLES[s].dot }}
+                  style={{ background: accent.dot }}
                 />
                 {labels[s]} ({statusCounts[s] ?? 0})
               </button>
@@ -462,7 +473,7 @@ export default function SuiviClientsPage() {
 
     {/* ── Create client modal ── */}
     {showCreate && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-[3px]" onClick={() => setShowCreate(false)}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-[3px]" onClick={() => { if (!creating && !created) setShowCreate(false); }}>
         <div className="w-full max-w-[640px] overflow-hidden rounded-[22px] border border-[rgba(94,234,212,0.18)] bg-[#061a16] shadow-2xl" onClick={(e) => e.stopPropagation()}>
 
           {/* Header */}
@@ -471,7 +482,11 @@ export default function SuiviClientsPage() {
               <h2 className="text-[16px] font-semibold text-[#e8f5ef]">Créer un nouveau client</h2>
               <p className="mt-0.5 text-[12px] text-[#94a8a0]">Informations client</p>
             </div>
-            <button onClick={() => setShowCreate(false)} className="grid h-7 w-7 place-items-center rounded-[8px] bg-[rgba(255,255,255,0.05)] text-[16px] text-[#94a8a0] hover:text-[#e8f5ef]">×</button>
+            <button
+              onClick={() => setShowCreate(false)}
+              disabled={creating || created}
+              className="grid h-7 w-7 place-items-center rounded-[8px] bg-[rgba(255,255,255,0.05)] text-[16px] text-[#94a8a0] hover:text-[#e8f5ef] disabled:opacity-40"
+            >×</button>
           </div>
 
           {/* Body */}
@@ -530,7 +545,7 @@ export default function SuiviClientsPage() {
                     </div>
                     <div>
                       <label className="mb-1.5 block text-[11px] text-[rgba(232,245,239,0.45)] uppercase tracking-[0.8px] font-semibold">CSM en charge</label>
-                      <select value={form.csm} onChange={(e) => set("csm", e.target.value)} className="w-full rounded-[9px] border border-[rgba(255,255,255,0.1)] bg-[#0e2520] px-3 py-2.5 text-[13px] text-[#e8f5ef] outline-none focus:border-[rgba(94,234,212,0.5)]">
+                      <select value={form.csm} onChange={(e) => set("csm", e.target.value)} className="field-select w-full rounded-[9px] border border-[rgba(255,255,255,0.1)] bg-[#0e2520] px-3 py-2.5 text-[13px] text-[#e8f5ef]">
                         <option value="">— Non assigné —</option>
                         {csmProfiles.map((p) => (
                           <option key={p.id} value={p.id}>{p.full_name}</option>
@@ -626,16 +641,33 @@ export default function SuiviClientsPage() {
 
           {/* Footer */}
           <div className="flex items-center justify-between border-t border-[#1a3530] px-6 py-4">
-            <button onClick={() => setShowCreate(false)}
-              className="rounded-[9px] px-4 py-2 text-[12px] text-[rgba(232,245,239,0.5)] hover:text-[#e8f5ef]">
+            <button
+              onClick={() => setShowCreate(false)}
+              disabled={creating || created}
+              className="rounded-[9px] px-4 py-2 text-[12px] text-[rgba(232,245,239,0.5)] hover:text-[#e8f5ef] disabled:opacity-40"
+            >
               Annuler
             </button>
             <button
               onClick={submitCreate}
-              disabled={!formValid || creating}
-              className="rounded-[9px] bg-[#5eead4] px-5 py-2 text-[12px] font-semibold text-[#061a16] transition-colors hover:bg-[#7df0db] disabled:opacity-40"
+              disabled={!formValid || creating || created}
+              className="inline-flex items-center gap-2 rounded-[9px] px-5 py-2 text-[12px] font-semibold transition-colors disabled:cursor-default"
+              style={
+                created
+                  ? { background: "#a8e895", color: "#061a16" }
+                  : { background: "#5eead4", color: "#061a16" }
+              }
             >
-              {creating ? "Création…" : "Créer le client →"}
+              {created ? (
+                <>✓ Client créé !</>
+              ) : creating ? (
+                <>
+                  <span className="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-[#061a16]" />
+                  Création en cours…
+                </>
+              ) : (
+                <>Créer le client →</>
+              )}
             </button>
           </div>
         </div>

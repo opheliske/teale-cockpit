@@ -75,19 +75,21 @@ export const planStore = {
     await fetchPlan(clientId);
   },
 
-  setState: async (state: StoredPlanState) => {
+  setState: async (state: StoredPlanState): Promise<{ error: string | null }> => {
     _state = state;
     _listeners.forEach((l) => l());
-    if (!_clientId) return;
-    if (!(await ensureSession())) return;
-    await supabase.from("plan_state").upsert({
+    if (!_clientId) return { error: null };
+    if (!(await ensureSession())) return { error: "Session indisponible" };
+    const { error } = await supabase.from("plan_state").upsert({
       client_id: _clientId,
       themes: state.themes,
       next_themes: state.nextThemes ?? null,
       items: state.items,
       updated_at: new Date().toISOString(),
     });
+    if (error) return { error: error.message };
     notifyChange("plan_state");
+    return { error: null };
   },
 
   subscribe: (listener: () => void): (() => void) => {
