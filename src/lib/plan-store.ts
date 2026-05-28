@@ -28,6 +28,10 @@ export type StoredPlanItem = {
   responsable?: string;
   detail?: string;
   files?: PlanItemFile[];
+  // Atelier — pre-filled from the catalogue at creation, then editable.
+  // Absent on legacy rows and on non-atelier items.
+  objectives?: string[];
+  themeId?: string;
 };
 
 export type StoredPlanState = {

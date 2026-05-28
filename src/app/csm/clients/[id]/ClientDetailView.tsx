@@ -320,6 +320,8 @@ function storedToPlanItem(s: StoredPlanItem): PlanItem {
     detail: s.detail,
     files: s.files,
     targets: s.targets,
+    objectives: s.objectives,
+    themeId: s.themeId,
   };
 }
 
@@ -519,6 +521,10 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [addPlanDetail, setAddPlanDetail] = useState("");
   const [addPlanCustomFiles, setAddPlanCustomFiles] = useState<PlanItemFile[]>([]);
   const [addPlanTargets, setAddPlanTargets] = useState<string[]>([]);
+  // Atelier — title / objectives / theme are pre-filled from the catalogue
+  // (workshops table) and remain editable until the CSM submits.
+  const [addPlanObjectives, setAddPlanObjectives] = useState<string[]>([]);
+  const [addPlanThemeId, setAddPlanThemeId] = useState<string>("");
   const [isPlanFileDragOver, setIsPlanFileDragOver] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -735,6 +741,8 @@ export default function ClientDetailView({ id }: { id: string }) {
         detail: e.detail || undefined,
         files: e.files?.length ? e.files : undefined,
         targets: e.targets?.length ? e.targets : (itemTargets[e.id]?.length ? itemTargets[e.id] : undefined),
+        objectives: e.objectives?.length ? e.objectives : undefined,
+        themeId: e.themeId || undefined,
       };
     };
     const qMap: Record<string, StoredPlanItem["quarter"]> = {
@@ -984,6 +992,8 @@ export default function ClientDetailView({ id }: { id: string }) {
     setAddPlanResponsable("");
     setAddPlanDetail("");
     setAddPlanCustomFiles([]);
+    setAddPlanObjectives([]);
+    setAddPlanThemeId("");
     setIsPlanFileDragOver(false);
   };
 
@@ -1005,7 +1015,27 @@ export default function ClientDetailView({ id }: { id: string }) {
         formatDateFr(addPlanDate),
         addPlanTime.trim(),
       ].filter(Boolean).join(" · ");
-      setExtraPlanItems((prev) => [...prev, { id: newId, type: addPlanCtx.type, icon: item.icon, title: item.title, meta, done: false, month, quarter: addPlanCtx.quarter }]);
+      // Atelier — title was pre-filled from the catalogue and may have been
+      // edited; persist the edited title plus objectives/theme so the catalogue
+      // context travels with the plan item.
+      const isAtelier = addPlanCtx.type === "atelier";
+      const title = isAtelier ? (addPlanCustomTitle.trim() || item.title) : item.title;
+      const objectives = isAtelier
+        ? addPlanObjectives.map((o) => o.trim()).filter(Boolean)
+        : undefined;
+      const themeId = isAtelier ? (addPlanThemeId || undefined) : undefined;
+      setExtraPlanItems((prev) => [...prev, {
+        id: newId,
+        type: addPlanCtx.type,
+        icon: item.icon,
+        title,
+        meta,
+        done: false,
+        month,
+        quarter: addPlanCtx.quarter,
+        objectives: objectives && objectives.length > 0 ? objectives : undefined,
+        themeId,
+      }]);
     } else {
       if (!addPlanCustomTitle.trim()) return;
       const dateFr = formatDateFr(addPlanDate);
@@ -1047,6 +1077,8 @@ export default function ClientDetailView({ id }: { id: string }) {
     setAddPlanDetail("");
     setAddPlanCustomFiles([]);
     setAddPlanTargets([]);
+    setAddPlanObjectives([]);
+    setAddPlanThemeId("");
     setAddPlanSearch("");
     setAddPlanCatFilter("Tous");
   };
@@ -1210,7 +1242,7 @@ export default function ClientDetailView({ id }: { id: string }) {
   });
   const hasCatalog = addPlanCtx?.type === "atelier" || addPlanCtx?.type === "kit";
   const canAddToPlan =
-    addPlanCtx?.type === "atelier" ? (!!selectedCatalogId && !!addPlanDate && !!addPlanTime) :
+    addPlanCtx?.type === "atelier" ? (!!selectedCatalogId && !!addPlanCustomTitle.trim() && !!addPlanDate && !!addPlanTime) :
     addPlanCtx?.type === "qbr"    ? (!!addPlanCustomTitle.trim() && !!addPlanDate && !!addPlanTime) :
     hasCatalog                    ? !!selectedCatalogId :
     !!addPlanCustomTitle.trim();
@@ -3612,7 +3644,17 @@ export default function ClientDetailView({ id }: { id: string }) {
                   return (
                     <button
                       key={item.id}
-                      onClick={() => setSelectedCatalogId(item.id)}
+                      onClick={() => {
+                        setSelectedCatalogId(item.id);
+                        // Atelier — hydrate editable title / objectives / theme
+                        // from the workshop referential so the CSM only tweaks.
+                        if (addPlanCtx.type === "atelier") {
+                          const w = workshopList.find((x) => x.id === item.id);
+                          setAddPlanCustomTitle(w?.title ?? item.title);
+                          setAddPlanObjectives(w?.objectives ? [...w.objectives] : []);
+                          setAddPlanThemeId(w?.themeId ?? "");
+                        }
+                      }}
                       className={`flex items-start gap-3 rounded-[12px] border p-3 text-left transition-all ${isSelected ? "border-[rgba(94,234,212,0.45)] bg-[rgba(94,234,212,0.07)]" : "border-[#1a3530] bg-[rgba(14,37,32,0.5)] hover:border-[rgba(94,234,212,0.2)]"}`}
                     >
                       <span className="mt-0.5 shrink-0 text-[18px]">{item.icon}</span>
@@ -3630,6 +3672,74 @@ export default function ClientDetailView({ id }: { id: string }) {
                   );
                 })}
               </div>
+
+              {/* Atelier — editable preview pre-filled from the catalogue */}
+              {addPlanCtx.type === "atelier" && selectedCatalogId && (
+                <div className="space-y-3 rounded-[12px] border border-[rgba(94,234,212,0.18)] bg-[rgba(94,234,212,0.04)] p-3.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-[1px] text-[#5eead4]">
+                    ✨ Pré-rempli depuis le catalogue — modifiable
+                  </p>
+                  <div>
+                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Titre *</label>
+                    <input
+                      type="text"
+                      value={addPlanCustomTitle}
+                      onChange={(e) => setAddPlanCustomTitle(e.target.value)}
+                      className="w-full rounded-[10px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef] outline-none focus:border-[rgba(94,234,212,0.5)]"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Thème</label>
+                    <select
+                      value={addPlanThemeId}
+                      onChange={(e) => setAddPlanThemeId(e.target.value)}
+                      className="w-full rounded-[10px] border border-[rgba(255,255,255,0.1)] bg-[#0e2520] px-3 py-2.5 text-[13px] text-[#e8f5ef] outline-none focus:border-[rgba(94,234,212,0.5)]"
+                    >
+                      <option value="">— Aucun —</option>
+                      {workshopThemes.map((t) => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Objectifs</label>
+                    <div className="space-y-1.5">
+                      {addPlanObjectives.map((obj, i) => (
+                        <div key={i} className="flex gap-2">
+                          <input
+                            type="text"
+                            value={obj}
+                            onChange={(e) =>
+                              setAddPlanObjectives((prev) =>
+                                prev.map((o, idx) => (idx === i ? e.target.value : o)),
+                              )
+                            }
+                            placeholder="Objectif…"
+                            className="flex-1 rounded-[8px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2 text-[12px] text-[#e8f5ef] placeholder-[rgba(232,245,239,0.3)] outline-none focus:border-[rgba(94,234,212,0.5)]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setAddPlanObjectives((prev) => prev.filter((_, idx) => idx !== i))
+                            }
+                            className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-[rgba(255,255,255,0.04)] text-[14px] text-[#94a8a0] hover:text-[#e8f5ef]"
+                            aria-label="Supprimer l'objectif"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAddPlanObjectives((prev) => [...prev, ""])}
+                      className="mt-2 text-[11px] font-semibold text-[#5eead4] hover:underline"
+                    >
+                      + Ajouter un objectif
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-3">

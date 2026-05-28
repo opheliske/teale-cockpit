@@ -83,6 +83,9 @@ export type PlanItem = {
   impact?: string;
   files?: PlanItemFile[];
   targets?: string[];
+  // Atelier — pre-filled from the catalogue at creation, then editable.
+  objectives?: string[];
+  themeId?: string;
 };
 
 export type NoteType = "csm" | "decision" | "qbr" | "alert" | "atelier";
