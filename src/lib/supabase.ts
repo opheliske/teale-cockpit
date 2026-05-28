@@ -12,11 +12,20 @@ export const supabase = createBrowserClient(url, key);
 // Refresh the access token if it expires within this many ms. 60 s gives
 // the next request plenty of head-room — we never want a query to leave
 // the browser with a token that's about to flip to invalid.
-const REFRESH_MARGIN_MS = 60_000;
+export const REFRESH_MARGIN_MS = 60_000;
 // Hard cap on the refresh round-trip. auth-js's LockManager has been
 // observed to deadlock (same fragility we already work around in signOut
 // and SessionWatchdog); without a timeout, the caller would hang.
-const REFRESH_TIMEOUT_MS = 5_000;
+// 8 s instead of 5 s: slow mobile / shaky-wifi connections need more
+// headroom; the LockManager deadlock is detected within ~1 s anyway, so
+// the extra time only kicks in on a genuinely slow refresh.
+const REFRESH_TIMEOUT_MS = 8_000;
+// On a refresh failure we don't immediately surface "Session expirée" if
+// the cookie still holds a token usable for at least this many ms — the
+// queue of pending queries can still succeed; the proactive watchdog
+// timer will retry shortly. Otherwise a one-off LockManager hiccup
+// would flash the red banner even though everything still works.
+const RECOVERY_GRACE_MS = 30_000;
 
 /**
  * Resolves to `true` once the browser has a usable session whose access
@@ -51,16 +60,30 @@ export async function ensureSession(): Promise<boolean> {
   // by REFRESH_TIMEOUT_MS so a deadlocked LockManager can't hang us.
   const expiresAtMs = (session.expires_at ?? 0) * 1000;
   if (expiresAtMs - Date.now() < REFRESH_MARGIN_MS) {
+    let refreshed = false;
     try {
       const fresh = await Promise.race([
         supabase.auth.refreshSession().then(({ data }) => data.session),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), REFRESH_TIMEOUT_MS)),
       ]);
-      if (!fresh) {
-        sessionStatusStore.set("lost");
-        return false;
-      }
+      if (fresh) refreshed = true;
     } catch {
+      /* fall through to the cookie-recovery path below */
+    }
+
+    if (!refreshed) {
+      // Refresh failed (LockManager deadlock most often). Don't immediately
+      // flag the session as lost — re-read the cookie. If a still-valid
+      // token is sitting there, ride it for now; the proactive watchdog
+      // timer will retry the refresh on its next tick. We only escalate to
+      // "lost" when the cookie itself has gone stale.
+      const { data: refetch } = await supabase.auth.getSession();
+      const fallback = refetch.session;
+      const fallbackExpMs = (fallback?.expires_at ?? 0) * 1000;
+      if (fallback && fallbackExpMs - Date.now() > RECOVERY_GRACE_MS) {
+        sessionStatusStore.set("ok");
+        return true;
+      }
       sessionStatusStore.set("lost");
       return false;
     }
