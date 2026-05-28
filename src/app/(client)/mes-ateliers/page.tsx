@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { workshops, themes, type Workshop } from "@/app/(client)/catalogue-ateliers/data";
+import { workshops, themes, type Workshop, type ProgrammeStep } from "@/app/(client)/catalogue-ateliers/data";
 import { useActiveClient } from "@/lib/client-context";
 import { planStore, type StoredPlanItem } from "@/lib/plan-store";
 import { atelierFeedbackStore, type AtelierFeedback } from "@/lib/atelier-feedback-store";
+import { csmClientsStore } from "@/lib/csm-clients-store";
+import { buildPlanQuarters, type PlanQuarter } from "@/lib/plan-quarters";
+import { monthFromMeta, yearFromMeta, dayFromMeta } from "@/lib/plan-dates";
 
 type Format = "presentiel" | "distanciel" | "hybride";
 type Audience = "RH" | "Elus" | "Managers" | "Collaborateurs" | "Codir";
@@ -12,7 +15,16 @@ type ScheduledStatus = "realise" | "annule" | "upcoming";
 
 type ScheduledAtelier = {
   id: string;
-  workshopId: string;
+  workshopId: string; // "" when no catalogue match
+  // Workshop data carried directly on the scheduled item — so a CSM-typed
+  // atelier title that doesn't match the static catalogue still produces a
+  // visible card (the previous version returned null and rendered nothing).
+  title: string;
+  themeId: string;
+  objectives: string[];
+  duration?: string;
+  programme?: ProgrammeStep[];
+  catalogueTargetAudience?: string[];
   dateLabel: string;
   timeLabel: string;
   isoDate: string;
@@ -174,19 +186,42 @@ function groupByMonth(items: ScheduledAtelier[]): { label: string; count: number
 }
 
 const workshopById = Object.fromEntries(workshops.map((w) => [w.id, w]));
+// Best-effort lookup by normalised title — covers the case where the CSM
+// picked a workshop from the catalogue (the plan item stores the title
+// verbatim, no workshop id). Trimmed + lower-cased to absorb tiny
+// differences (trailing spaces, casing).
+function normaliseTitle(t: string): string {
+  return t.trim().toLowerCase();
+}
+const workshopByTitle = new Map<string, Workshop>(
+  workshops.map((w) => [normaliseTitle(w.title), w]),
+);
 const themeNameById = Object.fromEntries(themes.map((t) => [t.id, t.name]));
+
+/**
+ * Returns a Workshop-shaped object for a ScheduledAtelier. Prefers the
+ * catalogue match (richer: programme, duration, audience). Falls back to
+ * a synthetic Workshop built from the data the CSM typed on the plan item
+ * — title, themeId, objectives — so the UI always has something to show.
+ */
+function resolveWorkshop(s: ScheduledAtelier): Workshop {
+  const catalogue = s.workshopId ? workshopById[s.workshopId] : undefined;
+  if (catalogue) return catalogue;
+  return {
+    id: s.workshopId || `synth-${s.id}`,
+    title: s.title,
+    themeId: s.themeId || "relations",
+    duration: s.duration,
+    objectives: s.objectives,
+    programme: s.programme ?? [],
+    targetAudience: s.catalogueTargetAudience ?? [],
+  };
+}
 
 const FR_MONTHS_LC = [
   "janvier", "février", "mars", "avril", "mai", "juin",
   "juillet", "août", "septembre", "octobre", "novembre", "décembre",
 ];
-
-function parseDayFromMeta(meta: string): number | undefined {
-  const m = meta.match(/(?:^|\s)(\d{1,2})\s+(?:janv|fév|mars|avr|mai|juin|juil|ao[uû]t|sept|oct|nov|déc)/i);
-  if (!m) return undefined;
-  const d = parseInt(m[1], 10);
-  return Number.isFinite(d) && d >= 1 && d <= 31 ? d : undefined;
-}
 
 function parseTimeFromMeta(meta: string): string | undefined {
   const m = meta.match(/(\d{1,2}:\d{2})/);
@@ -196,25 +231,63 @@ function parseTimeFromMeta(meta: string): string | undefined {
 // Build the client's scheduled-atelier list from their plan_state items.
 // Rich fields not stored on the plan (audiences, attendees, satisfaction…)
 // are left empty or omitted — the UI handles missing values gracefully.
+//
+// Sync note: the resolution chain for month/year must match the one used
+// by the Suivi projet page (mon-planning) — otherwise an atelier with a
+// parseable meta date but no structured `month` would appear in one page
+// and not the other.
 function planItemsToScheduled(
   items: StoredPlanItem[],
   feedbacks: Record<number, AtelierFeedback>,
+  planQuarters: PlanQuarter[],
 ): ScheduledAtelier[] {
   const yearNow = new Date().getFullYear();
+  const quarterFirstMonthNum: Record<string, number> = Object.fromEntries(
+    planQuarters.map((pq) => [pq.id, pq.months[0]?.num ?? 0]),
+  );
   const result: ScheduledAtelier[] = [];
   for (const it of items) {
     if (it.type !== "atelier") continue;
-    if (it.month == null) continue;
-    const year = it.year === "next" ? yearNow + 1 : yearNow;
-    const day = parseDayFromMeta(it.meta) ?? 15;
-    const isoDate = `${year}-${String(it.month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    const monthName = FR_MONTHS_LC[it.month];
+
+    // Month: structured field wins, else best-effort from meta text, else
+    // the first month of the item's quarter (contract-anchored via
+    // buildPlanQuarters). Same priority order as the Suivi projet page,
+    // so the two views can never disagree on which ateliers exist.
+    const monthNum =
+      typeof it.month === "number"
+        ? it.month
+        : monthFromMeta(it.meta) ?? quarterFirstMonthNum[it.quarter];
+    if (monthNum == null) continue; // no quarter either → genuinely unplaced
+
+    // Year: a full date in meta (e.g. "24 mai 2026 · 10:00") wins over the
+    // structured `year` flag — the human-typed date is authoritative.
+    const year =
+      yearFromMeta(it.meta) ??
+      (it.year === "next" ? yearNow + 1 : yearNow);
+
+    const day = dayFromMeta(it.meta);
+    const isoDate = `${year}-${String(monthNum + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const monthName = FR_MONTHS_LC[monthNum];
     const dateLabel = `${day} ${monthName} ${year}`;
     const timeLabel = parseTimeFromMeta(it.meta) ?? "";
     const fb = feedbacks[it.id];
+
+    // Best-effort match against the static workshop catalogue (by
+    // normalised title). When matched, we get richer detail (programme,
+    // duration, target audience) for the modal; when not, the synthetic
+    // resolveWorkshop() fallback uses the title + themeId + objectives the
+    // CSM saved directly on the plan item.
+    const catalogue = workshopByTitle.get(normaliseTitle(it.title ?? ""));
+
     result.push({
       id: String(it.id),
-      workshopId: String(it.id),
+      workshopId: catalogue?.id ?? "",
+      title: it.title,
+      themeId: catalogue?.themeId ?? it.themeId ?? "relations",
+      objectives: catalogue?.objectives ?? it.objectives ?? [],
+      duration: catalogue?.duration,
+      programme: catalogue?.programme,
+      catalogueTargetAudience: catalogue?.targetAudience,
       dateLabel,
       timeLabel,
       isoDate,
@@ -233,7 +306,7 @@ type ViewMode = "liste" | "cartes";
 
 export default function MesAteliersPage() {
   const [filter, setFilter] = useState<FilterId>("all");
-  const [viewMode, setViewMode] = useState<ViewMode>("liste");
+  const [viewMode, setViewMode] = useState<ViewMode>("cartes");
   const [activeId, setActiveId] = useState<string | null>(null);
   // Active client (via the (client) route guard) — every list below is scoped
   // to this client.
@@ -244,11 +317,15 @@ export default function MesAteliersPage() {
   const [feedbacks, setFeedbacks] = useState<Record<string, { rating: number; comment: string }>>({});
 
   // Load plan + feedback for this client, rebuild scheduled on any change.
+  // contractStart is read from the clients store so we can build the
+  // contract-anchored planQuarters — same source as the Suivi projet page.
   useEffect(() => {
     const refresh = () => {
       const items = planStore.getState()?.items ?? [];
       const fbMap = atelierFeedbackStore.getAll();
-      setScheduled(planItemsToScheduled(items, fbMap));
+      const contractStart = csmClientsStore.get(clientId)?.contractStart;
+      const planQuarters = buildPlanQuarters(contractStart);
+      setScheduled(planItemsToScheduled(items, fbMap, planQuarters));
       const stringKeyed: Record<string, { rating: number; comment: string }> = {};
       for (const fb of Object.values(fbMap)) {
         stringKeyed[String(fb.itemId)] = { rating: fb.rating, comment: fb.comment };
@@ -259,9 +336,13 @@ export default function MesAteliersPage() {
     void atelierFeedbackStore.load(clientId).then(refresh);
     const unsubPlan = planStore.subscribe(refresh);
     const unsubFb = atelierFeedbackStore.subscribe(refresh);
+    // Refresh when the clients store hydrates / changes — we need
+    // contractStart to compute the quarter fallback months.
+    const unsubClients = csmClientsStore.subscribe(refresh);
     return () => {
       unsubPlan();
       unsubFb();
+      unsubClients();
     };
   }, [clientId]);
 
@@ -362,7 +443,7 @@ export default function MesAteliersPage() {
         {/* ALERTS */}
         <AlertsRow
           pendingCount={pendingFeedbackItems.length}
-          pendingTitle={pendingFeedbackItems[0] ? (workshopById[pendingFeedbackItems[0].workshopId]?.title ?? "") : ""}
+          pendingTitle={pendingFeedbackItems[0]?.title ?? ""}
           pendingIntervenant={pendingFeedbackItems[0]?.intervenant.name ?? ""}
           cancelledCount={counts.annule}
           onOpenFeedback={() => setActiveId(pendingFeedbackItems[0]?.id ?? null)}
@@ -502,8 +583,7 @@ function StatBox({ value, label, color }: { value: number; label: string; color?
 }
 
 function HeroCard({ scheduled: s, onOpen }: { scheduled: ScheduledAtelier; onOpen: () => void }) {
-  const workshop = workshopById[s.workshopId];
-  if (!workshop) return null;
+  const workshop = resolveWorkshop(s);
   const days = dayDiff(s.isoDate);
   const fmtCfg = formatConfig[s.format];
   const d = new Date(s.isoDate);
@@ -696,8 +776,7 @@ function RowCard({ scheduled: s, clientFeedback, onOpen }: {
   clientFeedback?: { rating: number; comment: string };
   onOpen: () => void;
 }) {
-  const workshop = workshopById[s.workshopId];
-  if (!workshop) return null;
+  const workshop = resolveWorkshop(s);
   const status = scheduledStatus(s);
   const days = dayDiff(s.isoDate);
   const needsFeedback = status === "realise" && !clientFeedback;
@@ -799,8 +878,7 @@ function AtelierCard({ scheduled: s, clientFeedback, onOpen }: {
   clientFeedback?: { rating: number; comment: string };
   onOpen: () => void;
 }) {
-  const workshop = workshopById[s.workshopId];
-  if (!workshop) return null;
+  const workshop = resolveWorkshop(s);
   const status = scheduledStatus(s);
   const days = dayDiff(s.isoDate);
   const emoji = pickWorkshopEmoji(workshop);
@@ -950,8 +1028,7 @@ function AtelierModal({ scheduled, clientFeedback, onSubmitFeedback, onClose }: 
     return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
   }, [onClose]);
 
-  const workshop = workshopById[scheduled.workshopId];
-  if (!workshop) return null;
+  const workshop = resolveWorkshop(scheduled);
   const status = scheduledStatus(scheduled);
   const sCfg = statusConfig[status];
   const fmtCfg = formatConfig[scheduled.format];
