@@ -670,7 +670,7 @@ export default function MonPlanningPage() {
       </div>
 
       {/* Documents */}
-      <div className="border-t border-white/[0.04] px-9 pb-12 pt-10">
+      <div id="documents" className="border-t border-white/[0.04] px-9 pb-12 pt-10 scroll-mt-20">
         <div className="mx-auto max-w-[1280px]">
           <header className="mb-5">
             <h2 className="flex items-center gap-3 text-2xl font-medium tracking-tight text-[#e8f5ef]">

@@ -9,6 +9,7 @@ import { csmEventsStore, type CsmEvent } from "@/lib/csm-events-store";
 import { docsStore, type StoredDocument } from "@/lib/docs-store";
 import { openClientFile } from "@/lib/storage";
 import { countAtelierConsumed } from "@/lib/plan-dates";
+import { buildPlanQuarters } from "@/lib/plan-quarters";
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -29,7 +30,6 @@ function parseFrDate(s: string): Date | null {
   return new Date(y, m, d);
 }
 
-const QUARTER_OF_MONTH = ["Q1", "Q1", "Q1", "Q2", "Q2", "Q2", "Q3", "Q3", "Q3", "Q4", "Q4", "Q4"] as const;
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -107,9 +107,53 @@ export default function ClientHomePage() {
     return countAtelierConsumed(adapted, company?.contractStart ?? "", today);
   }, [planItems, company?.contractStart, today]);
 
-  const currentQuarter = QUARTER_OF_MONTH[new Date().getMonth()];
-  const quarterItems = planItems.filter((i) => i.quarter === currentQuarter);
-  const quarterTheme = plan?.themes?.[currentQuarter] ?? "";
+  // Use the contract-anchored quarters (same helper as the CSM view + the
+  // /mon-planning page). A calendar-quarter heuristic (Jan-Mar = Q1…) is
+  // wrong here: StoredPlanItem.quarter is anchored on the contract start,
+  // so the items wouldn't match the calendar-based label.
+  const planQuarters = useMemo(
+    () => buildPlanQuarters(company?.contractStart),
+    [company?.contractStart],
+  );
+  const currentPlanQuarter = useMemo(
+    () => planQuarters.find((q) => q.status === "current") ?? planQuarters[0],
+    [planQuarters],
+  );
+  const currentQuarter = currentPlanQuarter?.id ?? "Q1";
+  const currentQuarterMonths = useMemo(() => {
+    if (!currentPlanQuarter) return "";
+    const labels = currentPlanQuarter.months.map((m) => m.label);
+    const year = currentPlanQuarter.months[0]?.year;
+    return `${labels.join(" · ")}${year ? ` ${year}` : ""}`;
+  }, [currentPlanQuarter]);
+  // Per-quarter overview rendered on the home — themes + progress for the
+  // 4 quarters of the contract year. The user wanted a snapshot of "where
+  // the project is" without leaving the home page.
+  const quartersOverview = useMemo(() => {
+    const QUARTER_EMOJI: Record<"Q1" | "Q2" | "Q3" | "Q4", string> = {
+      Q1: "🌱", Q2: "📈", Q3: "📊", Q4: "🔄",
+    };
+    return planQuarters.map((q) => {
+      const items = planItems.filter((i) => i.quarter === q.id);
+      const total = items.length;
+      const done = items.filter((i) => i.done).length;
+      const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+      const months = q.months.map((m) => m.label).join(" · ");
+      const year = q.months[0]?.year;
+      const theme = plan?.themes?.[q.id] ?? "";
+      return {
+        id: q.id,
+        emoji: QUARTER_EMOJI[q.id],
+        status: q.status,
+        months,
+        year,
+        theme,
+        total,
+        done,
+        pct,
+      };
+    });
+  }, [planQuarters, planItems, plan?.themes]);
 
   // ── Loading / not-found states ──
   if (!clientsLoaded) {
@@ -169,46 +213,86 @@ export default function ClientHomePage() {
         {/* ── Two columns ── */}
         <div className="grid grid-cols-12 gap-4">
 
-          {/* Plan */}
+          {/* Plan — 4 trimestres en aperçu */}
           <section className="col-span-7 rounded-[14px] border border-[#1a3530] bg-[rgba(14,37,32,0.4)] p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-[15px] font-semibold text-[#e8f5ef]">
-                Votre plan annuel — {currentQuarter}
-              </h2>
-              <Link href="/mon-planning" className="text-[12px] text-[#5eead4] hover:underline">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="text-[15px] font-semibold text-[#e8f5ef]">
+                  Votre plan annuel
+                </h2>
+                <p className="mt-0.5 text-[11px] uppercase tracking-[0.06em] text-[#6b7c75]">
+                  Trimestre en cours · {currentQuarter}{currentQuarterMonths ? ` · ${currentQuarterMonths}` : ""}
+                </p>
+              </div>
+              <Link href="/mon-planning" className="shrink-0 text-[12px] text-[#5eead4] hover:underline">
                 Voir tout →
               </Link>
             </div>
-            {quarterTheme && (
-              <p className="mb-3 text-[12px] text-[#94a8a0]">{quarterTheme}</p>
-            )}
-            {quarterItems.length === 0 ? (
-              <p className="py-6 text-center text-[13px] text-[#94a8a0]">
-                Rien de planifié pour ce trimestre.
-              </p>
-            ) : (
-              <ul className="space-y-2">
-                {quarterItems.map((item) => (
-                  <li
-                    key={item.id}
-                    className="flex items-start gap-2.5 rounded-[10px] border border-[#1a3530] bg-[rgba(255,255,255,0.02)] px-3 py-2.5"
+
+            <div className="grid grid-cols-2 gap-3">
+              {quartersOverview.map((q) => {
+                const isCurrent = q.status === "current";
+                const isPast = q.status === "past";
+                const statusLabel = isPast ? "Terminé" : isCurrent ? "En cours" : "À venir";
+                const statusPillStyle = isCurrent
+                  ? { background: "#5eead4", color: "#042f2a" }
+                  : isPast
+                    ? { background: "rgba(168,232,149,0.15)", color: "#a8e895" }
+                    : { background: "rgba(255,255,255,0.05)", color: "#94a8a0" };
+                return (
+                  <Link
+                    key={q.id}
+                    href="/mon-planning"
+                    className={`flex flex-col rounded-[12px] border p-3.5 transition-all ${
+                      isCurrent
+                        ? "border-[rgba(94,234,212,0.35)] bg-[rgba(94,234,212,0.06)] hover:border-[rgba(94,234,212,0.55)] hover:bg-[rgba(94,234,212,0.09)]"
+                        : isPast
+                          ? "border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.02)] opacity-80 hover:opacity-100 hover:border-[rgba(94,234,212,0.18)]"
+                          : "border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.02)] hover:border-[rgba(94,234,212,0.18)] hover:bg-[rgba(255,255,255,0.035)]"
+                    }`}
                   >
-                    <span className="mt-0.5 shrink-0 text-sm">{item.icon || "•"}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className={`text-[13px] font-medium leading-snug ${item.done ? "text-[#94a8a0] line-through" : "text-[#e8f5ef]"}`}>
-                        {item.title}
-                      </div>
-                      {item.meta && (
-                        <div className="mt-0.5 text-[11px] text-[#94a8a0]">{item.meta}</div>
-                      )}
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <span className={`text-[12px] font-bold tracking-[1px] ${isCurrent ? "text-[#5eead4]" : "text-[#94a8a0]"}`}>
+                        {q.emoji} {q.id}
+                      </span>
+                      <span
+                        className="rounded-[4px] px-[7px] py-[2px] text-[9px] font-bold uppercase tracking-[0.5px]"
+                        style={statusPillStyle}
+                      >
+                        {statusLabel}
+                      </span>
                     </div>
-                    {item.done && (
-                      <span className="mt-0.5 shrink-0 text-[11px] font-bold text-[#a8e895]">✓</span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
+                    <p className="mb-2 text-[10px] uppercase tracking-[0.5px] text-[#6b7c75]">
+                      {q.months}{q.year ? ` · ${q.year}` : ""}
+                    </p>
+                    <p
+                      className={`mb-3 line-clamp-2 min-h-[34px] text-[13px] font-medium leading-snug ${
+                        q.theme ? "text-[#e8f5ef]" : "text-[#6b7c75] italic"
+                      }`}
+                    >
+                      {q.theme || "Thème à définir avec votre CSM"}
+                    </p>
+                    <div className="mt-auto">
+                      <div className="mb-1 h-1 overflow-hidden rounded-full bg-[rgba(255,255,255,0.05)]">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${q.pct}%`,
+                            background: isCurrent
+                              ? "linear-gradient(90deg,#5eead4,#2dd4bf)"
+                              : "rgba(168,232,149,0.7)",
+                          }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] text-[#94a8a0]">
+                        <span>{q.total === 0 ? "Aucun jalon" : `${q.done}/${q.total} jalon${q.total > 1 ? "s" : ""}`}</span>
+                        {q.total > 0 && <span className="tabular-nums font-semibold text-[#e8f5ef]">{q.pct}%</span>}
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
           </section>
 
           {/* Right column */}
@@ -243,9 +327,19 @@ export default function ClientHomePage() {
 
             {/* Documents */}
             <section className="rounded-[14px] border border-[#1a3530] bg-[rgba(14,37,32,0.4)] p-5">
-              <h2 className="mb-3 text-[15px] font-semibold text-[#e8f5ef]">
-                Documents partagés
-              </h2>
+              <div className="mb-3 flex items-baseline justify-between gap-3">
+                <h2 className="text-[15px] font-semibold text-[#e8f5ef]">
+                  Documents partagés
+                  {docs.length > 0 && (
+                    <span className="ml-2 text-[12px] font-normal text-[#94a8a0]">
+                      {docs.length > 5 ? `5 sur ${docs.length}` : docs.length}
+                    </span>
+                  )}
+                </h2>
+                <Link href="/mon-planning#documents" className="shrink-0 text-[12px] text-[#5eead4] hover:underline">
+                  Voir tout →
+                </Link>
+              </div>
               {docs.length === 0 ? (
                 <p className="py-4 text-center text-[13px] text-[#94a8a0]">
                   Aucun document partagé.
