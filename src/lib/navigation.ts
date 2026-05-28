@@ -22,10 +22,6 @@ export const navSections: NavSection[] = [
     items: [
       { label: "Kits de communication", href: "/kits-communication" },
       { label: "Catalogue d'ateliers", href: "/catalogue-ateliers" },
-      {
-        label: "Catalogue intervention d'urgence",
-        href: "/catalogue-intervention-urgence",
-      },
       { label: "FAQ RH", href: "/faq-rh" },
     ],
   },
