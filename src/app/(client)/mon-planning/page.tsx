@@ -6,6 +6,7 @@ import { commentsStore, type PlanComment } from "@/lib/comments-store";
 import { targetsStore, type TargetLabel } from "@/lib/targets-store";
 import { docsStore, type StoredDocument } from "@/lib/docs-store";
 import { openClientFile } from "@/lib/storage";
+import type { PlanItemFile } from "@/lib/clients-data";
 import {
   getUrgencies,
   watchUrgencies,
@@ -211,6 +212,14 @@ type PlanEvent = {
   impact?: string;
   itemId?: number;
   threadId?: string;
+  // Mirror what the CSM sees in their plan item modal so the client has
+  // the same context when opening an action.
+  responsable?: string;
+  detail?: string;
+  files?: PlanItemFile[];
+  objectives?: string[];
+  themeId?: string;
+  cancelled?: boolean;
 };
 
 function defaultDescription(type: EventType): string {
@@ -518,6 +527,12 @@ export default function MonPlanningPage() {
           done: item.done,
           targets: item.targets,
           impact: item.impact,
+          responsable: item.responsable,
+          detail: item.detail,
+          files: item.files,
+          objectives: item.objectives,
+          themeId: item.themeId,
+          cancelled: item.cancelled,
           itemId: item.id,
           threadId: String(item.id),
         });
@@ -1412,7 +1427,11 @@ function EventModal({
               >
                 {cfg.label}
               </span>
-              {event.type === "urgence" ? (
+              {event.cancelled ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-brand-salmon/15 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-brand-salmon">
+                  Annulé
+                </span>
+              ) : event.type === "urgence" ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-brand-salmon/15 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-brand-salmon">
                   <span className="relative flex h-1.5 w-1.5">
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-salmon opacity-70" />
@@ -1453,8 +1472,20 @@ function EventModal({
             >
               {event.title}
             </h2>
+            {event.responsable && (
+              <p className="mt-1.5 text-[12px] text-brand-muted-on-dark">
+                Animé par <span className="text-brand-cream">{event.responsable}</span>
+              </p>
+            )}
           </div>
         </div>
+
+        {event.cancelled && (
+          <div className="mt-5 rounded-[10px] border border-brand-salmon/30 bg-brand-salmon/10 px-4 py-2.5 text-[12px] leading-relaxed text-brand-salmon">
+            ⚠ Cette action a été annulée par votre CSM. Elle reste visible
+            pour conserver l&apos;historique mais ne sera pas tenue.
+          </div>
+        )}
 
         <div className="mt-6 space-y-5">
           <section>
@@ -1474,6 +1505,56 @@ function EventModal({
               <p className="text-sm leading-relaxed text-brand-cream">
                 {event.impact}
               </p>
+            </section>
+          )}
+
+          {event.detail && (
+            <section>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-teal-bright">
+                Détails complémentaires
+              </h3>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-brand-cream">
+                {event.detail}
+              </p>
+            </section>
+          )}
+
+          {event.objectives && event.objectives.length > 0 && (
+            <section>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-teal-bright">
+                Objectifs
+              </h3>
+              <ul className="space-y-1.5 text-sm text-brand-cream">
+                {event.objectives.map((o, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-green-bright" aria-hidden />
+                    <span>{o}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {event.files && event.files.length > 0 && (
+            <section>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-teal-bright">
+                Fichiers partagés
+              </h3>
+              <div className="flex flex-col gap-1.5">
+                {event.files.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => void openClientFile(f.path, f.name)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-brand-border-dark px-3 py-2 text-left text-[12px] font-medium text-brand-cream transition-colors hover:border-brand-green-bright/40 hover:bg-brand-green-bright/5"
+                  >
+                    <span className="text-[14px]">{getFileIcon(f.mimeType)}</span>
+                    <span className="min-w-0 flex-1 truncate">{f.name}</span>
+                    <span className="shrink-0 text-[11px] text-brand-muted-on-dark">{f.sizeLabel}</span>
+                    <span className="shrink-0 text-brand-green-bright"><DownloadIcon /></span>
+                  </button>
+                ))}
+              </div>
             </section>
           )}
 
