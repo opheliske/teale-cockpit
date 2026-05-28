@@ -9,7 +9,7 @@ import { csmClientsStore, type StoredCsmClient } from "@/lib/csm-clients-store";
 import { useAuth } from "@/lib/auth";
 import { supabase, ensureSession } from "@/lib/supabase";
 import { watchChanges } from "@/lib/sync";
-import { countAtelierConsumed } from "@/lib/plan-dates";
+import { countAtelierConsumed, dayFromMeta, monthFromMeta, yearFromMeta } from "@/lib/plan-dates";
 import type { StoredPlanItem } from "@/lib/plan-store";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -256,6 +256,57 @@ export default function CsmHomePage() {
     [renewals],
   );
 
+  // QBRs scheduled within the next 2 days (today / tomorrow / day-after) that
+  // still need a deck. Surfaced as "Rappels QBR" in the Alerts tab so the
+  // CSM never misses a J-2 prep window.
+  const qbrReminders = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yearNow = today.getFullYear();
+    const out: Array<{
+      key: string;
+      clientId: string;
+      clientName: string;
+      initials: string;
+      color: string;
+      title: string;
+      time: string;
+      daysUntil: number;
+      label: string;
+    }> = [];
+    for (const client of storeClients) {
+      const items = planItemsByClient[client.id] ?? [];
+      const stored = csmClientsStore.get(client.id);
+      if (!stored) continue;
+      for (const it of items) {
+        if (it.type !== "qbr") continue;
+        if (it.deckCreated) continue;
+        // Meta wins over structured fields (same rationale as countAtelierConsumed).
+        const month = monthFromMeta(it.meta) ?? it.month;
+        if (month == null) continue;
+        const year = yearFromMeta(it.meta) ?? (it.year === "next" ? yearNow + 1 : yearNow);
+        const date = new Date(year, month, dayFromMeta(it.meta));
+        date.setHours(0, 0, 0, 0);
+        const daysUntil = Math.round((date.getTime() - today.getTime()) / 86_400_000);
+        if (daysUntil < 0 || daysUntil > 2) continue;
+        const timeMatch = it.meta.match(/(\d{1,2}:\d{2})/);
+        const label = daysUntil === 0 ? "Aujourd'hui" : daysUntil === 1 ? "Demain" : "Dans 2 jours";
+        out.push({
+          key: `${client.id}:${it.id}`,
+          clientId: client.id,
+          clientName: client.name,
+          initials: stored.initials,
+          color: stored.color,
+          title: it.title,
+          time: timeMatch?.[1] ?? "",
+          daysUntil,
+          label,
+        });
+      }
+    }
+    return out.sort((a, b) => a.daysUntil - b.daysUntil);
+  }, [storeClients, planItemsByClient]);
+
   // ── KPIs ──
   const total = allClients.length;
   const sainCount = allClients.filter((c) => c.statut === "SAIN").length;
@@ -335,7 +386,7 @@ export default function CsmHomePage() {
           { label: "Alertes & risques",key: "Alertes" as const },
         ]).map(({ label, key }) => {
           const isActive = activeTab === key;
-          const alertBadge = vigilanceCount + risqueCount + overdueActionsCount;
+          const alertBadge = vigilanceCount + risqueCount + overdueActionsCount + qbrReminders.length;
           return (
             <button key={key} onClick={() => setActiveTab(key)}
               className={`-mb-px border-b-2 px-3.5 py-2.5 text-[13.5px] font-medium transition-colors ${
@@ -661,6 +712,39 @@ export default function CsmHomePage() {
       {/* ── Alertes & risques tab ── */}
       {activeTab === "Alertes" && (
         <div className="space-y-6">
+          {qbrReminders.length > 0 && (
+            <div>
+              <h2 className="mb-3 text-[14px] font-semibold text-brand-cream">
+                📊 QBR à préparer (J-2)
+                <span className="ml-2 rounded-full bg-[rgba(245,158,11,0.15)] px-2 py-0.5 text-[11px] text-[#f59e0b]">{qbrReminders.length}</span>
+              </h2>
+              <div className="overflow-hidden rounded-[12px] border border-[rgba(245,158,11,0.22)]">
+                <ul className="divide-y divide-[rgba(255,255,255,0.04)]">
+                  {qbrReminders.map((r) => (
+                    <li
+                      key={r.key}
+                      onClick={() => router.push(`/csm/clients/${r.clientId}`)}
+                      className="flex cursor-pointer items-center gap-3 bg-[rgba(245,158,11,0.05)] px-4 py-3 transition-colors hover:bg-[rgba(245,158,11,0.09)]"
+                    >
+                      <ClientAvatar initials={r.initials} color={r.color} size={32} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[13px] font-semibold text-brand-cream">{r.title}</span>
+                          <span className="truncate text-[11px] text-[rgba(232,245,239,0.45)]">— {r.clientName}</span>
+                        </div>
+                        <p className="mt-0.5 text-[11px] font-semibold" style={{ color: "#f59e0b" }}>
+                          {r.label}{r.time ? ` · ${r.time}` : ""}
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded border border-[rgba(245,158,11,0.45)] bg-[rgba(245,158,11,0.1)] px-2.5 py-1 text-[11px] font-semibold text-[#f59e0b]">
+                        Préparer →
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
           <div>
             <h2 className="mb-3 text-[14px] font-semibold text-brand-cream">
               Comptes à surveiller
