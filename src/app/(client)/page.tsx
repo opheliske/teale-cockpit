@@ -229,7 +229,7 @@ export default function ClientHomePage() {
               </Link>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-4 gap-2">
               {quartersOverview.map((q) => {
                 const isCurrent = q.status === "current";
                 const isPast = q.status === "past";
@@ -239,11 +239,17 @@ export default function ClientHomePage() {
                   : isPast
                     ? { background: "rgba(168,232,149,0.15)", color: "#a8e895" }
                     : { background: "rgba(255,255,255,0.05)", color: "#94a8a0" };
+                // Compact months : "Mars · Avr · Mai" (3-letter abbreviations
+                // so the 4 cards fit on a single line inside col-span-7).
+                const monthsCompact = q.months
+                  .split(" · ")
+                  .map((m) => m.slice(0, 3))
+                  .join(" · ");
                 return (
                   <Link
                     key={q.id}
                     href="/mon-planning"
-                    className={`flex flex-col rounded-[12px] border p-3.5 transition-all ${
+                    className={`flex flex-col rounded-[12px] border p-2.5 transition-all ${
                       isCurrent
                         ? "border-[rgba(94,234,212,0.35)] bg-[rgba(94,234,212,0.06)] hover:border-[rgba(94,234,212,0.55)] hover:bg-[rgba(94,234,212,0.09)]"
                         : isPast
@@ -251,29 +257,30 @@ export default function ClientHomePage() {
                           : "border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.02)] hover:border-[rgba(94,234,212,0.18)] hover:bg-[rgba(255,255,255,0.035)]"
                     }`}
                   >
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <span className={`text-[12px] font-bold tracking-[1px] ${isCurrent ? "text-[#5eead4]" : "text-[#94a8a0]"}`}>
+                    <div className="mb-1.5 flex items-center justify-between gap-1">
+                      <span className={`text-[11px] font-bold tracking-[0.5px] ${isCurrent ? "text-[#5eead4]" : "text-[#94a8a0]"}`}>
                         {q.emoji} {q.id}
                       </span>
                       <span
-                        className="rounded-[4px] px-[7px] py-[2px] text-[9px] font-bold uppercase tracking-[0.5px]"
+                        className="rounded-[3px] px-[5px] py-[1px] text-[8px] font-bold uppercase tracking-[0.4px]"
                         style={statusPillStyle}
                       >
                         {statusLabel}
                       </span>
                     </div>
-                    <p className="mb-2 text-[10px] uppercase tracking-[0.5px] text-[#6b7c75]">
-                      {q.months}{q.year ? ` · ${q.year}` : ""}
+                    <p className="mb-1.5 text-[9px] uppercase tracking-[0.4px] text-[#6b7c75]" title={`${q.months}${q.year ? ` · ${q.year}` : ""}`}>
+                      {monthsCompact}
                     </p>
                     <p
-                      className={`mb-3 line-clamp-2 min-h-[34px] text-[13px] font-medium leading-snug ${
+                      className={`mb-2 line-clamp-2 min-h-[30px] text-[12px] font-medium leading-snug ${
                         q.theme ? "text-[#e8f5ef]" : "text-[#6b7c75] italic"
                       }`}
+                      title={q.theme || undefined}
                     >
-                      {q.theme || "Thème à définir avec votre CSM"}
+                      {q.theme || "Thème à définir"}
                     </p>
                     <div className="mt-auto">
-                      <div className="mb-1 h-1 overflow-hidden rounded-full bg-[rgba(255,255,255,0.05)]">
+                      <div className="mb-1 h-[3px] overflow-hidden rounded-full bg-[rgba(255,255,255,0.05)]">
                         <div
                           className="h-full rounded-full transition-all"
                           style={{
@@ -284,8 +291,8 @@ export default function ClientHomePage() {
                           }}
                         />
                       </div>
-                      <div className="flex items-center justify-between text-[10px] text-[#94a8a0]">
-                        <span>{q.total === 0 ? "Aucun jalon" : `${q.done}/${q.total} jalon${q.total > 1 ? "s" : ""}`}</span>
+                      <div className="flex items-center justify-between text-[9px] text-[#94a8a0]">
+                        <span>{q.total === 0 ? "—" : `${q.done}/${q.total}`}</span>
                         {q.total > 0 && <span className="tabular-nums font-semibold text-[#e8f5ef]">{q.pct}%</span>}
                       </div>
                     </div>
