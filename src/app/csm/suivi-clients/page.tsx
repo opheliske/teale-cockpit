@@ -31,13 +31,6 @@ const PRODUIT_STYLE: Record<ProduitTeale, { bg: string; color: string }> = {
   "Assistante sociale": { bg: "rgba(230,170,153,0.12)", color: "#E6AA99" },
 };
 
-const QUARTER_THEMES = [
-  { key: "q1", emoji: "🚀", placeholder: "Ex : Lancement & onboarding" },
-  { key: "q2", emoji: "🌱", placeholder: "Ex : Sensibilisation & engagement" },
-  { key: "q3", emoji: "📈", placeholder: "Ex : Animation & fidélisation" },
-  { key: "q4", emoji: "📊", placeholder: "Ex : Bilan & perspectives" },
-] as const;
-
 function slugify(name: string) {
   return name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "").slice(0, 20) + "-" + Date.now().toString(36);
 }
@@ -111,7 +104,6 @@ const EMPTY_FORM = {
   contractStart: "", contractEnd: "", churnNotice: "",
   atelierTotal: "", rdvParCollab: "",
   produits: [] as ProduitTeale[],
-  themeQ1: "", themeQ2: "", themeQ3: "", themeQ4: "",
 };
 
 function storedToCard(
@@ -200,7 +192,6 @@ export default function SuiviClientsPage() {
 
   // Create modal
   const [showCreate, setShowCreate] = useState(false);
-  const [createStep, setCreateStep] = useState<1 | 2>(1);
   const [form, setForm] = useState(EMPTY_FORM);
   const [createError, setCreateError] = useState("");
   const [creating, setCreating] = useState(false);
@@ -211,9 +202,9 @@ export default function SuiviClientsPage() {
   const toggleProduit = (p: ProduitTeale) =>
     set("produits", form.produits.includes(p) ? form.produits.filter((x) => x !== p) : [...form.produits, p]);
 
-  const openCreate = () => { setForm({ ...EMPTY_FORM, csm: profile?.id ?? "" }); setCreateStep(1); setCreateError(""); setShowCreate(true); };
+  const openCreate = () => { setForm({ ...EMPTY_FORM, csm: profile?.id ?? "" }); setCreateError(""); setShowCreate(true); };
 
-  const step1Valid = form.name.trim().length > 0 && form.collab.trim().length > 0;
+  const formValid = form.name.trim().length > 0 && form.collab.trim().length > 0;
 
   const submitCreate = async () => {
     setCreateError("");
@@ -478,22 +469,14 @@ export default function SuiviClientsPage() {
           <div className="flex items-center justify-between border-b border-[#1a3530] px-6 py-4">
             <div>
               <h2 className="text-[16px] font-semibold text-[#e8f5ef]">Créer un nouveau client</h2>
-              <p className="mt-0.5 text-[12px] text-[#94a8a0]">Étape {createStep} / 2 — {createStep === 1 ? "Informations client" : "One-year plan"}</p>
+              <p className="mt-0.5 text-[12px] text-[#94a8a0]">Informations client</p>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="flex gap-1.5">
-                {[1, 2].map((s) => (
-                  <span key={s} className="h-1.5 w-6 rounded-full transition-all" style={{ backgroundColor: s <= createStep ? "#5eead4" : "rgba(255,255,255,0.1)" }} />
-                ))}
-              </div>
-              <button onClick={() => setShowCreate(false)} className="grid h-7 w-7 place-items-center rounded-[8px] bg-[rgba(255,255,255,0.05)] text-[16px] text-[#94a8a0] hover:text-[#e8f5ef]">×</button>
-            </div>
+            <button onClick={() => setShowCreate(false)} className="grid h-7 w-7 place-items-center rounded-[8px] bg-[rgba(255,255,255,0.05)] text-[16px] text-[#94a8a0] hover:text-[#e8f5ef]">×</button>
           </div>
 
           {/* Body */}
           <div className="max-h-[68vh] overflow-y-auto px-6 py-5">
-            {createStep === 1 ? (
-              <div className="space-y-5">
+            <div className="space-y-5">
 
                 {/* Nom + initiales + couleur */}
                 <div>
@@ -632,28 +615,6 @@ export default function SuiviClientsPage() {
                 </div>
 
               </div>
-            ) : (
-              <div className="space-y-4">
-                <p className="text-[13px] leading-relaxed text-[#94a8a0]">
-                  Définis un thème pour chaque trimestre du one-year plan. Ces thèmes guideront les ateliers, kits et actions planifiées tout au long de l&apos;année.
-                </p>
-                {QUARTER_THEMES.map(({ key, emoji, placeholder }) => {
-                  const fieldKey = `theme${key.toUpperCase()}` as "themeQ1" | "themeQ2" | "themeQ3" | "themeQ4";
-                  return (
-                    <div key={key} className="rounded-[12px] border border-[#1a3530] bg-[rgba(255,255,255,0.02)] p-4">
-                      <label className="mb-2 block text-[12px] font-semibold text-[#e8f5ef]">{emoji} {key.toUpperCase()}</label>
-                      <input
-                        value={form[fieldKey]}
-                        onChange={(e) => set(fieldKey, e.target.value)}
-                        placeholder={`${emoji} ${placeholder}`}
-                        className="w-full rounded-[8px] border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef] placeholder-[rgba(232,245,239,0.25)] outline-none focus:border-[rgba(94,234,212,0.5)]"
-                      />
-                    </div>
-                  );
-                })}
-                <p className="text-[11px] text-[#94a8a0]">Les thèmes sont facultatifs — tu pourras les modifier depuis le suivi détaillé du client.</p>
-              </div>
-            )}
           </div>
 
           {/* Error */}
@@ -665,27 +626,17 @@ export default function SuiviClientsPage() {
 
           {/* Footer */}
           <div className="flex items-center justify-between border-t border-[#1a3530] px-6 py-4">
-            <button onClick={() => createStep === 1 ? setShowCreate(false) : setCreateStep(1)}
+            <button onClick={() => setShowCreate(false)}
               className="rounded-[9px] px-4 py-2 text-[12px] text-[rgba(232,245,239,0.5)] hover:text-[#e8f5ef]">
-              {createStep === 1 ? "Annuler" : "← Retour"}
+              Annuler
             </button>
-            {createStep === 1 ? (
-              <button
-                disabled={!step1Valid}
-                onClick={() => setCreateStep(2)}
-                className="rounded-[9px] bg-[rgba(94,234,212,0.9)] px-5 py-2 text-[12px] font-semibold text-[#061a16] transition-colors hover:bg-[#5eead4] disabled:opacity-40"
-              >
-                Suivant — One-year plan →
-              </button>
-            ) : (
-              <button
-                onClick={submitCreate}
-                disabled={creating}
-                className="rounded-[9px] bg-[#5eead4] px-5 py-2 text-[12px] font-semibold text-[#061a16] transition-colors hover:bg-[#7df0db] disabled:opacity-40"
-              >
-                {creating ? "Création…" : "Créer le client →"}
-              </button>
-            )}
+            <button
+              onClick={submitCreate}
+              disabled={!formValid || creating}
+              className="rounded-[9px] bg-[#5eead4] px-5 py-2 text-[12px] font-semibold text-[#061a16] transition-colors hover:bg-[#7df0db] disabled:opacity-40"
+            >
+              {creating ? "Création…" : "Créer le client →"}
+            </button>
           </div>
         </div>
       </div>
