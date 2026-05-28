@@ -11,7 +11,9 @@
     "create-user": "node scripts/create-user.mjs",
     "seed-demo": "node scripts/seed-demo.mjs",
     "seed-users": "node scripts/seed-users.mjs",
-    "seed-catalog": "node scripts/seed-catalog.mjs"
+    "seed-catalog": "node scripts/seed-catalog.mjs",
+    "seed-hr-kb": "node scripts/seed-hr-kb.mjs",
+    "upload-hr-kb": "node scripts/upload-hr-kb-images.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",
