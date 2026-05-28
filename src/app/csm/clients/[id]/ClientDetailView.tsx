@@ -2223,22 +2223,9 @@ export default function ClientDetailView({ id }: { id: string }) {
 
             return (
               <>
-                {/* Filter toolbar */}
-                <div className="mb-4 flex items-center gap-3 rounded-[12px] border border-[#1a3530] bg-[rgba(14,37,32,0.45)] p-[6px]">
-                  <div className="flex flex-1 flex-wrap gap-1">
-                    {planFilterOptions.map((o) => (
-                      <button
-                        key={o.key}
-                        onClick={() => setPlanFilter(o.key)}
-                        className={`rounded-[8px] px-3 py-1.5 text-[12px] font-medium transition-all ${planFilter === o.key ? "bg-[#1a2e29] text-[#e8f5ef]" : "text-[#94a8a0] hover:text-[#e8f5ef]"}`}
-                      >
-                        {o.key} <span className="opacity-60">{o.count}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* FocusBar */}
+                {/* FocusBar — context (current quarter + theme) before the
+                    filter toolbar, so the CSM reads "what am I looking at"
+                    before reaching for filter chips. */}
                 {(() => {
                   const QUARTER_EMOJI: Record<"Q1"|"Q2"|"Q3"|"Q4", string> = { Q1: "🌱", Q2: "📈", Q3: "📊", Q4: "🔄" };
                   const activeItems = allItemsByQ[activePlanQ];
@@ -2248,7 +2235,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                   const fStatus = qStatusLabel[activePlanQ];
                   const fTheme = qThemeMap[activePlanQ];
                   return (
-                    <div className="relative mb-7 overflow-hidden rounded-2xl border border-[rgba(94,234,212,0.22)] px-7 py-5"
+                    <div className="relative mb-4 overflow-hidden rounded-2xl border border-[rgba(94,234,212,0.22)] px-7 py-5"
                       style={{ background: "linear-gradient(135deg, rgba(94,234,212,0.12) 0%, rgba(94,234,212,0.03) 100%)" }}>
                       <div className="absolute inset-y-0 left-0 w-1 rounded-l-2xl" style={{ background: "linear-gradient(180deg, #5eead4 0%, #2dd4bf 100%)" }} />
                       <div className="flex flex-wrap items-center gap-8">
@@ -2277,6 +2264,21 @@ export default function ClientDetailView({ id }: { id: string }) {
                     </div>
                   );
                 })()}
+
+                {/* Filter toolbar */}
+                <div className="mb-7 flex items-center gap-3 rounded-[12px] border border-[#1a3530] bg-[rgba(14,37,32,0.45)] p-[6px]">
+                  <div className="flex flex-1 flex-wrap gap-1">
+                    {planFilterOptions.map((o) => (
+                      <button
+                        key={o.key}
+                        onClick={() => setPlanFilter(o.key)}
+                        className={`rounded-[8px] px-3 py-1.5 text-[12px] font-medium transition-all ${planFilter === o.key ? "bg-[#1a2e29] text-[#e8f5ef]" : "text-[#94a8a0] hover:text-[#e8f5ef]"}`}
+                      >
+                        {o.key} <span className="opacity-60">{o.count}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 {/* Quarter tabs — client-view style */}
                 <div className="mb-7 grid grid-cols-4 gap-2.5">
