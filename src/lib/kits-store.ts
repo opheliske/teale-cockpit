@@ -22,6 +22,7 @@ function animationFromRow(row: Record<string, unknown>): AnimationItem {
     imagesEn: row.images_en as string[],
     pdfFr: row.pdf_fr as string[],
     pdfEn: row.pdf_en as string[],
+    body: (row.body as string | null) ?? undefined,
   };
 }
 
@@ -38,6 +39,7 @@ function animationToRow(a: AnimationItem) {
     images_en: a.imagesEn,
     pdf_fr: a.pdfFr,
     pdf_en: a.pdfEn,
+    body: a.body?.trim() ? a.body : null,
   };
 }
 

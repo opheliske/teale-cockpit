@@ -1458,7 +1458,7 @@ function KitModal({
               { label: active.data.language, style: "bg-brand-cream/10 text-brand-cream" },
             ]}
             title={active.data.title}
-            body={defaultLancementTemplate(active.data)}
+            body={active.data.body?.trim() || defaultLancementTemplate(active.data)}
             copied={copied}
             setCopied={setCopied}
           />
@@ -1471,7 +1471,7 @@ function KitModal({
               { label: active.data.language, style: "bg-brand-cream/10 text-brand-cream" },
             ]}
             title={active.data.title}
-            body={defaultEmailTemplate(active.data)}
+            body={active.data.body?.trim() || defaultEmailTemplate(active.data)}
             copied={copied}
             setCopied={setCopied}
           />
@@ -1634,6 +1634,8 @@ function AnimationModalBody({ item }: { item: AnimationItem }) {
           </span>
         </a>
       )}
+
+      {item.body?.trim() && <CopyableTextBlock body={item.body.trim()} />}
 
       <div className="mt-6 space-y-5">
         <ResourceGroup
@@ -1960,5 +1962,48 @@ function LinkIcon() {
       <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
       <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
     </svg>
+  );
+}
+
+// Reusable copy-to-clipboard block for the body field on animation kits.
+// The lancement/email modals already render the body via TextKitModalBody;
+// the animation modal didn't have a text section before, so it gets its
+// own scrollable container + copy button here.
+function CopyableTextBlock({ body }: { body: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(body).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      });
+    }
+  };
+  return (
+    <div className="mt-6">
+      <div className="mb-2 flex items-baseline justify-between gap-3">
+        <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-accent">
+          Contenu à copier
+        </h3>
+        <button
+          type="button"
+          onClick={copy}
+          className="inline-flex items-center gap-1.5 rounded-full bg-brand-accent px-3.5 py-1.5 text-[11px] font-medium text-brand-dark transition-colors hover:bg-brand-accent/90"
+        >
+          {copied ? (
+            <>
+              <CheckIcon /> Copié
+            </>
+          ) : (
+            <>
+              <CopyIcon /> Copier
+            </>
+          )}
+        </button>
+      </div>
+      <div className="max-h-60 overflow-y-auto whitespace-pre-wrap rounded-lg border border-brand-border-dark bg-brand-dark/40 p-4 text-sm leading-relaxed text-brand-cream">
+        {body}
+      </div>
+    </div>
   );
 }

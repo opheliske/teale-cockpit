@@ -50,7 +50,8 @@ create table if not exists kits_lancement (
   id       text primary key,
   title    text not null,
   step     text not null check (step in ('before', 'dday', 'after')),
-  language text not null check (language in ('FR', 'EN'))
+  language text not null check (language in ('FR', 'EN')),
+  body     text
 );
 
 create table if not exists kits_animation (
@@ -64,14 +65,16 @@ create table if not exists kits_animation (
   images_fr jsonb not null default '[]',
   images_en jsonb not null default '[]',
   pdf_fr    jsonb not null default '[]',
-  pdf_en    jsonb not null default '[]'
+  pdf_en    jsonb not null default '[]',
+  body      text
 );
 
 create table if not exists kits_email (
   id       text primary key,
   title    text not null,
   topic    text not null,
-  language text not null check (language in ('FR', 'EN'))
+  language text not null check (language in ('FR', 'EN')),
+  body     text
 );
 
 -- ─── Client actions (CSM home to-do list, per-CSM ownership) ────────────────

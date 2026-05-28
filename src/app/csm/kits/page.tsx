@@ -120,6 +120,7 @@ interface LancementForm {
   title: string;
   step: Step;
   language: EmailLanguage;
+  body: string;
 }
 
 interface AnimationForm {
@@ -134,30 +135,32 @@ interface AnimationForm {
   imagesEnText: string;
   pdfFrText: string;
   pdfEnText: string;
+  body: string;
 }
 
 interface EmailForm {
   title: string;
   topic: string;
   language: EmailLanguage;
+  body: string;
 }
 
 const EMPTY_LANCEMENT: LancementForm = {
-  title: "", step: "before", language: "FR",
+  title: "", step: "before", language: "FR", body: "",
 };
 
 const EMPTY_ANIMATION: AnimationForm = {
   title: "", month: "January", type: "Playlist", status: "Upcoming / À venir",
   landing: "", languageFR: true, languageEN: false,
-  imagesFrText: "", imagesEnText: "", pdfFrText: "", pdfEnText: "",
+  imagesFrText: "", imagesEnText: "", pdfFrText: "", pdfEnText: "", body: "",
 };
 
 const EMPTY_EMAIL: EmailForm = {
-  title: "", topic: "ABILITY TO COPE", language: "FR",
+  title: "", topic: "ABILITY TO COPE", language: "FR", body: "",
 };
 
 function lancementToForm(k: LancementKit): LancementForm {
-  return { title: k.title, step: k.step, language: k.language };
+  return { title: k.title, step: k.step, language: k.language, body: k.body ?? "" };
 }
 
 function animationToForm(a: AnimationItem): AnimationForm {
@@ -173,11 +176,12 @@ function animationToForm(a: AnimationItem): AnimationForm {
     imagesEnText: a.imagesEn.join("\n"),
     pdfFrText: a.pdfFr.join("\n"),
     pdfEnText: a.pdfEn.join("\n"),
+    body: a.body ?? "",
   };
 }
 
 function emailToForm(e: EmailTopicKit): EmailForm {
-  return { title: e.title, topic: e.topic, language: e.language };
+  return { title: e.title, topic: e.topic, language: e.language, body: e.body ?? "" };
 }
 
 function formToLancement(f: LancementForm, existingId?: string): LancementKit {
@@ -186,6 +190,7 @@ function formToLancement(f: LancementForm, existingId?: string): LancementKit {
     title: f.title.trim(),
     step: f.step,
     language: f.language,
+    body: f.body.trim() || undefined,
   };
 }
 
@@ -206,6 +211,7 @@ function formToAnimation(f: AnimationForm, existingId?: string): AnimationItem {
     imagesEn: lines(f.imagesEnText),
     pdfFr: lines(f.pdfFrText),
     pdfEn: lines(f.pdfEnText),
+    body: f.body.trim() || undefined,
   };
 }
 
@@ -215,6 +221,7 @@ function formToEmail(f: EmailForm, existingId?: string): EmailTopicKit {
     title: f.title.trim(),
     topic: f.topic,
     language: f.language,
+    body: f.body.trim() || undefined,
   };
 }
 
@@ -246,6 +253,11 @@ export default function CsmKitsPage() {
 
   // delete confirm
   const [confirmDelete, setConfirmDelete] = useState<{ kind: EditingKind; id: string } | null>(null);
+
+  // detail viewer — opened by clicking a kit card, read-only
+  const [viewingKit, setViewingKit] = useState<{ kind: EditingKind; id: string } | null>(null);
+  const openView = (kind: EditingKind, id: string) => setViewingKit({ kind, id });
+  const closeView = () => setViewingKit(null);
 
   const lower = search.trim().toLowerCase();
 
@@ -454,6 +466,7 @@ export default function CsmKitsPage() {
                 onAdd={() => openNew("animation")}
                 onEdit={(id) => openEdit("animation", id)}
                 onDelete={(id) => setConfirmDelete({ kind: "animation", id })}
+                onOpenDetail={(id) => openView("animation", id)}
               />
             )}
             {activeTheme === "animation" && filteredAnimation.length === 0 && (
@@ -473,6 +486,7 @@ export default function CsmKitsPage() {
                 onAdd={() => openNew("email")}
                 onEdit={(id) => openEdit("email", id)}
                 onDelete={(id) => setConfirmDelete({ kind: "email", id })}
+                onOpenDetail={(id) => openView("email", id)}
               />
             )}
             {activeTheme === "emails" && filteredEmails.length === 0 && (
@@ -489,6 +503,7 @@ export default function CsmKitsPage() {
                 onAdd={() => openNew("lancement")}
                 onEdit={(id) => openEdit("lancement", id)}
                 onDelete={(id) => setConfirmDelete({ kind: "lancement", id })}
+                onOpenDetail={(id) => openView("lancement", id)}
               />
             )}
             {activeTheme === "lancement" && filteredLancement.length === 0 && (
@@ -541,6 +556,22 @@ export default function CsmKitsPage() {
           </div>
         </div>
       )}
+
+      {/* KIT DETAIL VIEWER */}
+      {viewingKit && (
+        <KitDetailModal
+          viewing={viewingKit}
+          lancementKits={lancementKits}
+          animationItems={animationItems}
+          emailTopicKits={emailTopicKits}
+          onClose={closeView}
+          onEdit={() => {
+            const { kind, id } = viewingKit;
+            closeView();
+            openEdit(kind, id);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -552,11 +583,13 @@ function AdminAnimationSection({
   onAdd,
   onEdit,
   onDelete,
+  onOpenDetail,
 }: {
   items: AnimationItem[];
   onAdd: () => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
+  onOpenDetail: (id: string) => void;
 }) {
   const [activeQId, setActiveQId] = useState<CommQuarterId>(DEFAULT_QUARTER_ID);
   const quarter = commQuarters.find((q) => q.id === activeQId)!;
@@ -615,6 +648,7 @@ function AdminAnimationSection({
             nextItem={nextItem}
             onEdit={onEdit}
             onDelete={onDelete}
+            onOpenDetail={onOpenDetail}
           />
         ))}
       </div>
@@ -628,12 +662,14 @@ function AdminMonthColumnComm({
   nextItem,
   onEdit,
   onDelete,
+  onOpenDetail,
 }: {
   month: string;
   items: AnimationItem[];
   nextItem: AnimationItem | null;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
+  onOpenDetail: (id: string) => void;
 }) {
   const status = monthStatus(month);
   const doneCount = items.filter((i) => monthStatus(i.month) === "past").length;
@@ -668,6 +704,7 @@ function AdminMonthColumnComm({
               isNext={item === nextItem}
               onEdit={() => onEdit(item.id)}
               onDelete={() => onDelete(item.id)}
+              onOpenDetail={() => onOpenDetail(item.id)}
             />
           ))}
         </ul>
@@ -681,11 +718,13 @@ function AdminCommEventRow({
   isNext,
   onEdit,
   onDelete,
+  onOpenDetail,
 }: {
   item: AnimationItem;
   isNext: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  onOpenDetail: () => void;
 }) {
   const isDone = monthStatus(item.month) === "past";
   const isLetsTalk = item.type === "Let's talk";
@@ -697,7 +736,13 @@ function AdminCommEventRow({
           Prochain
         </span>
       )}
-      <div className={`group mb-2.5 flex w-full gap-2.5 rounded-[10px] border p-3 transition-all ${isDone ? "border-transparent opacity-[0.38]" : isNext ? "border-[rgba(94,234,212,0.18)] bg-[rgba(94,234,212,0.05)]" : "border-transparent hover:border-white/5 hover:bg-white/[0.025]"}`}>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onOpenDetail}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenDetail(); } }}
+        className={`group mb-2.5 flex w-full cursor-pointer gap-2.5 rounded-[10px] border p-3 text-left transition-all ${isDone ? "border-transparent opacity-[0.38] hover:opacity-50" : isNext ? "border-[rgba(94,234,212,0.18)] bg-[rgba(94,234,212,0.05)] hover:border-[rgba(94,234,212,0.35)]" : "border-transparent hover:border-white/10 hover:bg-white/[0.04]"}`}
+      >
         <div className="w-9 shrink-0 pt-0.5 text-center text-xl leading-none">
           {isLetsTalk ? "📺" : "🎵"}
         </div>
@@ -719,10 +764,10 @@ function AdminCommEventRow({
           </div>
         </div>
         <div className="flex shrink-0 flex-col gap-1 pl-1">
-          <button type="button" title="Modifier" onClick={onEdit} className="grid h-7 w-7 place-items-center rounded-[6px] border border-[rgba(255,255,255,0.05)] text-[#94a8a0] transition-all hover:border-[rgba(94,234,212,0.3)] hover:text-[#84d4a6]">
+          <button type="button" title="Modifier" onClick={(e) => { e.stopPropagation(); onEdit(); }} className="grid h-7 w-7 place-items-center rounded-[6px] border border-[rgba(255,255,255,0.05)] text-[#94a8a0] transition-all hover:border-[rgba(94,234,212,0.3)] hover:text-[#84d4a6]">
             <PencilIcon />
           </button>
-          <button type="button" title="Supprimer" onClick={onDelete} className="grid h-7 w-7 place-items-center rounded-[6px] border border-[rgba(255,255,255,0.05)] text-[#94a8a0] transition-all hover:border-[rgba(239,68,68,0.3)] hover:text-[#ef4444]">
+          <button type="button" title="Supprimer" onClick={(e) => { e.stopPropagation(); onDelete(); }} className="grid h-7 w-7 place-items-center rounded-[6px] border border-[rgba(255,255,255,0.05)] text-[#94a8a0] transition-all hover:border-[rgba(239,68,68,0.3)] hover:text-[#ef4444]">
             <TrashIcon />
           </button>
         </div>
@@ -736,11 +781,13 @@ function AdminLancementSection({
   onAdd,
   onEdit,
   onDelete,
+  onOpenDetail,
 }: {
   items: LancementKit[];
   onAdd: () => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
+  onOpenDetail: (id: string) => void;
 }) {
   const grouped: Record<string, LancementKit[]> = {};
   for (const k of items) {
@@ -780,6 +827,7 @@ function AdminLancementSection({
                     chipStyle="bg-brand-cream/10 text-brand-cream"
                     onEdit={() => onEdit(k.id)}
                     onDelete={() => onDelete(k.id)}
+                    onOpenDetail={() => onOpenDetail(k.id)}
                   />
                 ))}
               </div>
@@ -796,11 +844,13 @@ function AdminEmailsSection({
   onAdd,
   onEdit,
   onDelete,
+  onOpenDetail,
 }: {
   items: EmailTopicKit[];
   onAdd: () => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
+  onOpenDetail: (id: string) => void;
 }) {
   const grouped: Record<string, EmailTopicKit[]> = {};
   for (const k of items) {
@@ -837,6 +887,7 @@ function AdminEmailsSection({
                   chipStyle="bg-brand-cream/10 text-brand-cream"
                   onEdit={() => onEdit(k.id)}
                   onDelete={() => onDelete(k.id)}
+                  onOpenDetail={() => onOpenDetail(k.id)}
                 />
               ))}
             </div>
@@ -911,20 +962,28 @@ function AdminTextKitCard({
   chipStyle,
   onEdit,
   onDelete,
+  onOpenDetail,
 }: {
   title: string;
   chip: string;
   chipStyle: string;
   onEdit: () => void;
   onDelete: () => void;
+  onOpenDetail: () => void;
 }) {
   return (
-    <div className="group relative flex h-full flex-col justify-between rounded-xl border border-transparent bg-brand-surface p-4 transition-colors hover:border-[rgba(94,234,212,0.3)]">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpenDetail}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenDetail(); } }}
+      className="group relative flex h-full cursor-pointer flex-col justify-between rounded-xl border border-transparent bg-brand-surface p-4 text-left transition-colors hover:border-[rgba(94,234,212,0.3)] hover:bg-[rgba(94,234,212,0.04)]"
+    >
       <div className="absolute right-3 top-3 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-        <button type="button" title="Modifier" onClick={onEdit} className="grid h-7 w-7 place-items-center rounded-[6px] border border-[rgba(255,255,255,0.07)] bg-brand-dark text-[#94a8a0] transition-all hover:border-[rgba(94,234,212,0.4)] hover:text-[#84d4a6]">
+        <button type="button" title="Modifier" onClick={(e) => { e.stopPropagation(); onEdit(); }} className="grid h-7 w-7 place-items-center rounded-[6px] border border-[rgba(255,255,255,0.07)] bg-brand-dark text-[#94a8a0] transition-all hover:border-[rgba(94,234,212,0.4)] hover:text-[#84d4a6]">
           <PencilIcon />
         </button>
-        <button type="button" title="Supprimer" onClick={onDelete} className="grid h-7 w-7 place-items-center rounded-[6px] border border-[rgba(255,255,255,0.07)] bg-brand-dark text-[#94a8a0] transition-all hover:border-[rgba(239,68,68,0.3)] hover:text-[#ef4444]">
+        <button type="button" title="Supprimer" onClick={(e) => { e.stopPropagation(); onDelete(); }} className="grid h-7 w-7 place-items-center rounded-[6px] border border-[rgba(255,255,255,0.07)] bg-brand-dark text-[#94a8a0] transition-all hover:border-[rgba(239,68,68,0.3)] hover:text-[#ef4444]">
           <TrashIcon />
         </button>
       </div>
@@ -935,7 +994,7 @@ function AdminTextKitCard({
         <h4 className="mt-2 text-sm font-medium leading-snug text-brand-cream">{title}</h4>
       </div>
       <span className="mt-3 inline-flex items-center gap-1 text-xs text-[#84d4a6]">
-        Kit de communication
+        Voir le contenu →
       </span>
     </div>
   );
@@ -1090,6 +1149,16 @@ function KitsFormSlideOver({
                   <option value="EN">EN — English</option>
                 </select>
               </div>
+              <div>
+                <label className={LABEL}>Contenu à copier par le client <span className="text-[#6b7c75] normal-case font-normal">— optionnel</span></label>
+                <textarea
+                  className={TEXTAREA}
+                  rows={10}
+                  value={lancementForm.body}
+                  onChange={(e) => setLancementForm((f) => ({ ...f, body: e.target.value }))}
+                  placeholder="Texte de l'email tel qu'il sera proposé au client (sujet, corps, variables…). Laissé vide : le client voit le modèle auto-généré."
+                />
+              </div>
             </>
           )}
 
@@ -1174,6 +1243,16 @@ function KitsFormSlideOver({
               {uploadError && (
                 <p className="rounded-[8px] bg-[rgba(239,68,68,0.1)] px-3 py-2 text-[11px] text-[#fca5a5]">{uploadError}</p>
               )}
+              <div>
+                <label className={LABEL}>Contenu à copier par le client <span className="text-[#6b7c75] normal-case font-normal">— optionnel</span></label>
+                <textarea
+                  className={TEXTAREA}
+                  rows={8}
+                  value={animationForm.body}
+                  onChange={(e) => setAnimationForm((f) => ({ ...f, body: e.target.value }))}
+                  placeholder="Texte d'accompagnement (description, suggestions de post Slack/Teams, légende…) que le client pourra copier-coller depuis son espace."
+                />
+              </div>
             </>
           )}
 
@@ -1197,6 +1276,16 @@ function KitsFormSlideOver({
                   <option value="FR">FR — Français</option>
                   <option value="EN">EN — English</option>
                 </select>
+              </div>
+              <div>
+                <label className={LABEL}>Contenu à copier par le client <span className="text-[#6b7c75] normal-case font-normal">— optionnel</span></label>
+                <textarea
+                  className={TEXTAREA}
+                  rows={10}
+                  value={emailForm.body}
+                  onChange={(e) => setEmailForm((f) => ({ ...f, body: e.target.value }))}
+                  placeholder="Texte de l'email tel qu'il sera proposé au client. Laissé vide : le client voit le modèle auto-généré."
+                />
               </div>
             </>
           )}
@@ -1335,5 +1424,233 @@ function TrashIcon() {
       <path d="M10 11v6"/><path d="M14 11v6"/>
       <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
     </svg>
+  );
+}
+
+// ─── kit detail modal (read-only viewer) ──────────────────────────────────────
+
+function isAssetUrl(s: string): boolean {
+  return /^https?:\/\//i.test(s);
+}
+
+function KitDetailModal({
+  viewing,
+  lancementKits,
+  animationItems,
+  emailTopicKits,
+  onClose,
+  onEdit,
+}: {
+  viewing: { kind: EditingKind; id: string };
+  lancementKits: LancementKit[];
+  animationItems: AnimationItem[];
+  emailTopicKits: EmailTopicKit[];
+  onClose: () => void;
+  onEdit: () => void;
+}) {
+  let kindLabel = "";
+  let title = "";
+  let body: React.ReactNode = null;
+
+  if (viewing.kind === "animation") {
+    const item = animationItems.find((a) => a.id === viewing.id);
+    if (!item) return null;
+    kindLabel = item.type === "Let's talk" ? "Let's Talk" : "Playlist";
+    title = item.title;
+    body = <AnimationDetailBody item={item} />;
+  } else if (viewing.kind === "lancement") {
+    const item = lancementKits.find((k) => k.id === viewing.id);
+    if (!item) return null;
+    kindLabel = "Kit de lancement";
+    title = item.title;
+    body = <LancementDetailBody item={item} />;
+  } else if (viewing.kind === "email") {
+    const item = emailTopicKits.find((e) => e.id === viewing.id);
+    if (!item) return null;
+    kindLabel = "Email — " + topicLabel(item.topic);
+    title = item.title;
+    body = <EmailDetailBody item={item} />;
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm sm:items-center sm:p-8"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-[680px] overflow-hidden rounded-2xl border border-[rgba(94,234,212,0.18)] bg-[#0a1f18] shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-[rgba(255,255,255,0.06)] px-6 py-4">
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-bold uppercase tracking-[1.6px] text-[#84d4a6]">{kindLabel}</p>
+            <h2 className="mt-1 text-[17px] font-semibold leading-snug text-[#e8f5ef]">{title}</h2>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={onEdit}
+              className="inline-flex items-center gap-1.5 rounded-[8px] border border-[rgba(94,234,212,0.3)] bg-[rgba(94,234,212,0.06)] px-3 py-1.5 text-[12px] font-semibold text-[#84d4a6] transition-colors hover:bg-[rgba(94,234,212,0.12)]"
+            >
+              <PencilIcon /> Modifier
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Fermer"
+              className="grid h-8 w-8 place-items-center rounded-[8px] bg-[rgba(255,255,255,0.05)] text-[16px] text-[#94a8a0] transition-colors hover:bg-[rgba(255,255,255,0.08)] hover:text-[#e8f5ef]"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+        <div className="max-h-[70vh] overflow-y-auto px-6 py-5">{body}</div>
+      </div>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline gap-3 border-b border-[rgba(255,255,255,0.04)] py-2.5 last:border-b-0">
+      <span className="w-28 shrink-0 text-[10px] font-bold uppercase tracking-[1.2px] text-[#6b7c75]">{label}</span>
+      <span className="min-w-0 flex-1 text-[13px] text-[#e8f5ef]">{value}</span>
+    </div>
+  );
+}
+
+function AssetList({ label, items, accent }: { label: string; items: string[]; accent: string }) {
+  if (!items || items.length === 0) {
+    return (
+      <div>
+        <p className="mb-2 text-[10px] font-bold uppercase tracking-[1.2px] text-[#6b7c75]">{label}</p>
+        <p className="text-[12px] italic text-[#6b7c75]">— aucun fichier</p>
+      </div>
+    );
+  }
+  const images = items.filter((s) => isAssetUrl(s) && /\.(png|jpe?g|webp|gif)$/i.test(s));
+  const links = items.filter((s) => isAssetUrl(s) && !/\.(png|jpe?g|webp|gif)$/i.test(s));
+  const filenames = items.filter((s) => !isAssetUrl(s));
+
+  return (
+    <div>
+      <p className="mb-2 text-[10px] font-bold uppercase tracking-[1.2px]" style={{ color: accent }}>
+        {label}
+      </p>
+      {images.length > 0 && (
+        <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {images.map((src) => (
+            <a key={src} href={src} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-[8px] border border-[rgba(255,255,255,0.06)] transition-all hover:border-[rgba(94,234,212,0.4)]">
+              {/* eslint-disable-next-line @next/next/no-img-element -- external Supabase Storage URL, no Next image loader configured for this bucket */}
+              <img src={src} alt="" loading="lazy" className="h-28 w-full object-cover" />
+            </a>
+          ))}
+        </div>
+      )}
+      {links.length > 0 && (
+        <ul className="mb-2 space-y-1">
+          {links.map((href) => (
+            <li key={href}>
+              <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[12px] text-[#5eead4] hover:underline">
+                📄 {href.split("/").pop()}
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+      {filenames.length > 0 && (
+        <ul className="space-y-1 text-[12px] text-[#94a8a0]">
+          {filenames.map((fn) => (
+            <li key={fn} className="flex items-center gap-1.5">
+              <span aria-hidden>📎</span>
+              <span className="truncate">{fn}</span>
+              <span className="ml-1 rounded-full bg-[rgba(255,181,71,0.12)] px-1.5 py-0.5 text-[9px] font-semibold text-[#FFB547]">non uploadé</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function BodyPreview({ body }: { body?: string }) {
+  if (!body || !body.trim()) {
+    return (
+      <div className="rounded-[10px] border border-dashed border-[#1a3530] bg-[rgba(255,255,255,0.02)] p-4 text-[12px] italic leading-relaxed text-[#6b7c75]">
+        Pas encore de contenu écrit. Côté client, un modèle auto-généré est
+        affiché en attendant. Clique sur « Modifier » pour rédiger le texte
+        que le client copiera-collera.
+      </div>
+    );
+  }
+  return (
+    <div className="max-h-72 overflow-y-auto whitespace-pre-wrap rounded-[10px] border border-[rgba(94,234,212,0.18)] bg-[rgba(94,234,212,0.04)] p-4 text-[13px] leading-relaxed text-[#e8f5ef]">
+      {body}
+    </div>
+  );
+}
+
+function AnimationDetailBody({ item }: { item: AnimationItem }) {
+  const monthLbl = monthLabel[item.month] ?? item.month ?? "—";
+  return (
+    <div className="space-y-5">
+      <div>
+        <DetailRow label="Mois" value={monthLbl} />
+        <DetailRow label="Type" value={item.type || "—"} />
+        <DetailRow label="Statut" value={item.status || "—"} />
+        <DetailRow
+          label="Langues"
+          value={item.languages.length > 0
+            ? item.languages.map((l) => (l === "FR" ? "🇫🇷 FR" : "🇬🇧 EN")).join(" · ")
+            : "—"}
+        />
+        {item.landing && (
+          <DetailRow
+            label="Landing"
+            value={<a href={item.landing} target="_blank" rel="noopener noreferrer" className="text-[#5eead4] hover:underline">{item.landing} ↗</a>}
+          />
+        )}
+      </div>
+      <div className="border-t border-[rgba(255,255,255,0.06)] pt-4">
+        <p className="mb-2 text-[10px] font-bold uppercase tracking-[1.2px] text-[#84d4a6]">Contenu à copier (client)</p>
+        <BodyPreview body={item.body} />
+      </div>
+      <div className="space-y-4 border-t border-[rgba(255,255,255,0.06)] pt-4">
+        <AssetList label="🇫🇷 Images FR" items={item.imagesFr} accent="#84d4a6" />
+        <AssetList label="🇬🇧 Images EN" items={item.imagesEn} accent="#84d4a6" />
+        <AssetList label="🇫🇷 PDF FR" items={item.pdfFr} accent="#94a8a0" />
+        <AssetList label="🇬🇧 PDF EN" items={item.pdfEn} accent="#94a8a0" />
+      </div>
+    </div>
+  );
+}
+
+function LancementDetailBody({ item }: { item: LancementKit }) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <DetailRow label="Étape" value={stepLabels[item.step] ?? item.step} />
+        <DetailRow label="Langue" value={item.language === "FR" ? "🇫🇷 Français" : "🇬🇧 English"} />
+      </div>
+      <div>
+        <p className="mb-2 text-[10px] font-bold uppercase tracking-[1.2px] text-[#84d4a6]">Contenu à copier (client)</p>
+        <BodyPreview body={item.body} />
+      </div>
+    </div>
+  );
+}
+
+function EmailDetailBody({ item }: { item: EmailTopicKit }) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <DetailRow label="Thématique" value={topicLabel(item.topic)} />
+        <DetailRow label="Langue" value={item.language === "FR" ? "🇫🇷 Français" : "🇬🇧 English"} />
+      </div>
+      <div>
+        <p className="mb-2 text-[10px] font-bold uppercase tracking-[1.2px] text-[#84d4a6]">Contenu à copier (client)</p>
+        <BodyPreview body={item.body} />
+      </div>
+    </div>
   );
 }
