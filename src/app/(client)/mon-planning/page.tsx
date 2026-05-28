@@ -220,6 +220,10 @@ type PlanEvent = {
   objectives?: string[];
   themeId?: string;
   cancelled?: boolean;
+  // Deck preparation flag — QBR / atelier. Set by the CSM in the QBR &
+  // Ateliers page; surfaced to the client as a small "Deck préparé"
+  // indicator so they know the CSM is ready.
+  deckCreated?: boolean;
 };
 
 function defaultDescription(type: EventType): string {
@@ -533,6 +537,7 @@ export default function MonPlanningPage() {
           objectives: item.objectives,
           themeId: item.themeId,
           cancelled: item.cancelled,
+          deckCreated: item.deckCreated,
           itemId: item.id,
           threadId: String(item.id),
         });
@@ -694,6 +699,7 @@ export default function MonPlanningPage() {
           event={activeEvent.event}
           month={activeEvent.month}
           year={activeYear}
+          clientLabels={clientLabels}
           onClose={() => setActiveEvent(null)}
         />
       )}
@@ -1331,13 +1337,17 @@ function EventModal({
   event,
   month,
   year,
+  clientLabels,
   onClose,
 }: {
   event: PlanEvent;
   month: string;
   year: Year;
+  clientLabels: TargetLabel[];
   onClose: () => void;
 }) {
+  const assignedLabels = clientLabels.filter((l) => event.targets?.includes(l.id));
+  const showDeckBadge = !!event.deckCreated && (event.type === "qbr" || event.type === "atelier");
   const { clientId: CLIENT_ID } = useActiveClient();
   const threadId = event.threadId ?? `${event.type}:${event.title}`;
   const [comments, setComments] = useState<PlanComment[]>(() =>
@@ -1465,6 +1475,11 @@ function EventModal({
                 {event.date ?? monthLabel[month]}
                 {event.date && ` · ${monthLabel[month]} ${year}`}
               </span>
+              {showDeckBadge && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-brand-teal-bright/15 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-brand-teal-bright">
+                  📊 Deck préparé
+                </span>
+              )}
             </div>
             <h2
               id="event-modal-title"
@@ -1532,6 +1547,29 @@ function EventModal({
                   </li>
                 ))}
               </ul>
+            </section>
+          )}
+
+          {assignedLabels.length > 0 && (
+            <section>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-teal-bright">
+                Étiquettes
+              </h3>
+              <div className="flex flex-wrap gap-1.5">
+                {assignedLabels.map((l) => (
+                  <span
+                    key={l.id}
+                    className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
+                    style={{
+                      background: `${l.color}22`,
+                      color: l.color,
+                      border: `1px solid ${l.color}55`,
+                    }}
+                  >
+                    {l.name}
+                  </span>
+                ))}
+              </div>
             </section>
           )}
 
