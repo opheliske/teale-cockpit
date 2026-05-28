@@ -176,9 +176,31 @@ export default function QbrAteliersPage() {
         <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-[2.5px] text-[#84d4a6]">
           Espace CSM
         </p>
-        <h1 className="mb-8 text-[28px] font-semibold tracking-[-0.4px] text-brand-cream">
-          QBR et Ateliers
-        </h1>
+        <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+          <h1 className="text-[28px] font-semibold tracking-[-0.4px] text-brand-cream">
+            QBR et Ateliers
+          </h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href="https://metabase.ops.teale.int/question/4257-qbr-big-final-query?date_previous=past3months-from-3months&number_of_periods=&date_pulse=&tag=&company_name=BCA%20Expertise&date=past3months&number_of_groups=&group_name=all%20employees&group_name=All%20Employees&group_name=All%20employees&period_min_bound=12_months_back"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-[10px] border border-[rgba(94,234,212,0.35)] bg-[rgba(94,234,212,0.07)] px-3.5 py-2 text-[12px] font-semibold text-[#5eead4] transition-colors hover:bg-[rgba(94,234,212,0.14)]"
+            >
+              📊 Voir les données Metabase
+              <span aria-hidden className="text-[11px] opacity-70">↗</span>
+            </a>
+            <a
+              href="https://qbr.lab.ops.teale.int/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-[10px] bg-[#5eead4] px-3.5 py-2 text-[12px] font-semibold text-[#061a16] transition-[filter] hover:brightness-105"
+            >
+              ✨ Générer la QBR
+              <span aria-hidden className="text-[11px] opacity-70">↗</span>
+            </a>
+          </div>
+        </div>
 
         <div className="grid grid-cols-[1fr_360px] items-start gap-8">
           {/* ── Left: QBR ── */}
