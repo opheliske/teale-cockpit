@@ -661,9 +661,6 @@ function AlertsRow({
           Aucun atelier en attente de votre retour.
         </div>
       )}
-      <div className="flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-[11px] border border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.02)] px-3.5 py-3 text-[11px] text-[#94a8a0] transition-colors hover:bg-[rgba(255,255,255,0.04)]">
-        ⓘ Annulation&nbsp;: <strong className="text-[#e8f5ef] font-semibold">15 jours</strong>&nbsp;avant l&apos;atelier&nbsp;·&nbsp;<strong className="text-[#e8f5ef] font-semibold">{cancelledCount}/X</strong>&nbsp;utilisés
-      </div>
     </div>
   );
 }
