@@ -318,7 +318,15 @@ export default function CsmCataloguePage() {
 
       {/* PREVIEW MODAL */}
       {previewWorkshop && (
-        <PreviewModal workshop={previewWorkshop} onClose={() => setPreviewId(null)} />
+        <PreviewModal
+          workshop={previewWorkshop}
+          onClose={() => setPreviewId(null)}
+          onEdit={() => {
+            const w = previewWorkshop;
+            setPreviewId(null);
+            openEdit(w);
+          }}
+        />
       )}
 
       {/* DELETE CONFIRM */}
@@ -627,7 +635,7 @@ function WorkshopFormModal({
 
 // ─── preview modal (read-only) ────────────────────────────────────────────────
 
-function PreviewModal({ workshop, onClose }: { workshop: Workshop; onClose: () => void }) {
+function PreviewModal({ workshop, onClose, onEdit }: { workshop: Workshop; onClose: () => void; onEdit: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKey);
@@ -642,11 +650,24 @@ function PreviewModal({ workshop, onClose }: { workshop: Workshop; onClose: () =
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-6 backdrop-blur-sm sm:p-10" onClick={onClose} role="dialog" aria-modal="true">
       <div className="relative w-full max-w-2xl rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[#0a1f18] p-7 sm:p-8" onClick={(e) => e.stopPropagation()}>
-        <button type="button" onClick={onClose} aria-label="Fermer" className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full text-[#94a8a0] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-[#e8f5ef]">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M6 18 18 6" /></svg>
-        </button>
+        <div className="absolute right-4 top-4 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onEdit}
+            className="inline-flex items-center gap-1.5 rounded-[8px] border border-[rgba(94,234,212,0.3)] bg-[rgba(94,234,212,0.06)] px-3 py-1.5 text-[12px] font-semibold text-[#84d4a6] transition-colors hover:bg-[rgba(94,234,212,0.14)]"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>
+            Modifier
+          </button>
+          <button type="button" onClick={onClose} aria-label="Fermer" className="grid h-9 w-9 place-items-center rounded-full text-[#94a8a0] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-[#e8f5ef]">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M6 18 18 6" /></svg>
+          </button>
+        </div>
 
-        <div className="flex flex-wrap items-center gap-2 pr-12">
+        <div className="flex flex-wrap items-center gap-2 pr-40">
           <span className={`rounded-[4px] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${tagClass}`}>{tagLabel}</span>
           {workshop.subtitle && <span className="text-[10px] uppercase tracking-wider text-[#94a8a0]">· {workshop.subtitle}</span>}
         </div>
