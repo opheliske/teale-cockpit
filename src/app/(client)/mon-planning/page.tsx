@@ -865,7 +865,7 @@ function FocusBar({
           </div>
           <div className="text-center">
             <div className="text-[30px] font-bold leading-none tabular-nums text-[#5eead4]">{qDone}</div>
-            <div className="mt-1.5 text-[10px] uppercase tracking-[1px] text-[#94a8a0]">des actions réalisées</div>
+            <div className="mt-1.5 text-[10px] uppercase tracking-[1px] text-[#94a8a0]">actions réalisées</div>
           </div>
           <div className="text-center">
             <div className="text-[30px] font-bold leading-none tabular-nums text-[#5eead4]">
