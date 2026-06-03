@@ -412,13 +412,11 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [planFilter, setPlanFilter] = useState<string>("Tous");
   const [activeSection, setActiveSection] = useState<Section>("big-picture");
   const [planYear, setPlanYear] = useState<"prev" | "current" | "next">("current");
-  const [activePlanQ, setActivePlanQ] = useState<"Q1" | "Q2" | "Q3" | "Q4">(() => {
-    const contractStart = storedClient?.contractStart || detail?.contractStart || "";
-    const qs = buildPlanQuarters(contractStart);
-    return qs.find((q) => q.status === "current")?.id
-      ?? qs.find((q) => q.status === "upcoming")?.id
-      ?? "Q1";
-  });
+  // activePlanQ is derived from `userPickedPlanQ` (manual click) OR the
+  // contract's "current" quarter. We store only the override so that as soon
+  // as planQuarters resolves (contractStart loads async), the derived default
+  // re-evaluates to the right quarter without needing an effect.
+  const [userPickedPlanQ, setUserPickedPlanQ] = useState<"Q1" | "Q2" | "Q3" | "Q4" | null>(null);
   const [localNotes, setLocalNotes] = useState<Note[]>(() => notesStore.getNotes());
   const deleteNote = (noteId: number) => {
     void notesStore.removeNote(noteId);
@@ -504,7 +502,6 @@ export default function ClientDetailView({ id }: { id: string }) {
   const { workshops: workshopList } = useWorkshops();
   const { lancementKits, animationItems, emailTopicKits } = useKitsStore();
   const planItemSeq = useRef(1_000_000_000);
-  const [planQAutoPicked, setPlanQAutoPicked] = useState(false);
   // Seed the id counter from the clock so two sessions can't mint the same
   // plan-item ids. Done in an effect — Date.now() must stay out of render.
   useEffect(() => {
@@ -1184,16 +1181,15 @@ export default function ClientDetailView({ id }: { id: string }) {
 
   const atelierRemainingDerived = Math.max(0, localDetail.atelierTotal - atelierConsumedThisYear);
 
-  // Once the client (hence the real contract start) is loaded, jump the plan
-  // to the current/upcoming quarter — once. A guarded setState during render
-  // (the documented "adjust state on a change" pattern), not an effect.
-  if (!planQAutoPicked && storedClient) {
-    setPlanQAutoPicked(true);
-    const target =
-      planQuarters.find((q) => q.status === "current") ??
-      planQuarters.find((q) => q.status === "upcoming");
-    if (target) setActivePlanQ(target.id);
-  }
+  // Default plan quarter — la "current" du cycle contractuel, sinon la
+  // prochaine, sinon Q1. Recalculé à chaque render donc s'adapte
+  // automatiquement quand storedClient (et donc planQuarters) résout en
+  // async, sans aucun effet.
+  const defaultPlanQ: "Q1" | "Q2" | "Q3" | "Q4" =
+    planQuarters.find((q) => q.status === "current")?.id ??
+    planQuarters.find((q) => q.status === "upcoming")?.id ??
+    "Q1";
+  const activePlanQ = userPickedPlanQ ?? defaultPlanQ;
 
   if (storeLoading) {
     return <ClientDetailSkeleton />;
@@ -1959,7 +1955,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                 return (
                   <button
                     key={q}
-                    onClick={() => { setActivePlanQ(q); switchTab("plan"); }}
+                    onClick={() => { setUserPickedPlanQ(q); switchTab("plan"); }}
                     className={`flex flex-col gap-[10px] rounded-[14px] border px-[18px] py-[16px] text-left transition-all ${
                       isDone ? "opacity-70 border-[#1a2c28] bg-[#0e1f1c]" :
                       isNow ? "border-[rgba(94,234,212,0.30)] bg-gradient-to-br from-[rgba(94,234,212,0.05)] to-[#0e1f1c]" :
@@ -2223,7 +2219,14 @@ export default function ClientDetailView({ id }: { id: string }) {
               <button
                 key={key}
                 type="button"
-                onClick={() => { if (!disabled) setPlanYear(key); }}
+                onClick={() => {
+                  if (disabled) return;
+                  setPlanYear(key);
+                  // Drop the manual quarter override so the user lands on
+                  // the year's default (current quarter for the current year,
+                  // Q1 otherwise).
+                  setUserPickedPlanQ(null);
+                }}
                 className={`rounded-[8px] px-3 py-[7px] text-[11px] font-semibold tracking-[0.5px] transition-all ${
                   planYear === key
                     ? "bg-[rgba(94,234,212,0.14)] text-[#5eead4]"
@@ -2399,7 +2402,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                       <button
                         key={q}
                         type="button"
-                        onClick={() => setActivePlanQ(q)}
+                        onClick={() => setUserPickedPlanQ(q)}
                         className={`rounded-[11px] border px-4 py-3.5 text-left transition-all ${
                           isActive
                             ? "border-[rgba(94,234,212,0.3)] bg-[rgba(94,234,212,0.07)] shadow-[0_0_0_1px_rgba(94,234,212,0.15),0_8px_28px_-10px_rgba(94,234,212,0.5)]"
