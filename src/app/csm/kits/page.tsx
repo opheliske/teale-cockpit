@@ -1035,11 +1035,13 @@ function Card({
   onOpen,
   onEdit,
   onDelete,
+  hideMonth,
 }: {
   card: KitCard;
   onOpen: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  hideMonth?: boolean;
 }) {
   const meta = TYPE_META[card.type];
   const shownAuds = card.audiences.filter((a) => a !== "tous");
@@ -1077,7 +1079,7 @@ function Card({
           </span>
         ))}
         <span className="text-[11px] text-brand-muted-on-dark/70">{langFlag(card.lang)}</span>
-        {card.month && (
+        {card.month && !hideMonth && (
           <span className="rounded-full border border-brand-border-dark/70 bg-brand-dark/50 px-2.5 py-1 text-[11px] text-brand-muted-on-dark/80">
             {monthName(card.month)}
           </span>
@@ -1177,13 +1179,6 @@ function commQuarterProgressOf(q: CommQuarter, curIdx: number): number {
   const startIdx = allMonths.indexOf(q.months[0]);
   return Math.round((curIdx - startIdx) * 33 + 15);
 }
-function cleanTitle(t: string): string {
-  return t.replace(/^[^\p{L}\p{N}]+/u, "").trim();
-}
-function animOf(card: KitCard): AnimationItem | null {
-  return card.payload.kind === "animation" ? card.payload.data : null;
-}
-
 function TempsFortCalendar({
   cards,
   currentMonth,
@@ -1211,16 +1206,6 @@ function TempsFortCalendar({
   ).length;
   const countOfQuarter = (q: CommQuarter) =>
     cards.filter((c) => c.month !== null && q.months.includes(allMonths[c.month - 1])).length;
-
-  const nextCardId = useMemo(() => {
-    for (const m of quarter.months) {
-      if (monthStatusOf(m, curIdx) !== "past") {
-        const found = quarterCards.find((c) => c.month === allMonths.indexOf(m) + 1);
-        if (found) return found.id;
-      }
-    }
-    return null;
-  }, [quarterCards, quarter, curIdx]);
 
   return (
     <section>
@@ -1266,7 +1251,6 @@ function TempsFortCalendar({
             month={month}
             curIdx={curIdx}
             cards={cardsOfMonth(month)}
-            nextCardId={nextCardId}
             onOpen={onOpen}
             onEdit={onEdit}
             onDelete={onDelete}
@@ -1328,7 +1312,6 @@ function MonthColumn({
   month,
   curIdx,
   cards,
-  nextCardId,
   onOpen,
   onEdit,
   onDelete,
@@ -1336,7 +1319,6 @@ function MonthColumn({
   month: string;
   curIdx: number;
   cards: KitCard[];
-  nextCardId: string | null;
   onOpen: (c: KitCard) => void;
   onEdit: (c: KitCard) => void;
   onDelete: (c: KitCard) => void;
@@ -1370,111 +1352,20 @@ function MonthColumn({
           Pas de communication programmée.
         </p>
       ) : (
-        <ul className="space-y-0">
+        <div className="space-y-3">
           {cards.map((c) => (
-            <CommEventRow
+            <Card
               key={c.id}
               card={c}
-              curIdx={curIdx}
-              isNext={c.id === nextCardId}
+              hideMonth
               onOpen={() => onOpen(c)}
               onEdit={() => onEdit(c)}
               onDelete={() => onDelete(c)}
             />
           ))}
-        </ul>
+        </div>
       )}
     </div>
-  );
-}
-
-function CommEventRow({
-  card,
-  curIdx,
-  isNext,
-  onOpen,
-  onEdit,
-  onDelete,
-}: {
-  card: KitCard;
-  curIdx: number;
-  isNext: boolean;
-  onOpen: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const a = animOf(card);
-  const isDone =
-    card.month !== null && monthStatusOf(allMonths[card.month - 1], curIdx) === "past";
-  const isLetsTalk = a?.type === "Let's talk";
-  return (
-    <li className="relative">
-      {isNext && (
-        <span className="absolute -top-2 right-2.5 z-10 rounded-[4px] bg-brand-accent px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] text-brand-dark">
-          Prochain
-        </span>
-      )}
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={onOpen}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onOpen();
-          }
-        }}
-        className={`group mb-2.5 flex w-full cursor-pointer gap-2.5 rounded-[10px] border p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60 ${
-          isDone
-            ? "border-transparent opacity-[0.5] hover:opacity-80"
-            : isNext
-              ? "border-brand-accent/20 bg-brand-accent/5"
-              : "border-transparent hover:border-white/10 hover:bg-white/[0.04]"
-        }`}
-      >
-        <div className="w-9 shrink-0 pt-0.5 text-center text-xl leading-none">
-          {isLetsTalk ? "📺" : "🎵"}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="mb-1.5 flex items-center gap-1.5">
-            <span
-              className={`rounded-[4px] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] ${
-                isLetsTalk ? "bg-brand-salmon/20 text-brand-salmon" : "bg-brand-accent/15 text-brand-accent"
-              }`}
-            >
-              {isLetsTalk ? "LET'S TALK" : "PLAYLIST"}
-            </span>
-            {card.isNew && (
-              <span className="rounded-[4px] bg-brand-accent px-[6px] py-[2px] text-[8.5px] font-bold uppercase tracking-[0.4px] text-brand-dark">
-                Nouveau
-              </span>
-            )}
-          </div>
-          <div className={`mb-1 text-[13px] font-medium leading-snug ${isDone ? "text-brand-muted-on-dark/70 line-through" : "text-brand-cream"}`}>
-            {cleanTitle(card.title)}
-          </div>
-          <div className="text-[10px] text-brand-muted-on-dark/70">{langFlag(card.lang)}</div>
-        </div>
-        <div className="flex shrink-0 flex-col gap-1 pl-1">
-          <button
-            type="button"
-            title="Modifier"
-            onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            className="grid h-7 w-7 place-items-center rounded-[6px] border border-white/[0.05] text-brand-muted-on-dark transition-all hover:border-brand-accent/30 hover:text-brand-accent"
-          >
-            <PencilIcon />
-          </button>
-          <button
-            type="button"
-            title="Supprimer"
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className="grid h-7 w-7 place-items-center rounded-[6px] border border-white/[0.05] text-brand-muted-on-dark transition-all hover:border-[#ef4444]/30 hover:text-[#ef4444]"
-          >
-            <TrashIcon />
-          </button>
-        </div>
-      </div>
-    </li>
   );
 }
 

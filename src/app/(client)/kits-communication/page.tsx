@@ -724,7 +724,15 @@ function FacetOption({
   );
 }
 
-function Card({ card, onOpen }: { card: KitCard; onOpen: () => void }) {
+function Card({
+  card,
+  onOpen,
+  hideMonth,
+}: {
+  card: KitCard;
+  onOpen: () => void;
+  hideMonth?: boolean;
+}) {
   const meta = TYPE_META[card.type];
   const shownAuds = card.audiences.filter((a) => a !== "tous");
   return (
@@ -762,7 +770,7 @@ function Card({ card, onOpen }: { card: KitCard; onOpen: () => void }) {
           </span>
         ))}
         <span className="text-[11px] text-brand-muted-on-dark/70">{langFlag(card.lang)}</span>
-        {card.month && (
+        {card.month && !hideMonth && (
           <span className="rounded-full border border-brand-border-dark/70 bg-brand-dark/50 px-2.5 py-1 text-[11px] text-brand-muted-on-dark/80">
             {monthName(card.month)}
           </span>
@@ -825,13 +833,6 @@ function commQuarterProgressOf(q: CommQuarter, curIdx: number): number {
   const startIdx = allMonths.indexOf(q.months[0]);
   return Math.round((curIdx - startIdx) * 33 + 15);
 }
-function cleanTitle(t: string): string {
-  return t.replace(/^[^\p{L}\p{N}]+/u, "").trim();
-}
-function animOf(card: KitCard): AnimationItem | null {
-  return card.payload.kind === "animation" ? card.payload.data : null;
-}
-
 function TempsFortCalendar({
   cards,
   currentMonth,
@@ -855,16 +856,6 @@ function TempsFortCalendar({
   ).length;
   const countOfQuarter = (q: CommQuarter) =>
     cards.filter((c) => c.month !== null && q.months.includes(allMonths[c.month - 1])).length;
-
-  const nextCardId = useMemo(() => {
-    for (const m of quarter.months) {
-      if (monthStatusOf(m, curIdx) !== "past") {
-        const found = quarterCards.find((c) => c.month === allMonths.indexOf(m) + 1);
-        if (found) return found.id;
-      }
-    }
-    return null;
-  }, [quarterCards, quarter, curIdx]);
 
   return (
     <section>
@@ -910,7 +901,6 @@ function TempsFortCalendar({
             month={month}
             curIdx={curIdx}
             cards={cardsOfMonth(month)}
-            nextCardId={nextCardId}
             onOpen={onOpen}
           />
         ))}
@@ -970,13 +960,11 @@ function MonthColumn({
   month,
   curIdx,
   cards,
-  nextCardId,
   onOpen,
 }: {
   month: string;
   curIdx: number;
   cards: KitCard[];
-  nextCardId: string | null;
   onOpen: (p: ActiveCard) => void;
 }) {
   const status = monthStatusOf(month, curIdx);
@@ -1008,85 +996,13 @@ function MonthColumn({
           Pas de communication programmée.
         </p>
       ) : (
-        <ul className="space-y-0">
+        <div className="space-y-3">
           {cards.map((c) => (
-            <CommEventRow
-              key={c.id}
-              card={c}
-              curIdx={curIdx}
-              isNext={c.id === nextCardId}
-              onOpen={() => onOpen(c.payload)}
-            />
+            <Card key={c.id} card={c} hideMonth onOpen={() => onOpen(c.payload)} />
           ))}
-        </ul>
+        </div>
       )}
     </div>
-  );
-}
-
-function CommEventRow({
-  card,
-  curIdx,
-  isNext,
-  onOpen,
-}: {
-  card: KitCard;
-  curIdx: number;
-  isNext: boolean;
-  onOpen: () => void;
-}) {
-  const a = animOf(card);
-  const isDone =
-    card.month !== null && monthStatusOf(allMonths[card.month - 1], curIdx) === "past";
-  const isLetsTalk = a?.type === "Let's talk";
-  return (
-    <li className="relative">
-      {isNext && (
-        <span className="absolute -top-2 right-2.5 z-10 rounded-[4px] bg-brand-accent px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] text-brand-dark">
-          Prochain
-        </span>
-      )}
-      <button
-        type="button"
-        onClick={onOpen}
-        className={`group mb-2.5 flex w-full gap-2.5 rounded-[10px] border p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60 ${
-          isDone
-            ? "border-transparent opacity-[0.45] hover:opacity-75"
-            : isNext
-              ? "border-brand-accent/20 bg-brand-accent/5"
-              : "border-transparent hover:border-white/5 hover:bg-white/[0.025]"
-        }`}
-      >
-        <div className="w-9 shrink-0 pt-0.5 text-center text-xl leading-none">
-          {isLetsTalk ? "📺" : "🎵"}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="mb-1.5 flex items-center gap-1.5">
-            <span
-              className={`rounded-[4px] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] ${
-                isLetsTalk ? "bg-brand-salmon/20 text-brand-salmon" : "bg-brand-accent/15 text-brand-accent"
-              }`}
-            >
-              {isLetsTalk ? "LET'S TALK" : "PLAYLIST"}
-            </span>
-            {card.isNew && (
-              <span className="rounded-[4px] bg-brand-accent px-[6px] py-[2px] text-[8.5px] font-bold uppercase tracking-[0.4px] text-brand-dark">
-                Nouveau
-              </span>
-            )}
-            {isDone && (
-              <span className="ml-auto flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-full bg-brand-accent/20 text-[9px] text-brand-accent" aria-hidden>
-                ✓
-              </span>
-            )}
-          </div>
-          <div className={`mb-1 text-[13px] font-medium leading-snug ${isDone ? "text-brand-muted-on-dark/70 line-through" : "text-brand-cream"}`}>
-            {cleanTitle(card.title)}
-          </div>
-          <div className="text-[10px] text-brand-muted-on-dark/70">{langFlag(card.lang)}</div>
-        </div>
-      </button>
-    </li>
   );
 }
 
