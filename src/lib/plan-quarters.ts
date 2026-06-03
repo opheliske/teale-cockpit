@@ -28,6 +28,28 @@ export type PlanQuarter = {
   status: "past" | "current" | "upcoming";
 };
 
+/**
+ * Builds the 4 quarters for a contract cycle shifted by `cycleOffset` years
+ * from the contract's start. cycleOffset = 0 returns the contract year
+ * containing today; -1 returns the previous 12-month cycle; +1 the next.
+ *
+ * Off-cycle contracts (e.g. starting in October) span two calendar years
+ * per cycle, so a "next year" view (cycleOffset = +1) is *not* the same as
+ * "next calendar year" — it's the next contract cycle.
+ */
+export function buildPlanQuartersForCycle(
+  contractStart: string | undefined,
+  cycleOffset: number,
+): PlanQuarter[] {
+  if (!contractStart || cycleOffset === 0) return buildPlanQuarters(contractStart);
+  const parts = contractStart.split("-");
+  if (parts.length < 2) return buildPlanQuarters(contractStart);
+  const year = parseInt(parts[0]);
+  if (Number.isNaN(year)) return buildPlanQuarters(contractStart);
+  const shifted = `${year + cycleOffset}-${parts.slice(1).join("-")}`;
+  return buildPlanQuarters(shifted);
+}
+
 export function buildPlanQuarters(contractStart: string | undefined): PlanQuarter[] {
   const today = new Date();
   const todayYear = today.getFullYear();

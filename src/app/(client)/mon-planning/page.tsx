@@ -20,7 +20,7 @@ import {
 import { workshops } from "@/app/(client)/catalogue-ateliers/data";
 import { lancementKits, animationItems, emailTopicKits } from "@/app/(client)/kits-communication/data";
 import { useActiveClient } from "@/lib/client-context";
-import { buildPlanQuarters, type PlanQuarter } from "@/lib/plan-quarters";
+import { buildPlanQuartersForCycle, type PlanQuarter } from "@/lib/plan-quarters";
 import { csmClientsStore } from "@/lib/csm-clients-store";
 
 // Today, computed once at module load — derives the month status (past /
@@ -459,7 +459,18 @@ export default function MonPlanningPage() {
     });
   }, [CLIENT_ID]);
 
-  const planQuarters = useMemo(() => buildPlanQuarters(contractStart), [contractStart]);
+  const [activeYear, setActiveYear] = useState<Year>(TODAY_YEAR);
+  // Contract cycle to display = year offset from today's cycle. The user's
+  // year switcher maps each calendar year to the contract cycle whose
+  // index is `activeYear - TODAY_YEAR` (current cycle for TODAY_YEAR,
+  // next cycle for TODAY_YEAR+1, etc.). For off-cycle contracts that
+  // straddle two calendar years, this is the only mapping that lines up
+  // with the CSM-side "current/next" distinction.
+  const cycleOffset = activeYear - TODAY_YEAR;
+  const planQuarters = useMemo(
+    () => buildPlanQuartersForCycle(contractStart, cycleOffset),
+    [contractStart, cycleOffset],
+  );
 
   const quarters: Quarter[] = useMemo(
     () =>
@@ -479,7 +490,6 @@ export default function MonPlanningPage() {
     [planQuarters],
   );
 
-  const [activeYear, setActiveYear] = useState<Year>(TODAY_YEAR);
   // Active quarter is derived from `userPickedQuarter` (manual click) OR
   // the contract's "current" quarter (auto). Storing only the override
   // avoids stale state when contractStart resolves async: the derived
@@ -526,15 +536,23 @@ export default function MonPlanningPage() {
     return targetsStore.subscribe(() => setClientLabels(targetsStore.getLabels(CLIENT_ID)));
   }, [CLIENT_ID]);
 
-  // Override quarter themes from CSM plan store when available
+  // Override quarter themes from the CSM plan store, picking the right
+  // bucket per active cycle: `themes` for the current contract year,
+  // `nextThemes` for the next, nothing for prev (the CSM doesn't track
+  // historical themes on this side).
   const displayQuarters = useMemo<Quarter[]>(() => {
     if (!storeState) return quarters;
+    const themesForCycle =
+      cycleOffset === 0 ? storeState.themes
+      : cycleOffset === 1 ? storeState.nextThemes
+      : undefined;
+    if (!themesForCycle) return quarters;
     return quarters.map((q) => ({
       ...q,
-      theme: storeState.themes[q.id] || q.theme,
-      subtitle: storeState.themes[q.id] ? "" : q.subtitle,
+      theme: themesForCycle[q.id] || q.theme,
+      subtitle: themesForCycle[q.id] ? "" : q.subtitle,
     }));
-  }, [storeState, quarters]);
+  }, [storeState, quarters, cycleOffset]);
 
   const activeQuarter =
     displayQuarters.find((q) => q.id === activeQuarterId) ?? displayQuarters[0];
@@ -542,10 +560,17 @@ export default function MonPlanningPage() {
   const yearEvents = useMemo(() => {
     const merged: Record<string, PlanEvent[]> = {};
 
-    // When the CSM has set up a plan, use it as the source of truth for 2026
-    if (storeState && activeYear === TODAY_YEAR) {
+    // Use the CSM plan as the source of truth for the current cycle and
+    // the next cycle (the only two the CSM-side editor maintains). Items
+    // carry `year?: "current" | "next"` — when absent we treat them as
+    // current for back-compat with rows saved before that column existed.
+    // Anything else (prev cycle) falls through to the bundled demo data.
+    const cycleItemYear = cycleOffset === 0 ? "current" : cycleOffset === 1 ? "next" : null;
+    if (storeState && cycleItemYear) {
       for (const month of allMonths) merged[month] = [];
       for (const item of storeState.items) {
+        const itemYear = item.year ?? "current";
+        if (itemYear !== cycleItemYear) continue;
         // Explicit month wins (set by the CSM plan editor). Otherwise fall
         // back to parsing the meta date, then to the quarter's first month.
         const parsed = metaToMonthYear(item.meta);
@@ -589,7 +614,7 @@ export default function MonPlanningPage() {
       merged[monthName].unshift(urgencyToPlanEvent(u, displayDate));
     }
     return merged;
-  }, [activeYear, urgencies, storeState, quarterFirstMonth]);
+  }, [activeYear, urgencies, storeState, quarterFirstMonth, cycleOffset]);
 
   const switchYear = (y: Year) => {
     setActiveYear(y);
