@@ -476,7 +476,7 @@ export default function SuiviClientsPage() {
     {/* ── Create client modal ── */}
     {showCreate && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-[3px]" onClick={() => { if (!creating && !created) setShowCreate(false); }}>
-        <div className="w-full max-w-[640px] overflow-hidden rounded-[22px] border border-[rgba(94,234,212,0.18)] bg-[#061a16] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="my-4 flex max-h-[calc(100vh-2rem)] w-full max-w-[640px] flex-col overflow-hidden rounded-[22px] border border-[rgba(94,234,212,0.18)] bg-[#061a16] shadow-2xl" onClick={(e) => e.stopPropagation()}>
 
           {/* Header */}
           <div className="flex items-center justify-between border-b border-[#1a3530] px-6 py-4">

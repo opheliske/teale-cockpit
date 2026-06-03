@@ -2809,7 +2809,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     {/* ── Plan item edit modal ── */}
     {editingPlanItem && (
       <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-[2px]" onClick={() => setEditingPlanItem(null)}>
-        <div className="w-full max-w-[460px] rounded-[18px] border border-[rgba(94,234,212,0.18)] bg-[#061a16] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="my-4 max-h-[calc(100vh-2rem)] w-full max-w-[460px] overflow-y-auto rounded-[18px] border border-[rgba(94,234,212,0.18)] bg-[#061a16] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
           {/* Header */}
           <div className="mb-5 flex items-center justify-between">
             <h3 className="text-[15px] font-semibold text-[#e8f5ef]">Détail du jalon</h3>
@@ -3133,7 +3133,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     {/* ── Nouvelle action modal ── */}
     {showNewAction && (
       <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-[2px]" onClick={() => setShowNewAction(false)}>
-        <div className="w-full max-w-[440px] rounded-[18px] border border-[rgba(94,234,212,0.18)] bg-[#061a16] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="my-4 max-h-[calc(100vh-2rem)] w-full max-w-[440px] overflow-y-auto rounded-[18px] border border-[rgba(94,234,212,0.18)] bg-[#061a16] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
           {/* Header */}
           <div className="mb-5 flex items-center justify-between">
             <div>
@@ -3216,7 +3216,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     {/* ── Edit client details modal ── */}
     {showEditDetails && editDraft && (
       <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-[2px]" onClick={() => setShowEditDetails(false)}>
-        <div className="w-full max-w-[620px] rounded-[20px] border border-[rgba(94,234,212,0.18)] bg-[#061a16] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="my-4 flex max-h-[calc(100vh-2rem)] w-full max-w-[620px] flex-col overflow-hidden rounded-[20px] border border-[rgba(94,234,212,0.18)] bg-[#061a16] shadow-2xl" onClick={(e) => e.stopPropagation()}>
           {/* Header */}
           <div className="flex items-center justify-between border-b border-[#1a3530] px-6 py-4">
             <h3 className="text-[15px] font-semibold text-[#e8f5ef]">Modifier les détails — {client.name}</h3>
@@ -3481,7 +3481,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     {/* ── Delete client confirmation ── */}
     {showDeleteConfirm && (
       <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-[2px]" onClick={() => !deleting && setShowDeleteConfirm(false)}>
-        <div className="w-full max-w-[400px] rounded-[18px] border border-[rgba(239,68,68,0.25)] bg-[#061a16] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="my-4 max-h-[calc(100vh-2rem)] w-full max-w-[400px] overflow-y-auto rounded-[18px] border border-[rgba(239,68,68,0.25)] bg-[#061a16] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
           <h3 className="text-[15px] font-semibold text-[#e8f5ef]">Supprimer {client.name} ?</h3>
           <p className="mt-2 text-[12px] leading-relaxed text-[#94a8a0]">
             Cette action est définitive. Le client et toutes ses données (plan, événements, documents, alertes) seront supprimés.
@@ -3524,7 +3524,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     {/* ── Health update modal ── */}
     {showHealthModal && (
       <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-[2px]" onClick={() => setShowHealthModal(false)}>
-        <div className="w-full max-w-[400px] rounded-[18px] border border-[rgba(168,232,149,0.18)] bg-[#061a16] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="my-4 max-h-[calc(100vh-2rem)] w-full max-w-[400px] overflow-y-auto rounded-[18px] border border-[rgba(168,232,149,0.18)] bg-[#061a16] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
           <div className="mb-5 flex items-center justify-between">
             <h3 className="text-[15px] font-semibold text-[#e8f5ef]">Mettre à jour l&apos;état de santé</h3>
             <button onClick={() => setShowHealthModal(false)} className="text-[18px] leading-none text-[#94a8a0] hover:text-[#e8f5ef]">×</button>
@@ -3576,7 +3576,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     {/* ── Note create/edit modal ── */}
     {noteModal && (
       <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-[2px]" onClick={() => setNoteModal(null)}>
-        <div className="w-full max-w-[460px] rounded-[18px] border border-[rgba(94,234,212,0.18)] bg-[#061a16] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="my-4 max-h-[calc(100vh-2rem)] w-full max-w-[460px] overflow-y-auto rounded-[18px] border border-[rgba(94,234,212,0.18)] bg-[#061a16] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
           <div className="mb-5 flex items-center justify-between">
             <h3 className="text-[15px] font-semibold text-[#e8f5ef]">{noteModal.mode === "create" ? "Nouvelle note" : "Modifier la note"}</h3>
             <button onClick={() => setNoteModal(null)} className="text-[18px] leading-none text-[#94a8a0] hover:text-[#e8f5ef]">×</button>
@@ -3638,7 +3638,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     {/* ── Document add/edit modal ── */}
     {showDocModal && (
       <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-[2px]" onClick={() => setShowDocModal(false)}>
-        <div className="w-full max-w-[460px] rounded-[18px] border border-[rgba(94,234,212,0.18)] bg-[#061a16] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="my-4 max-h-[calc(100vh-2rem)] w-full max-w-[460px] overflow-y-auto rounded-[18px] border border-[rgba(94,234,212,0.18)] bg-[#061a16] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
           <div className="mb-5 flex items-center justify-between">
             <h3 className="text-[15px] font-semibold text-[#e8f5ef]">{editingDoc ? "Modifier le document" : "Ajouter un document"}</h3>
             <button onClick={() => setShowDocModal(false)} className="grid h-7 w-7 place-items-center rounded-[8px] bg-[rgba(255,255,255,0.05)] text-[16px] text-[#94a8a0] hover:text-[#e8f5ef]">×</button>
@@ -3792,7 +3792,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     {/* ── Add from catalog modal ── */}
     {addPlanCtx && (
       <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-[2px]" onClick={() => setAddPlanCtx(null)}>
-        <div className="w-full max-w-[640px] rounded-[20px] border border-[rgba(94,234,212,0.18)] bg-[#061a16] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="my-4 max-h-[calc(100vh-2rem)] w-full max-w-[640px] overflow-y-auto rounded-[20px] border border-[rgba(94,234,212,0.18)] bg-[#061a16] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
 
           {/* Header */}
           <div className="mb-5 flex items-start justify-between">

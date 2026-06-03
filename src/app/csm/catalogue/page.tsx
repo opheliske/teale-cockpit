@@ -350,7 +350,7 @@ export default function CsmCataloguePage() {
         const w = workshops.find((x) => x.id === confirmDeleteId);
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setConfirmDeleteId(null)}>
-            <div className="w-full max-w-sm rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[#0a1f18] p-7" onClick={(e) => e.stopPropagation()}>
+            <div className="my-4 max-h-[calc(100vh-2rem)] w-full max-w-sm overflow-y-auto rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[#0a1f18] p-7" onClick={(e) => e.stopPropagation()}>
               <h2 className="text-base font-semibold text-[#e8f5ef]">Supprimer l&apos;atelier ?</h2>
               <p className="mt-2 text-[13px] text-[#94a8a0]">
                 <span className="font-medium text-[#e8f5ef]">{w?.title}</span> sera définitivement supprimé du catalogue et de la vue client.
