@@ -12,6 +12,7 @@ import { watchChanges } from "@/lib/sync";
 import { countAtelierConsumed, dayFromMeta, monthFromMeta, yearFromMeta } from "@/lib/plan-dates";
 import type { StoredPlanItem } from "@/lib/plan-store";
 import { useUnreadComments } from "@/lib/use-unread-comments";
+import { useNewCatalogueItems } from "@/lib/use-new-catalogue-items";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -356,6 +357,7 @@ export default function CsmHomePage() {
   // title and the client metadata at render time using the data already
   // loaded for the portfolio (planItemsByClient + allClients).
   const { unread: unreadCommentsCsm } = useUnreadComments("csm");
+  const newCatalogue = useNewCatalogueItems();
   const unreadInbox = useMemo(() => {
     const list: Array<{
       threadId: string;
@@ -430,7 +432,8 @@ export default function CsmHomePage() {
           { label: "Alertes & risques",key: "Alertes" as const },
         ]).map(({ label, key }) => {
           const isActive = activeTab === key;
-          const alertBadge = vigilanceCount + risqueCount + overdueActionsCount + qbrReminders.length + unreadInbox.length;
+          const catalogueNewCount = newCatalogue.ateliers.length + newCatalogue.kits.length;
+          const alertBadge = vigilanceCount + risqueCount + overdueActionsCount + qbrReminders.length + unreadInbox.length + catalogueNewCount;
           return (
             <button key={key} onClick={() => setActiveTab(key)}
               className={`-mb-px border-b-2 px-3.5 py-2.5 text-[13.5px] font-medium transition-colors ${
@@ -756,6 +759,54 @@ export default function CsmHomePage() {
       {/* ── Alertes & risques tab ── */}
       {activeTab === "Alertes" && (
         <div className="space-y-6">
+          {(newCatalogue.ateliers.length > 0 || newCatalogue.kits.length > 0) && (
+            <div>
+              <h2 className="mb-3 text-[14px] font-semibold text-brand-cream">
+                ✨ Nouveautés catalogue
+                <span className="ml-2 rounded-full bg-[rgba(94,234,212,0.18)] px-2 py-0.5 text-[11px] text-[#5eead4]">
+                  {newCatalogue.ateliers.length + newCatalogue.kits.length}
+                </span>
+              </h2>
+              <div className="overflow-hidden rounded-[12px] border border-[rgba(94,234,212,0.22)]">
+                <ul className="divide-y divide-[rgba(255,255,255,0.04)]">
+                  {newCatalogue.ateliers.length > 0 && (
+                    <li
+                      onClick={() => router.push("/csm/catalogue")}
+                      className="flex cursor-pointer items-center gap-3 bg-[rgba(94,234,212,0.04)] px-4 py-3 transition-colors hover:bg-[rgba(94,234,212,0.08)]"
+                    >
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[rgba(94,234,212,0.12)] text-[14px]">🎓</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[13px] font-semibold text-brand-cream">
+                          {newCatalogue.ateliers.length} nouveau{newCatalogue.ateliers.length > 1 ? "x" : ""} atelier{newCatalogue.ateliers.length > 1 ? "s" : ""}
+                        </div>
+                        <p className="mt-0.5 text-[11px] text-[rgba(232,245,239,0.45)]">Ajouté{newCatalogue.ateliers.length > 1 ? "s" : ""} au catalogue depuis votre dernière visite</p>
+                      </div>
+                      <span className="shrink-0 rounded border border-[rgba(94,234,212,0.45)] bg-[rgba(94,234,212,0.1)] px-2.5 py-1 text-[11px] font-semibold text-[#5eead4]">
+                        Voir →
+                      </span>
+                    </li>
+                  )}
+                  {newCatalogue.kits.length > 0 && (
+                    <li
+                      onClick={() => router.push("/csm/kits")}
+                      className="flex cursor-pointer items-center gap-3 bg-[rgba(94,234,212,0.04)] px-4 py-3 transition-colors hover:bg-[rgba(94,234,212,0.08)]"
+                    >
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[rgba(94,234,212,0.12)] text-[14px]">📦</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[13px] font-semibold text-brand-cream">
+                          {newCatalogue.kits.length} nouveau{newCatalogue.kits.length > 1 ? "x" : ""} kit{newCatalogue.kits.length > 1 ? "s" : ""} de communication
+                        </div>
+                        <p className="mt-0.5 text-[11px] text-[rgba(232,245,239,0.45)]">Ajouté{newCatalogue.kits.length > 1 ? "s" : ""} à la bibliothèque depuis votre dernière visite</p>
+                      </div>
+                      <span className="shrink-0 rounded border border-[rgba(94,234,212,0.45)] bg-[rgba(94,234,212,0.1)] px-2.5 py-1 text-[11px] font-semibold text-[#5eead4]">
+                        Voir →
+                      </span>
+                    </li>
+                  )}
+                </ul>
+              </div>
+            </div>
+          )}
           {unreadInbox.length > 0 && (
             <div>
               <h2 className="mb-3 text-[14px] font-semibold text-brand-cream">

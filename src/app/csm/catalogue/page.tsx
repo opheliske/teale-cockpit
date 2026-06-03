@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useRef, type ReactNode } from "react";
 import { themes, type Workshop, type WorkshopKitFile } from "@/app/(client)/catalogue-ateliers/data";
 import { useWorkshops } from "@/lib/workshops-store";
 import { uploadKitFile, openKitFile } from "@/lib/storage";
+import { setSeenIds } from "@/lib/catalogue-read-state";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -145,6 +146,10 @@ function formToWorkshop(form: FormState, existingId?: string): Workshop {
 
 export default function CsmCataloguePage() {
   const { workshops, addWorkshop, updateWorkshop, deleteWorkshop } = useWorkshops();
+  // Visiter le catalogue clear le badge "nouveaux ateliers" sur la home CSM.
+  useEffect(() => {
+    if (workshops.length > 0) setSeenIds("ateliers", workshops.map((w) => w.id));
+  }, [workshops]);
 
   const [search, setSearch] = useState("");
   const [activeThemeId, setActiveThemeId] = useState<string | null>(null);

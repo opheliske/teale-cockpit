@@ -5,6 +5,7 @@ import { useKitsStore, type LancementKit, type AnimationItem, type EmailTopicKit
 import { VISUEL_CATEGORIES, type VisuelCategory } from "@/app/(client)/kits-communication/data";
 import { uploadKitFile, getKitFileUrl, kitFileLabel, openKitFile } from "@/lib/storage";
 import { useWorkshops, themes as workshopThemes, type Workshop } from "@/lib/workshops-store";
+import { setSeenIds } from "@/lib/catalogue-read-state";
 
 // ─── constants ───────────────────────────────────────────────────────────────
 
@@ -262,6 +263,16 @@ export default function CsmKitsPage() {
     addVisuelKit, updateVisuelKit, deleteVisuelKit,
   } = useKitsStore();
   const { workshops } = useWorkshops();
+  // Visiter /csm/kits clear le badge "nouveaux kits" sur la home CSM.
+  useEffect(() => {
+    const ids = [
+      ...lancementKits.map((k) => `lan:${k.id}`),
+      ...animationItems.map((a) => `ani:${a.id}`),
+      ...emailTopicKits.map((e) => `email:${e.id}`),
+      ...visuelKits.map((v) => `vis:${v.id}`),
+    ];
+    if (ids.length > 0) setSeenIds("kits", ids);
+  }, [lancementKits, animationItems, emailTopicKits, visuelKits]);
 
   const [search, setSearch] = useState("");
   const [activeTheme, setActiveTheme] = useState<ThemeId>("animation");
