@@ -7,6 +7,7 @@ import { impersonationStore } from "@/lib/impersonation-store";
 import { type PlanItem, type PlanItemFile, type PlanItemType, type Note, type PrioAction, type HistoryEvent, type ContractFormule, type ProduitTeale, type Statut, type ChecklistItem } from "@/lib/clients-data";
 import { csmClientsStore, toClient, toClientDetail } from "@/lib/csm-clients-store";
 import { useCsmProfiles } from "@/lib/use-csm-profiles";
+import { useClientContacts } from "@/lib/use-client-contacts";
 import ClientDetailSkeleton from "./ClientDetailSkeleton";
 import { clientActionsStore } from "@/lib/client-actions-store";
 import { notesStore } from "@/lib/notes-store";
@@ -486,6 +487,7 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [localStatut, setLocalStatut] = useState<Statut>(() => client?.statut ?? "SAIN");
   const [showStatutDropdown, setShowStatutDropdown] = useState(false);
   const { profiles: csmProfiles } = useCsmProfiles();
+  const { contacts: clientContacts, loading: contactsLoading } = useClientContacts(id);
   const { workshops: workshopList } = useWorkshops();
   const { lancementKits, animationItems, emailTopicKits } = useKitsStore();
   const planItemSeq = useRef(1_000_000_000);
@@ -1952,6 +1954,64 @@ export default function ClientDetailView({ id }: { id: string }) {
                 );
               })}
             </div>
+          </div>
+
+          {/* ── Comptes & dernière connexion ── */}
+          <div className="mt-8">
+            <header className="mb-4 flex items-baseline justify-between">
+              <div>
+                <h3 className="text-[16px] font-medium tracking-[-0.2px] text-[#e8f5ef]">
+                  Comptes côté client
+                </h3>
+                <p className="mt-0.5 text-[12px] text-[#94a8a0]">
+                  Contacts ayant accès à l&apos;espace client.
+                </p>
+              </div>
+              {!contactsLoading && (
+                <span className="text-[11px] uppercase tracking-[0.5px] text-[#6b7c75]">
+                  {clientContacts.length} compte{clientContacts.length > 1 ? "s" : ""}
+                </span>
+              )}
+            </header>
+            {contactsLoading ? (
+              <p className="rounded-[14px] border border-[rgba(255,255,255,0.06)] bg-[rgba(14,37,32,0.30)] px-4 py-5 text-center text-[12px] text-[#6b7c75]">
+                Chargement…
+              </p>
+            ) : clientContacts.length === 0 ? (
+              <p className="rounded-[14px] border border-dashed border-[#1a3530] bg-[rgba(14,37,32,0.20)] px-4 py-5 text-center text-[12px] italic text-[#6b7c75]">
+                Aucun compte client provisionné.
+              </p>
+            ) : (
+              <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                {clientContacts.map((c) => (
+                  <li
+                    key={c.id}
+                    className="flex items-start gap-3 rounded-[12px] border border-[#1a3530] bg-[rgba(14,37,32,0.40)] px-4 py-3"
+                  >
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[rgba(94,234,212,0.12)] text-[12px] font-semibold uppercase text-[#5eead4]">
+                      {(c.full_name || c.email).slice(0, 2)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[13px] font-medium text-[#e8f5ef]">
+                        {c.full_name || c.email.split("@")[0]}
+                      </div>
+                      <a
+                        href={`mailto:${c.email}`}
+                        className="block truncate text-[11.5px] text-[#94a8a0] hover:text-[#5eead4]"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {c.email}
+                      </a>
+                      <div className="mt-1 text-[10.5px] uppercase tracking-[0.4px] text-[#6b7c75]">
+                        {c.last_sign_in_at
+                          ? `Dernière connexion · ${new Date(c.last_sign_in_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}`
+                          : "Jamais connecté"}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </section>}
 
