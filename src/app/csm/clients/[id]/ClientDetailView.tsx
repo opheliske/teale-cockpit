@@ -27,7 +27,7 @@ type CatalogItem = {
 };
 import { planStore, type StoredPlanItem } from "@/lib/plan-store";
 import { docsStore, type StoredDocument, type StoredDocumentFile } from "@/lib/docs-store";
-import { uploadClientFile, openClientFile } from "@/lib/storage";
+import { uploadClientFile, openClientFile, openKitFile } from "@/lib/storage";
 import { csmEventsStore, parseFrDateWeekday } from "@/lib/csm-events-store";
 import { healthStore, type HealthEntry, type HealthStatut } from "@/lib/health-store";
 import { targetsStore, type TargetLabel, LABEL_COLORS } from "@/lib/targets-store";
@@ -421,6 +421,7 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [editPlanCancelled, setEditPlanCancelled] = useState(false);
   const [editPlanChecklist, setEditPlanChecklist] = useState<ChecklistItem[]>([]);
   const [newChecklistText, setNewChecklistText] = useState("");
+  const [editPlanWorkshopKit, setEditPlanWorkshopKit] = useState<NonNullable<PlanItem["workshopKitFiles"]>>([]);
   const [planFilter, setPlanFilter] = useState<string>("Tous");
   const [activeSection, setActiveSection] = useState<Section>("big-picture");
   const [planYear, setPlanYear] = useState<"prev" | "current" | "next">("current");
@@ -859,6 +860,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     setEditPlanCancelled(eff.cancelled ?? false);
     setEditPlanChecklist(eff.checklist ?? []);
     setNewChecklistText("");
+    setEditPlanWorkshopKit(eff.workshopKitFiles ?? []);
     setPlanItemComments(commentsStore.getByThread(String(eff.id)));
     setCommentDraft("");
   };
@@ -894,6 +896,10 @@ export default function ClientDetailView({ id }: { id: string }) {
         // keeps the persisted shape clean.
         cancelled: editPlanType === "atelier" ? editPlanCancelled : undefined,
         checklist: editPlanChecklist.length ? editPlanChecklist : undefined,
+        workshopKitFiles:
+          editPlanType === "atelier" && editPlanWorkshopKit.length
+            ? editPlanWorkshopKit
+            : undefined,
       },
     }));
     setEditingPlanItem(null);
@@ -3116,6 +3122,92 @@ export default function ClientDetailView({ id }: { id: string }) {
                 </button>
               </div>
             </div>
+
+            {/* Kit de communication de l'atelier — uniquement pour le type
+                "atelier". Pré-attaché à la création (recopie du
+                communicationKit du workshop) ; le CSM peut retirer des
+                fichiers ou ré-attacher le kit complet du workshop si le
+                catalogue a été mis à jour entre-temps. */}
+            {editPlanType === "atelier" && (() => {
+              // Best-effort lookup du workshop d'origine : match par titre,
+              // sinon par themeId. Si plusieurs workshops partagent le même
+              // themeId, on prend le premier — suffisant pour proposer le
+              // bouton "Recharger" tant que la liste a au moins un kit.
+              const sourceWorkshop =
+                workshopList.find((w) => w.title === editPlanTitle.trim()) ??
+                (editingPlanItem.themeId
+                  ? workshopList.find((w) => w.themeId === editingPlanItem.themeId && (w.communicationKit?.length ?? 0) > 0)
+                  : undefined);
+              const sourceKit = sourceWorkshop?.communicationKit ?? [];
+              return (
+                <div>
+                  <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">
+                    Kit de communication de l&apos;atelier
+                    <span className="ml-1.5 normal-case font-normal text-[rgba(232,245,239,0.35)]">
+                      · visible et téléchargeable par le client
+                    </span>
+                  </label>
+                  {editPlanWorkshopKit.length > 0 ? (
+                    <ul className="mb-2 space-y-1.5">
+                      {editPlanWorkshopKit.map((f) => (
+                        <li
+                          key={f.id}
+                          className="flex items-center gap-2 rounded-[8px] border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.02)] px-2.5 py-2"
+                        >
+                          <span className="shrink-0 text-[14px]">📎</span>
+                          <span className="min-w-0 flex-1 truncate text-[12.5px] text-[#e8f5ef]">{f.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => void openKitFile(f.path, f.name)}
+                            className="shrink-0 text-[11px] font-semibold text-[#5eead4] hover:text-[#84d4a6]"
+                          >
+                            Aperçu
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditPlanWorkshopKit((prev) => prev.filter((x) => x.id !== f.id))}
+                            aria-label="Retirer ce fichier"
+                            className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] text-[#6b7c75] hover:bg-[rgba(230,170,153,0.12)] hover:text-[#E6AA99]"
+                          >
+                            ×
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mb-2 rounded-[8px] border border-dashed border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.02)] px-3 py-2 text-[12px] italic text-[#6b7c75]">
+                      Aucun fichier joint pour le moment.
+                    </p>
+                  )}
+                  {sourceKit.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditPlanWorkshopKit(
+                          sourceKit.map((f) => ({
+                            id: f.id,
+                            path: f.path,
+                            name: f.name,
+                            mimeType: f.mimeType,
+                          })),
+                        )
+                      }
+                      className="inline-flex items-center gap-1.5 rounded-[8px] border border-[rgba(94,234,212,0.3)] bg-[rgba(94,234,212,0.06)] px-3 py-1.5 text-[11.5px] font-semibold text-[#5eead4] transition-colors hover:bg-[rgba(94,234,212,0.12)]"
+                    >
+                      📎 {editPlanWorkshopKit.length > 0 ? "Recharger le kit du workshop" : `Joindre le kit du workshop (${sourceKit.length} fichier${sourceKit.length > 1 ? "s" : ""})`}
+                    </button>
+                  ) : (
+                    <p className="text-[11px] italic text-[#6b7c75]">
+                      Aucun kit n&apos;est attaché à ce workshop dans le catalogue.{" "}
+                      <a href="/csm/catalogue" className="text-[#5eead4] hover:underline">
+                        Ouvrir le catalogue
+                      </a>{" "}
+                      pour en ajouter.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Étiquettes */}
             {clientLabels.length > 0 && (
