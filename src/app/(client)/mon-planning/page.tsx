@@ -97,10 +97,12 @@ const QUARTER_GRADIENTS: Record<QuarterId, { gradient: string; emoji: string }> 
   Q4: { gradient: "from-[#8fb6c7] to-[#2d6b62]", emoji: "🔄" },
 };
 
-function quarterStatus(q: Quarter): QuarterStatus {
-  // Uses the pre-computed status on each PlanQuarterMonth — resolved at render time
-  // from planQuarters which is derived from contractStart
-  const statuses = q.months.map((m) => monthStatus(m, new Date().getFullYear()));
+function quarterStatus(q: Quarter, year: number): QuarterStatus {
+  // Status is relative to the year being viewed — past/current/upcoming
+  // shift when the user navigates to a previous or next year, so an
+  // already-passed quarter on the current year shows as "À venir" again
+  // when re-viewed under the next year tab.
+  const statuses = q.months.map((m) => monthStatus(m, year));
   if (statuses.every((s) => s === "past")) return "past";
   if (statuses.includes("current")) return "current";
   return "upcoming";
@@ -425,8 +427,8 @@ function parseDateLabel(dateStr: string): { day: string; mo: string } | null {
   return { day, mo };
 }
 
-function quarterProgress(q: Quarter): number {
-  const statuses = q.months.map((m) => monthStatus(m, new Date().getFullYear()));
+function quarterProgress(q: Quarter, year: number): number {
+  const statuses = q.months.map((m) => monthStatus(m, year));
   if (statuses.every((s) => s === "past")) return 100;
   if (statuses.every((s) => s === "upcoming")) return 0;
   const past = statuses.filter((s) => s === "past").length;
@@ -745,7 +747,7 @@ export default function MonPlanningPage() {
           {/* Year switcher + quarter tabs */}
           <div className="mb-7 grid items-center gap-6" style={{ gridTemplateColumns: "auto 1fr" }}>
             <YearSwitcher year={activeYear} onChange={switchYear} />
-            <QuarterTabs active={activeQuarterId} onSelect={handlePickQuarter} quarterList={displayQuarters} />
+            <QuarterTabs active={activeQuarterId} onSelect={handlePickQuarter} quarterList={displayQuarters} year={activeYear} />
           </div>
 
           {/* Section header — affiche les mois du trimestre actif plutôt que
@@ -873,17 +875,19 @@ function QuarterTabs({
   active,
   onSelect,
   quarterList,
+  year,
 }: {
   active: QuarterId;
   onSelect: (id: QuarterId) => void;
   quarterList: Quarter[];
+  year: Year;
 }) {
   return (
     <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
       {quarterList.map((q) => {
         const isActive = q.id === active;
-        const status = quarterStatus(q);
-        const progress = quarterProgress(q);
+        const status = quarterStatus(q, year);
+        const progress = quarterProgress(q, year);
         const monthsAbbr = q.months
           .map((m) => monthLabel[m]?.slice(0, 3) ?? m.slice(0, 3))
           .join(" · ");
@@ -946,8 +950,8 @@ function FocusBar({
   qUpcoming: number;
   qDone: number;
 }) {
-  const status = quarterStatus(quarter);
-  const progress = quarterProgress(quarter);
+  const status = quarterStatus(quarter, year);
+  const progress = quarterProgress(quarter, year);
   return (
     <div className="relative mb-7 overflow-hidden rounded-2xl border border-[rgba(94,234,212,0.22)] px-7 py-5"
       style={{ background: "linear-gradient(135deg, rgba(94,234,212,0.12) 0%, rgba(94,234,212,0.03) 100%)" }}
