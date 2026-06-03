@@ -201,7 +201,6 @@ function typeStyle(t: string): string {
   return "bg-brand-accent/15 text-brand-accent";
 }
 
-type CollectionId = "all" | "new" | "month" | "managers" | "lancement";
 type SortId = "relevance" | "new" | "az" | "period";
 
 function toggle<T>(setter: Dispatch<SetStateAction<Set<T>>>, val: T) {
@@ -246,7 +245,6 @@ export default function KitsCommunicationPage() {
   }, []);
 
   const [q, setQ] = useState("");
-  const [collection, setCollection] = useState<CollectionId>("all");
   const [types, setTypes] = useState<Set<KitTypeId>>(new Set());
   const [themesSel, setThemesSel] = useState<Set<string>>(new Set());
   const [auds, setAuds] = useState<Set<AudId>>(new Set());
@@ -256,7 +254,6 @@ export default function KitsCommunicationPage() {
   const [activeCard, setActiveCard] = useState<ActiveCard | null>(null);
 
   const currentMonth = useMemo(() => new Date().getMonth() + 1, []);
-  const currentMonthName = monthName(currentMonth);
 
   const cards = useMemo<KitCard[]>(() => {
     const isNew = (key: string) => newSet.has(key);
@@ -388,48 +385,10 @@ export default function KitsCommunicationPage() {
     [cards]
   );
 
-  const collectionCount = (id: CollectionId): number => {
-    switch (id) {
-      case "new":
-        return cards.filter((c) => c.isNew).length;
-      case "month":
-        return cards.filter((c) => c.month === currentMonth).length;
-      case "managers":
-        return cards.filter((c) => c.audiences.includes("managers")).length;
-      case "lancement":
-        return cards.filter((c) => c.type === "lancement").length;
-      default:
-        return cards.length;
-    }
-  };
-
-  const collections: { id: CollectionId; icon: string; label: string }[] = [
-    { id: "all", icon: "🗂️", label: "Tous les kits" },
-    { id: "new", icon: "✨", label: "Nouveautés" },
-    { id: "month", icon: "📍", label: `Ce mois-ci · ${currentMonthName}` },
-    { id: "managers", icon: "🧭", label: "Pour managers" },
-    { id: "lancement", icon: "🚀", label: "Lancement teale" },
-  ];
-
   // ── Filtrage + tri ──────────────────────────────────────────────────────────
   const visible = useMemo(() => {
     const query = q.trim().toLowerCase();
-    const matchesCollection = (c: KitCard) => {
-      switch (collection) {
-        case "new":
-          return c.isNew;
-        case "month":
-          return c.month === currentMonth;
-        case "managers":
-          return c.audiences.includes("managers");
-        case "lancement":
-          return c.type === "lancement";
-        default:
-          return true;
-      }
-    };
     const list = cards.filter((c) => {
-      if (!matchesCollection(c)) return false;
       if (types.size && !types.has(c.type)) return false;
       if (themesSel.size && !themesSel.has(c.theme)) return false;
       if (auds.size && !c.audiences.some((a) => auds.has(a))) return false;
@@ -445,7 +404,7 @@ export default function KitsCommunicationPage() {
         (x, y) => (x.month ?? 99) - (y.month ?? 99) || x.title.localeCompare(y.title, "fr")
       );
     return sorted;
-  }, [cards, q, collection, types, themesSel, auds, langs, sort, currentMonth]);
+  }, [cards, q, types, themesSel, auds, langs, sort]);
 
   // Les temps forts vont dans la section calendrier (en haut) ; les autres kits
   // dans la grille en dessous.
@@ -453,11 +412,10 @@ export default function KitsCommunicationPage() {
   const otherCards = useMemo(() => visible.filter((c) => c.type !== "tempsfort"), [visible]);
 
   const activeFacetCount = types.size + themesSel.size + auds.size + langs.size;
-  const hasActiveFilters = activeFacetCount > 0 || !!q.trim() || collection !== "all";
+  const hasActiveFilters = activeFacetCount > 0 || !!q.trim();
 
   const resetFilters = () => {
     setQ("");
-    setCollection("all");
     setTypes(new Set());
     setThemesSel(new Set());
     setAuds(new Set());
@@ -465,16 +423,8 @@ export default function KitsCommunicationPage() {
   };
 
   // ── Pastilles de filtres actifs ─────────────────────────────────────────────
-  const collectionLabel = (id: CollectionId) =>
-    collections.find((c) => c.id === id)?.label ?? "";
   const pills: { key: string; label: string; onRemove: () => void }[] = [];
   if (q.trim()) pills.push({ key: "q", label: `« ${q.trim()} »`, onRemove: () => setQ("") });
-  if (collection !== "all")
-    pills.push({
-      key: "col",
-      label: collectionLabel(collection),
-      onRemove: () => setCollection("all"),
-    });
   types.forEach((t) =>
     pills.push({ key: `t-${t}`, label: TYPE_META[t].label, onRemove: () => toggle(setTypes, t) })
   );
@@ -599,38 +549,6 @@ export default function KitsCommunicationPage() {
               </kbd>
             )}
           </div>
-        </div>
-
-        {/* Collections */}
-        <div className="mt-4 flex flex-wrap gap-2.5">
-          {collections.map((col) => {
-            const on = collection === col.id;
-            return (
-              <button
-                key={col.id}
-                type="button"
-                onClick={() => setCollection(col.id)}
-                aria-pressed={on}
-                className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60 ${
-                  on
-                    ? "border-brand-accent bg-brand-accent/15 text-brand-accent"
-                    : "border-brand-border-dark bg-brand-surface text-brand-cream hover:border-brand-accent/40 hover:bg-brand-surface/70"
-                }`}
-              >
-                <span aria-hidden>{col.icon}</span>
-                {col.label}
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                    on
-                      ? "bg-brand-accent/20 text-brand-accent"
-                      : "bg-brand-dark/60 text-brand-muted-on-dark"
-                  }`}
-                >
-                  {collectionCount(col.id)}
-                </span>
-              </button>
-            );
-          })}
         </div>
 
         {/* Corps : rail + résultats */}
