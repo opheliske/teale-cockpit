@@ -7,9 +7,16 @@ import { csmClientsStore, type StoredCsmClient } from "@/lib/csm-clients-store";
 import { planStore, type StoredPlanState } from "@/lib/plan-store";
 import { csmEventsStore, type CsmEvent } from "@/lib/csm-events-store";
 import { docsStore, type StoredDocument } from "@/lib/docs-store";
+import { useKitsStore } from "@/lib/kits-store";
 import { openClientFile } from "@/lib/storage";
 import { countAtelierConsumed } from "@/lib/plan-dates";
 import { buildPlanQuarters } from "@/lib/plan-quarters";
+
+// Strip leading emojis / punctuation so the title reads cleanly in the compact
+// list — mirrors the same util in the kits-communication page.
+function cleanTitle(title: string): string {
+  return title.replace(/^[^\p{L}\p{N}]+/u, "").trim();
+}
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -43,6 +50,7 @@ export default function ClientHomePage() {
   const [plan, setPlan] = useState<StoredPlanState | null>(() => planStore.getState());
   const [events, setEvents] = useState<CsmEvent[]>(() => csmEventsStore.getEvents());
   const [docs, setDocs] = useState<StoredDocument[]>(() => docsStore.getDocs());
+  const { animationItems } = useKitsStore();
 
   useEffect(() => {
     const unsubClients = csmClientsStore.subscribe(() => {
@@ -88,8 +96,6 @@ export default function ClientHomePage() {
   // Memo so its identity is stable across renders — otherwise the
   // useMemo deriving `ateliersConsommes` below would re-run every render.
   const planItems = useMemo(() => plan?.items ?? [], [plan]);
-  const planDone = planItems.filter((i) => i.done).length;
-  const planPct = planItems.length > 0 ? Math.round((planDone / planItems.length) * 100) : 0;
 
   const atelierTotal = company?.atelierTotal ?? 0;
   // Same semantics as the CSM detail view: an atelier counts as consumed
@@ -126,6 +132,26 @@ export default function ClientHomePage() {
     const year = currentPlanQuarter.months[0]?.year;
     return `${labels.join(" · ")}${year ? ` ${year}` : ""}`;
   }, [currentPlanQuarter]);
+  // "Temps forts mensuels" (kits_animation) for the current contract quarter.
+  // Sorted in the quarter's month order so the next month surfaces first.
+  // PlanQuarterMonth exposes `.en` which matches the animationItem.month
+  // values (English month names).
+  const currentQuarterComms = useMemo(() => {
+    if (!currentPlanQuarter) return [];
+    const order = currentPlanQuarter.months.map((m) => m.en);
+    const monthsEn = new Set(order);
+    return animationItems
+      .filter((a) => monthsEn.has(a.month))
+      .sort((a, b) => order.indexOf(a.month) - order.indexOf(b.month));
+  }, [animationItems, currentPlanQuarter]);
+  const monthLabelByEn = useMemo(() => {
+    const m: Record<string, string> = {};
+    if (currentPlanQuarter) {
+      for (const month of currentPlanQuarter.months) m[month.en] = month.label;
+    }
+    return m;
+  }, [currentPlanQuarter]);
+
   // Per-quarter overview rendered on the home — themes + progress for the
   // 4 quarters of the contract year. The user wanted a snapshot of "where
   // the project is" without leaving the home page.
@@ -193,12 +219,11 @@ export default function ClientHomePage() {
         </header>
 
         {/* ── KPI row ── */}
-        <div className="mb-7 grid grid-cols-4 gap-3">
+        <div className="mb-7 grid grid-cols-3 gap-3">
           <StatCard
             label="Ateliers consommés"
             value={`${ateliersConsommes} / ${atelierTotal}`}
           />
-          <StatCard label="Avancement du plan" value={`${planPct} %`} />
           <StatCard
             label="Prochain rendez-vous"
             value={upcoming[0]?.date ?? "—"}
@@ -328,6 +353,55 @@ export default function ClientHomePage() {
                       </div>
                     </li>
                   ))}
+                </ul>
+              )}
+            </section>
+
+            {/* Communications du trimestre — aperçu compact des Temps forts
+                mensuels (kits_animation) pour le trimestre en cours. */}
+            <section className="rounded-[14px] border border-[#1a3530] bg-[rgba(14,37,32,0.4)] p-5">
+              <div className="mb-3 flex items-baseline justify-between gap-3">
+                <h2 className="text-[15px] font-semibold text-[#e8f5ef]">
+                  Communications du trimestre
+                  {currentQuarterComms.length > 0 && (
+                    <span className="ml-2 text-[12px] font-normal text-[#94a8a0]">
+                      {currentQuarterComms.length > 4 ? `4 sur ${currentQuarterComms.length}` : currentQuarterComms.length}
+                    </span>
+                  )}
+                </h2>
+                <Link href="/kits-communication" className="shrink-0 text-[12px] text-[#5eead4] hover:underline">
+                  Voir tout →
+                </Link>
+              </div>
+              {currentQuarterComms.length === 0 ? (
+                <p className="py-4 text-center text-[13px] text-[#94a8a0]">
+                  Aucune communication ce trimestre.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {currentQuarterComms.slice(0, 4).map((a) => {
+                    const isLetsTalk = a.type.toLowerCase().includes("let's talk");
+                    return (
+                      <li key={a.id}>
+                        <Link
+                          href="/kits-communication"
+                          className="flex items-center gap-2.5 rounded-[10px] border border-[#1a3530] bg-[rgba(255,255,255,0.02)] px-3 py-2 transition-colors hover:border-[rgba(94,234,212,0.3)]"
+                        >
+                          <span className="shrink-0 text-sm">{isLetsTalk ? "📺" : "🎵"}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-[13px] font-medium text-[#e8f5ef]">
+                              {cleanTitle(a.title)}
+                            </div>
+                            <div className="text-[11px] text-[#94a8a0]">
+                              {monthLabelByEn[a.month] ?? a.month}
+                              {" · "}
+                              {isLetsTalk ? "Let's talk" : "Playlist"}
+                            </div>
+                          </div>
+                        </Link>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </section>
