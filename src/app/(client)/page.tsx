@@ -10,7 +10,7 @@ import { docsStore, type StoredDocument } from "@/lib/docs-store";
 import { useKitsStore } from "@/lib/kits-store";
 import { openClientFile } from "@/lib/storage";
 import { countAtelierConsumed } from "@/lib/plan-dates";
-import { buildPlanQuarters } from "@/lib/plan-quarters";
+import { buildPlanQuarters, calendarQuarter } from "@/lib/plan-quarters";
 import { useUnreadComments } from "@/lib/use-unread-comments";
 
 // Strip leading emojis / punctuation so the title reads cleanly in the compact
@@ -176,7 +176,11 @@ export default function ClientHomePage() {
       Q1: "🌱", Q2: "📈", Q3: "📊", Q4: "🔄",
     };
     return planQuarters.map((q) => {
-      const items = planItems.filter((i) => i.quarter === q.id);
+      // Calendar bucketing : a stored item is shown under the quarter whose
+      // months match its `month` value (Q1 = Jan-Mar, etc.), not the stored
+      // `quarter` field — which may be stale on items created under an
+      // off-cycle contract anchor.
+      const items = planItems.filter((i) => calendarQuarter(i.month, i.quarter) === q.id);
       const total = items.length;
       const done = items.filter((i) => i.done).length;
       const pct = total > 0 ? Math.round((done / total) * 100) : 0;

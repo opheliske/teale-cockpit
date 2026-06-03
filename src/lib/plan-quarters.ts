@@ -28,61 +28,54 @@ export type PlanQuarter = {
   status: "past" | "current" | "upcoming";
 };
 
+type QId = "Q1" | "Q2" | "Q3" | "Q4";
+
 /**
- * Builds the 4 quarters for a contract cycle shifted by `cycleOffset` years
- * from the contract's start. cycleOffset = 0 returns the contract year
- * containing today; -1 returns the previous 12-month cycle; +1 the next.
- *
- * Off-cycle contracts (e.g. starting in October) span two calendar years
- * per cycle, so a "next year" view (cycleOffset = +1) is *not* the same as
- * "next calendar year" — it's the next contract cycle.
+ * Returns the calendar quarter of a month index (0=Jan…11=Dec). Q1 = Jan/Feb/Mar.
+ * When `month` is undefined, falls back to `storedQuarter` if it looks like a
+ * valid quarter id, otherwise defaults to Q1. Used to bucket plan items in a
+ * calendar-aligned view independently of how they were created (e.g. an item
+ * originally placed under a contract-anchored Q1 keeps its `month` but gets
+ * re-bucketed into the matching calendar quarter).
  */
-export function buildPlanQuartersForCycle(
-  contractStart: string | undefined,
-  cycleOffset: number,
-): PlanQuarter[] {
-  if (!contractStart || cycleOffset === 0) return buildPlanQuarters(contractStart);
-  const parts = contractStart.split("-");
-  if (parts.length < 2) return buildPlanQuarters(contractStart);
-  const year = parseInt(parts[0]);
-  if (Number.isNaN(year)) return buildPlanQuarters(contractStart);
-  const shifted = `${year + cycleOffset}-${parts.slice(1).join("-")}`;
-  return buildPlanQuarters(shifted);
+export function calendarQuarter(month: number | undefined, storedQuarter?: string): QId {
+  if (typeof month === "number" && Number.isFinite(month)) {
+    if (month < 3)  return "Q1";
+    if (month < 6)  return "Q2";
+    if (month < 9)  return "Q3";
+    return "Q4";
+  }
+  const q = (storedQuarter ?? "").toUpperCase().replace(/^NEXT-/, "");
+  if (q === "Q1" || q === "Q2" || q === "Q3" || q === "Q4") return q;
+  return "Q1";
 }
 
-export function buildPlanQuarters(contractStart: string | undefined): PlanQuarter[] {
+/**
+ * Builds the 4 calendar quarters of the given `year` (defaults to today).
+ * Q1 = January/February/March, regardless of the contract start date. The
+ * status (past/current/upcoming) of each month is computed against today.
+ */
+export function buildPlanQuarters(_contractStart: string | undefined, year?: number): PlanQuarter[] {
   const today = new Date();
   const todayYear = today.getFullYear();
   const todayNum = today.getMonth(); // 0-indexed
-
-  let startNum = 0;
-  let startYear = todayYear;
-  if (contractStart) {
-    const parts = contractStart.split("-");
-    if (parts.length >= 2) {
-      startYear = parseInt(parts[0]) || todayYear;
-      startNum  = (parseInt(parts[1]) || 1) - 1;
-    }
-  }
+  const displayYear = year ?? todayYear;
 
   return (["Q1", "Q2", "Q3", "Q4"] as const).map((qId, qi) => {
     const months: PlanQuarterMonth[] = [0, 1, 2].map((mi) => {
-      const offset = qi * 3 + mi;
-      const abs = startNum + offset;
-      const num = abs % 12;
-      const year = startYear + Math.floor(abs / 12);
+      const num = qi * 3 + mi;
       const info = MONTHS[num];
 
       let status: "past" | "current" | "upcoming";
-      if (year < todayYear || (year === todayYear && num < todayNum)) {
+      if (displayYear < todayYear || (displayYear === todayYear && num < todayNum)) {
         status = "past";
-      } else if (year === todayYear && num === todayNum) {
+      } else if (displayYear === todayYear && num === todayNum) {
         status = "current";
       } else {
         status = "upcoming";
       }
 
-      return { key: info.key, label: info.label, en: info.en, num, year, status };
+      return { key: info.key, label: info.label, en: info.en, num, year: displayYear, status };
     });
 
     const allPast = months.every((m) => m.status === "past");
@@ -91,4 +84,18 @@ export function buildPlanQuarters(contractStart: string | undefined): PlanQuarte
 
     return { id: qId, months, status };
   });
+}
+
+/**
+ * Returns the 4 calendar quarters for the year shifted by `cycleOffset`
+ * relative to today. cycleOffset = 0 → this year, +1 → next year, -1 → prev.
+ * `contractStart` is kept in the signature for backwards compat but is no
+ * longer used to anchor the layout (which is now calendar-aligned).
+ */
+export function buildPlanQuartersForCycle(
+  contractStart: string | undefined,
+  cycleOffset: number,
+): PlanQuarter[] {
+  const todayYear = new Date().getFullYear();
+  return buildPlanQuarters(contractStart, todayYear + cycleOffset);
 }

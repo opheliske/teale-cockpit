@@ -32,7 +32,7 @@ import { csmEventsStore, parseFrDateWeekday } from "@/lib/csm-events-store";
 import { healthStore, type HealthEntry, type HealthStatut } from "@/lib/health-store";
 import { targetsStore, type TargetLabel, LABEL_COLORS } from "@/lib/targets-store";
 import { commentsStore, type PlanComment } from "@/lib/comments-store";
-import { buildPlanQuarters } from "@/lib/plan-quarters";
+import { buildPlanQuarters, calendarQuarter } from "@/lib/plan-quarters";
 import { countAtelierConsumed, isPlanItemPast } from "@/lib/plan-dates";
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
@@ -348,13 +348,19 @@ function storedToPlanItem(s: StoredPlanItem): PlanItem {
 // so the CSM plan tab reloads exactly what was persisted instead of a static
 // base. Next-year items (year === "next") are excluded here.
 function buildPlanBase(items: StoredPlanItem[]) {
+  // Bucketing follows the calendar quarter computed from the item's month
+  // (Q1 = Jan-Mar, etc.) so off-cycle contracts no longer place items under
+  // the wrong tab. Falls back to the stored `quarter` field for legacy items
+  // that have no `month`.
   const cur = items.filter((i) => i.year !== "next");
+  const inQ = (id: "Q1" | "Q2" | "Q3" | "Q4") =>
+    (i: StoredPlanItem) => calendarQuarter(i.month, i.quarter) === id;
   return {
-    planQ1: cur.filter((i) => i.quarter === "Q1").map(storedToPlanItem),
-    planQ2Done: cur.filter((i) => i.quarter === "Q2" && i.done).map(storedToPlanItem),
-    planQ2Upcoming: cur.filter((i) => i.quarter === "Q2" && !i.done).map(storedToPlanItem),
-    planQ3: cur.filter((i) => i.quarter === "Q3").map(storedToPlanItem),
-    planQ4: cur.filter((i) => i.quarter === "Q4").map(storedToPlanItem),
+    planQ1: cur.filter(inQ("Q1")).map(storedToPlanItem),
+    planQ2Done: cur.filter((i) => inQ("Q2")(i) && i.done).map(storedToPlanItem),
+    planQ2Upcoming: cur.filter((i) => inQ("Q2")(i) && !i.done).map(storedToPlanItem),
+    planQ3: cur.filter(inQ("Q3")).map(storedToPlanItem),
+    planQ4: cur.filter(inQ("Q4")).map(storedToPlanItem),
   };
 }
 type PlanBase = ReturnType<typeof buildPlanBase>;
@@ -362,9 +368,15 @@ type PlanBase = ReturnType<typeof buildPlanBase>;
 // Restores the next-year items as `extraPlanItems` (keyed "next-q1".."next-q4"),
 // so a milestone planned for the following year doesn't leak into this year.
 function buildNextExtras(items: StoredPlanItem[]): Array<PlanItem & { quarter: string }> {
+  // Same calendar-aligned bucketing as buildPlanBase, applied to next-year
+  // items (the `next-q*` keys are what extraPlanItems filtering downstream
+  // expects).
   return items
     .filter((i) => i.year === "next")
-    .map((s) => ({ ...storedToPlanItem(s), quarter: `next-${s.quarter.toLowerCase()}` }));
+    .map((s) => ({
+      ...storedToPlanItem(s),
+      quarter: `next-${calendarQuarter(s.month, s.quarter).toLowerCase()}`,
+    }));
 }
 
 export default function ClientDetailView({ id }: { id: string }) {
