@@ -97,6 +97,10 @@ export type PlanItem = {
   themeId?: string;
   // CSM-authored sub-tasks; the client toggles them from the action modal.
   checklist?: ChecklistItem[];
+  // Atelier — kit de communication issu du workshop choisi dans le
+  // catalogue. Stocké dans le bucket kit-files (open via openKitFile).
+  // Distinct de `files` (qui pointe sur client-files / per-client).
+  workshopKitFiles?: { id: string; path: string; name: string; mimeType: string }[];
 };
 
 export type NoteType = "csm" | "decision" | "qbr" | "alert" | "atelier";

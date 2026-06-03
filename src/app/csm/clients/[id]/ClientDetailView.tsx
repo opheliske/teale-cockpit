@@ -339,6 +339,7 @@ function storedToPlanItem(s: StoredPlanItem): PlanItem {
     objectives: s.objectives,
     themeId: s.themeId,
     checklist: s.checklist,
+    workshopKitFiles: s.workshopKitFiles,
   };
 }
 
@@ -776,6 +777,7 @@ export default function ClientDetailView({ id }: { id: string }) {
         objectives: e.objectives?.length ? e.objectives : undefined,
         themeId: e.themeId || undefined,
         checklist: e.checklist?.length ? e.checklist : undefined,
+        workshopKitFiles: e.workshopKitFiles?.length ? e.workshopKitFiles : undefined,
       };
     };
     const qMap: Record<string, StoredPlanItem["quarter"]> = {
@@ -1074,6 +1076,17 @@ export default function ClientDetailView({ id }: { id: string }) {
         ? addPlanObjectives.map((o) => o.trim()).filter(Boolean)
         : undefined;
       const themeId = isAtelier ? (addPlanThemeId || undefined) : undefined;
+      // Atelier — pré-attache le kit de communication du workshop choisi.
+      // Le CSM peut le retirer / le compléter depuis la modale d'édition.
+      const workshop = isAtelier ? workshopList.find((w) => w.id === selectedCatalogId) : undefined;
+      const workshopKitFiles = workshop?.communicationKit && workshop.communicationKit.length > 0
+        ? workshop.communicationKit.map((f) => ({
+            id: f.id,
+            path: f.path,
+            name: f.name,
+            mimeType: f.mimeType,
+          }))
+        : undefined;
       setExtraPlanItems((prev) => [...prev, {
         id: newId,
         type: addPlanCtx.type,
@@ -1085,6 +1098,7 @@ export default function ClientDetailView({ id }: { id: string }) {
         quarter: addPlanCtx.quarter,
         objectives: objectives && objectives.length > 0 ? objectives : undefined,
         themeId,
+        workshopKitFiles,
       }]);
     } else {
       if (!addPlanCustomTitle.trim()) return;

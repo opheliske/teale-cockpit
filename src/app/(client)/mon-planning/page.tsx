@@ -5,7 +5,7 @@ import { planStore, type StoredPlanState, type StoredPlanItemType } from "@/lib/
 import { commentsStore, type PlanComment } from "@/lib/comments-store";
 import { targetsStore, type TargetLabel } from "@/lib/targets-store";
 import { docsStore, type StoredDocument } from "@/lib/docs-store";
-import { openClientFile } from "@/lib/storage";
+import { openClientFile, openKitFile } from "@/lib/storage";
 import type { PlanItemFile, ChecklistItem } from "@/lib/clients-data";
 import {
   getUrgencies,
@@ -224,6 +224,9 @@ type PlanEvent = {
   // toggles persist via planStore.toggleChecklistItem and are visible to
   // the CSM the next time they open the card.
   checklist?: ChecklistItem[];
+  // Atelier — kit de communication issu du workshop choisi. Téléchargeable
+  // via openKitFile (bucket kit-files).
+  workshopKitFiles?: { id: string; path: string; name: string; mimeType: string }[];
 };
 
 function defaultDescription(type: EventType): string {
@@ -605,6 +608,7 @@ export default function MonPlanningPage() {
           cancelled: item.cancelled,
           deckCreated: item.deckCreated,
           checklist: item.checklist,
+          workshopKitFiles: item.workshopKitFiles,
           itemId: item.id,
           threadId: String(item.id),
         });
@@ -1746,6 +1750,28 @@ function EventModal({
                     <span className="min-w-0 flex-1 truncate">{f.name}</span>
                     <span className="shrink-0 text-[11px] text-brand-muted-on-dark">{f.sizeLabel}</span>
                     <span className="shrink-0 text-brand-green-bright"><DownloadIcon /></span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {event.workshopKitFiles && event.workshopKitFiles.length > 0 && (
+            <section>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-accent">
+                Kit de communication
+              </h3>
+              <div className="flex flex-col gap-1.5">
+                {event.workshopKitFiles.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => void openKitFile(f.path, f.name)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-brand-border-dark px-3 py-2 text-left text-[12px] font-medium text-brand-cream transition-colors hover:border-brand-accent/40 hover:bg-brand-accent/5"
+                  >
+                    <span className="text-[14px]">{getFileIcon(f.mimeType)}</span>
+                    <span className="min-w-0 flex-1 truncate">{f.name}</span>
+                    <span className="shrink-0 text-brand-accent"><DownloadIcon /></span>
                   </button>
                 ))}
               </div>

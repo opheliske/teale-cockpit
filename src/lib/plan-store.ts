@@ -34,6 +34,9 @@ export type StoredPlanItem = {
   themeId?: string;
   // CSM-authored sub-tasks; both sides can toggle `done`.
   checklist?: ChecklistItem[];
+  // Atelier — kit de communication du workshop, copié à la création de
+  // l'item. Stocké dans le bucket kit-files (open via openKitFile).
+  workshopKitFiles?: { id: string; path: string; name: string; mimeType: string }[];
 };
 
 export type StoredPlanState = {
