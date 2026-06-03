@@ -818,7 +818,7 @@ export default function CsmHomePage() {
                   {unreadInbox.map((u) => (
                     <li
                       key={`${u.clientId}:${u.threadId}`}
-                      onClick={() => router.push(`/csm/clients/${u.clientId}`)}
+                      onClick={() => router.push(`/csm/clients/${u.clientId}?openPlan=${encodeURIComponent(u.threadId)}`)}
                       className="flex cursor-pointer items-start gap-3 bg-[rgba(230,170,153,0.04)] px-4 py-3 transition-colors hover:bg-[rgba(230,170,153,0.08)]"
                     >
                       <ClientAvatar initials={u.clientInitials} color={u.clientColor} size={32} />

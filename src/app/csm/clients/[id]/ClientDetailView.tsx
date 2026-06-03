@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useRouter, notFound } from "next/navigation";
+import { useRouter, useSearchParams, notFound } from "next/navigation";
 import Link from "next/link";
 import { impersonationStore } from "@/lib/impersonation-store";
 import { type PlanItem, type PlanItemFile, type PlanItemType, type Note, type PrioAction, type HistoryEvent, type ContractFormule, type ProduitTeale, type Statut, type ChecklistItem } from "@/lib/clients-data";
@@ -864,6 +864,35 @@ export default function ClientDetailView({ id }: { id: string }) {
     setPlanItemComments(commentsStore.getByThread(String(eff.id)));
     setCommentDraft("");
   };
+
+  // Deep-link `?openPlan=<itemId>` — quand le CSM clique sur une alerte
+  // "nouveau message" depuis la home, on saute directement sur la modale
+  // de l'action concernée. Le ref empêche la ré-ouverture après un
+  // re-render (storedPlanItems se met à jour en async pendant le chargement).
+  const searchParams = useSearchParams();
+  const openPlanHandledRef = useRef(false);
+  useEffect(() => {
+    if (openPlanHandledRef.current) return;
+    const openPlanId = searchParams.get("openPlan");
+    if (!openPlanId) { openPlanHandledRef.current = true; return; }
+    const numId = Number(openPlanId);
+    if (!Number.isFinite(numId)) { openPlanHandledRef.current = true; return; }
+    const stored = storedPlanItems.find((i) => i.id === numId);
+    if (!stored) return; // pas encore chargé — on retentera au prochain tick
+    openPlanHandledRef.current = true;
+    // setState déferré hors de l'effet — sinon le lint set-state-in-effect
+    // râle sur le chainage de setters dans openPlanEdit + setActiveSection.
+    queueMicrotask(() => {
+      openPlanEdit(storedToPlanItem(stored));
+      setActiveSection("plan");
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("openPlan");
+        window.history.replaceState({}, "", url.toString());
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, storedPlanItems]);
 
   useEffect(() => {
     if (!editingPlanItem) return;
