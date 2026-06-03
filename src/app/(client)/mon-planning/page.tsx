@@ -387,6 +387,32 @@ function metaToTimeStr(meta: string): string | undefined {
   return m ? m[1] : undefined;
 }
 
+// Returns true when a plan event sits strictly before `today`. Used to keep
+// the "Prochain" badge off events whose date has passed but that weren't
+// marked done (a common case for QBRs / points that weren't checked off).
+// The event date is rebuilt from (year, English month bucket, day-of-month
+// parsed from e.date), so we don't depend on a year being present in the
+// stored "29 mai." label.
+function isPlanEventPast(
+  e: PlanEvent,
+  monthName: string,
+  year: number,
+  today: Date,
+): boolean {
+  const monthIdx = allMonths.indexOf(monthName);
+  if (monthIdx === -1) return false;
+  const dayMatch = e.date?.match(/^(\d+)/);
+  if (!dayMatch) {
+    // No day in the label — fall back to the end of the bucketed month.
+    const monthEnd = new Date(year, monthIdx + 1, 0);
+    monthEnd.setHours(23, 59, 59, 999);
+    return monthEnd.getTime() < today.getTime();
+  }
+  const eventDate = new Date(year, monthIdx, parseInt(dayMatch[1], 10));
+  eventDate.setHours(23, 59, 59, 999);
+  return eventDate.getTime() < today.getTime();
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 
 function parseDateLabel(dateStr: string): { day: string; mo: string } | null {
@@ -563,14 +589,20 @@ export default function MonPlanningPage() {
     setActiveQuarterId(defaultQuarter(quarters));
   };
 
-  // First upcoming event across the active quarter
+  // First upcoming event across the active quarter — must be in the future
+  // (or today) AND not already done. An event whose date passed without being
+  // checked off is no longer "next" even if `done` was never flipped.
   const nextEvent = useMemo<PlanEvent | null>(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     for (const m of activeQuarter.months) {
-      const found = (yearEvents[m] ?? []).find((e) => !e.done);
+      const found = (yearEvents[m] ?? []).find(
+        (e) => !e.done && !isPlanEventPast(e, m, activeYear, today),
+      );
       if (found) return found;
     }
     return null;
-  }, [activeQuarter, yearEvents]);
+  }, [activeQuarter, yearEvents, activeYear]);
 
   const qEvents = activeQuarter.months.flatMap((m) => yearEvents[m] ?? []);
   const qTotal = qEvents.length;
@@ -699,7 +731,11 @@ export default function MonPlanningPage() {
           {/* Month columns */}
           <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
             {activeQuarter.months.map((m) => {
-              const firstUpcomingInMonth = (yearEvents[m] ?? []).find((e) => !e.done) ?? null;
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const firstUpcomingInMonth = (yearEvents[m] ?? []).find(
+                (e) => !e.done && !isPlanEventPast(e, m, activeYear, today),
+              ) ?? null;
               const isNextMonth =
                 nextEvent !== null && firstUpcomingInMonth === nextEvent;
               return (
