@@ -306,6 +306,10 @@ type LocalDetail = {
 };
 
 // Converts a persisted plan item back to the editable PlanItem shape.
+// Every field carried by StoredPlanItem must round-trip here, otherwise the
+// next CSM-side auto-save (which serialises planBase via toStored) silently
+// drops the missing field from plan_state — that's exactly how checklist
+// was getting wiped on reload before this fix.
 function storedToPlanItem(s: StoredPlanItem): PlanItem {
   return {
     id: s.id,
@@ -324,6 +328,7 @@ function storedToPlanItem(s: StoredPlanItem): PlanItem {
     targets: s.targets,
     objectives: s.objectives,
     themeId: s.themeId,
+    checklist: s.checklist,
   };
 }
 
