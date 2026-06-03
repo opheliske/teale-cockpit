@@ -42,15 +42,45 @@ export function useClientContacts(clientId: string | null | undefined) {
         }
         return;
       }
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, full_name, email, last_sign_in_at")
-        .eq("role", "client")
-        .eq("client_id", clientId)
-        .order("full_name");
-      if (error) console.error("[use-client-contacts]", error);
+      // Try the full select first. If `last_sign_in_at` hasn't been added
+      // yet (migration not applied), Postgres returns 42703 — we retry
+      // without that column so the contacts list still loads.
+      type Row = { id: string; full_name: string; email: string; last_sign_in_at?: string | null };
+      let rows: Row[] | null = null;
+      let err: { message: string; code?: string } | null = null;
+      {
+        const r = await supabase
+          .from("profiles")
+          .select("id, full_name, email, last_sign_in_at")
+          .eq("role", "client")
+          .eq("client_id", clientId)
+          .order("full_name");
+        rows = (r.data as Row[] | null) ?? null;
+        err = r.error;
+      }
+      if (err && err.code === "42703") {
+        console.warn(
+          "[use-client-contacts] profiles.last_sign_in_at absent — applique la migration profiles_last_sign_in pour afficher la dernière connexion.",
+        );
+        const fallback = await supabase
+          .from("profiles")
+          .select("id, full_name, email")
+          .eq("role", "client")
+          .eq("client_id", clientId)
+          .order("full_name");
+        rows = (fallback.data as Row[] | null) ?? null;
+        err = fallback.error;
+      }
+      if (err) console.error("[use-client-contacts]", err);
       if (active) {
-        setContacts((data as ClientContact[]) ?? []);
+        setContacts(
+          (rows ?? []).map((r) => ({
+            id: r.id,
+            full_name: r.full_name,
+            email: r.email,
+            last_sign_in_at: r.last_sign_in_at ?? null,
+          })),
+        );
         setLoading(false);
       }
     })();
