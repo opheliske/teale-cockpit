@@ -1118,7 +1118,11 @@ export default function ClientDetailView({ id }: { id: string }) {
     } else {
       if (!addPlanCustomTitle.trim()) return;
       const dateFr = formatDateFr(addPlanDate);
-      const metaParts = [dateFr, addPlanTime.trim(), addPlanResponsable.trim()].filter(Boolean);
+      // QBR ne porte pas de responsable (ni dans le meta, ni sur l'item, ni
+      // dans l'agenda CSM) — c'est purement un point CSM ↔ client.
+      const isQbr = addPlanCtx.type === "qbr";
+      const responsable = isQbr ? "" : addPlanResponsable.trim();
+      const metaParts = [dateFr, addPlanTime.trim(), responsable].filter(Boolean);
       setExtraPlanItems((prev) => [...prev, {
         id: newId,
         type: addPlanCtx.type,
@@ -1128,11 +1132,11 @@ export default function ClientDetailView({ id }: { id: string }) {
         done: false,
         month,
         quarter: addPlanCtx.quarter,
-        responsable: addPlanResponsable.trim() || undefined,
+        responsable: responsable || undefined,
         detail: addPlanDetail.trim() || undefined,
         files: addPlanCustomFiles.length > 0 ? [...addPlanCustomFiles] : undefined,
       }]);
-      if (addPlanCtx.type === "qbr" && client) {
+      if (isQbr && client) {
         csmEventsStore.add({
           clientId: client.id,
           clientName: client.name,
@@ -1142,7 +1146,7 @@ export default function ClientDetailView({ id }: { id: string }) {
           date: dateFr,
           weekday: parseFrDateWeekday(dateFr),
           time: addPlanTime.trim(),
-          responsable: addPlanResponsable.trim(),
+          responsable: "",
         });
       }
     }
@@ -4181,20 +4185,6 @@ export default function ClientDetailView({ id }: { id: string }) {
                   </div>
                 )}
               </div>
-
-              {/* Responsable (QBR only — separate row) */}
-              {addPlanCtx.type === "qbr" && (
-                <div>
-                  <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Responsable</label>
-                  <input
-                    type="text"
-                    value={addPlanResponsable}
-                    onChange={(e) => setAddPlanResponsable(e.target.value)}
-                    placeholder="Ex : Lucie Martin"
-                    className="w-full rounded-[10px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef] placeholder-[rgba(232,245,239,0.3)] outline-none focus:border-[rgba(94,234,212,0.5)]"
-                  />
-                </div>
-              )}
 
               {/* Détail */}
               {addPlanCtx.type === "custom" && (

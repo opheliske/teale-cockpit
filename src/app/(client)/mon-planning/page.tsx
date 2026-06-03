@@ -1647,7 +1647,7 @@ function EventModal({
             >
               {event.title}
             </h2>
-            {event.responsable && (
+            {event.responsable && event.type !== "qbr" && (
               <p className="mt-1.5 text-[12px] text-brand-muted-on-dark">
                 Animé par <span className="text-brand-cream">{event.responsable}</span>
               </p>
