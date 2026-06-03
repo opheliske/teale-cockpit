@@ -1114,6 +1114,12 @@ export default function ClientDetailView({ id }: { id: string }) {
         objectives: objectives && objectives.length > 0 ? objectives : undefined,
         themeId,
         workshopKitFiles,
+        // Fichiers personnalisés ajoutés par le CSM (per-client, bucket
+        // client-files) — distincts du workshopKitFiles qui pointe sur le
+        // kit catalogue. Le client les télécharge depuis la modale du jalon.
+        files: isAtelier && addPlanCustomFiles.length > 0
+          ? [...addPlanCustomFiles]
+          : undefined,
       }]);
     } else {
       if (!addPlanCustomTitle.trim()) return;
@@ -3985,6 +3991,10 @@ export default function ClientDetailView({ id }: { id: string }) {
     {/* ── Add from catalog modal ── */}
     {addPlanCtx && (
       <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-[2px]" onClick={() => setAddPlanCtx(null)}>
+        {/* Hidden file input — hoisted out of the branch-specific blocks so
+            both the atelier and custom flows can trigger it without each
+            needing its own DOM node. */}
+        <input ref={planFileInputRef} type="file" multiple className="hidden" onChange={(e) => e.target.files && handlePlanFileSelect(e.target.files)} />
         <div className="my-4 max-h-[calc(100vh-2rem)] w-full max-w-[640px] overflow-y-auto rounded-[20px] border border-[rgba(94,234,212,0.18)] bg-[#061a16] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
 
           {/* Header */}
@@ -4131,6 +4141,73 @@ export default function ClientDetailView({ id }: { id: string }) {
                       + Ajouter un objectif
                     </button>
                   </div>
+
+                  {/* Fichiers joints — uploadés dans client-files (bucket
+                      per-client), distincts du kit du workshop déjà pré-
+                      attaché. Le client les voit dans la modale de l'action
+                      sous "Fichiers partagés". */}
+                  <div>
+                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">
+                      Fichiers joints
+                      <span className="ml-1.5 normal-case font-normal text-[rgba(232,245,239,0.35)]">
+                        · t&eacute;l&eacute;chargeables par le client
+                      </span>
+                    </label>
+                    <div
+                      className="flex flex-col items-center justify-center rounded-[10px] border border-dashed px-4 py-4 text-center transition-all"
+                      style={{
+                        borderColor: isPlanFileDragOver ? "#5eead4" : "rgba(255,255,255,0.12)",
+                        background: isPlanFileDragOver ? "rgba(94,234,212,0.05)" : "rgba(255,255,255,0.02)",
+                      }}
+                      onDragOver={(e) => { e.preventDefault(); setIsPlanFileDragOver(true); }}
+                      onDragLeave={() => setIsPlanFileDragOver(false)}
+                      onDrop={(e) => { e.preventDefault(); setIsPlanFileDragOver(false); handlePlanFileSelect(e.dataTransfer.files); }}
+                    >
+                      {addPlanCustomFiles.length === 0 ? (
+                        <>
+                          <p className="text-[12px] text-[#94a8a0]">Glisse des fichiers ici ou</p>
+                          <button
+                            type="button"
+                            onClick={() => planFileInputRef.current?.click()}
+                            className="mt-1 text-[12px] font-medium text-[#5eead4] hover:underline"
+                          >
+                            parcourir
+                          </button>
+                        </>
+                      ) : (
+                        <div className="w-full space-y-1.5">
+                          {addPlanCustomFiles.map((f) => (
+                            <div key={f.id} className="flex items-center justify-between rounded-[8px] px-3 py-1.5" style={{ background: "rgba(220,237,99,0.07)" }}>
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span className="text-sm">{getFileIcon(f.mimeType)}</span>
+                                <span className="truncate text-[12px] text-[#e8f5ef]">{f.name}</span>
+                                <span className="shrink-0 text-[11px] text-[#94a8a0]">{f.sizeLabel}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setAddPlanCustomFiles((prev) => prev.filter((x) => x.id !== f.id))}
+                                className="ml-2 shrink-0 text-[14px] text-[#94a8a0] hover:text-[#e8f5ef]"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => planFileInputRef.current?.click()}
+                            className="mt-1 text-[11px] text-[#5eead4] hover:underline"
+                          >
+                            + Ajouter d&apos;autres fichiers
+                          </button>
+                        </div>
+                      )}
+                      {uploadError && (
+                        <p className="mt-2 rounded-[8px] bg-[rgba(239,68,68,0.1)] px-3 py-2 text-[11px] text-[#fca5a5]">
+                          {uploadError}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -4252,7 +4329,6 @@ export default function ClientDetailView({ id }: { id: string }) {
                         </button>
                       </div>
                     )}
-                    <input ref={planFileInputRef} type="file" multiple className="hidden" onChange={(e) => e.target.files && handlePlanFileSelect(e.target.files)} />
                     {uploadError && (
                       <p className="mt-2 rounded-[8px] bg-[rgba(239,68,68,0.1)] px-3 py-2 text-[11px] text-[#fca5a5]">
                         {uploadError}
