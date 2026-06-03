@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState, useRef, type ReactNode } from "react";
-import { themes, type Workshop } from "@/app/(client)/catalogue-ateliers/data";
+import { themes, type Workshop, type WorkshopKitFile } from "@/app/(client)/catalogue-ateliers/data";
 import { useWorkshops } from "@/lib/workshops-store";
+import { uploadKitFile, openKitFile } from "@/lib/storage";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -88,6 +89,7 @@ interface FormState {
   objectivesText: string;    // one per line
   targetAudienceText: string; // one per line
   programme: { title: string; itemsText: string }[];
+  kitFiles: WorkshopKitFile[];
 }
 
 const EMPTY_FORM: FormState = {
@@ -98,6 +100,7 @@ const EMPTY_FORM: FormState = {
   objectivesText: "",
   targetAudienceText: "",
   programme: [{ title: "", itemsText: "" }],
+  kitFiles: [],
 };
 
 function workshopToForm(w: Workshop): FormState {
@@ -112,6 +115,7 @@ function workshopToForm(w: Workshop): FormState {
       title: s.title,
       itemsText: s.items?.join("\n") ?? "",
     })),
+    kitFiles: w.communicationKit ?? [],
   };
 }
 
@@ -133,6 +137,7 @@ function formToWorkshop(form: FormState, existingId?: string): Workshop {
           ? s.itemsText.split("\n").map((x) => x.trim()).filter(Boolean)
           : undefined,
       })),
+    communicationKit: form.kitFiles.length > 0 ? form.kitFiles : undefined,
   };
 }
 
@@ -146,6 +151,10 @@ export default function CsmCataloguePage() {
 
   // modal state
   const [editingId, setEditingId] = useState<string | "new" | null>(null);
+  // Stable workshop id used both as the storage-path prefix during upload
+  // *and* as the persisted row id at submit time. Pre-generated for new
+  // workshops so the upload helper has a target before the row exists.
+  const [workshopDraftId, setWorkshopDraftId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [formError, setFormError] = useState("");
 
@@ -171,17 +180,20 @@ export default function CsmCataloguePage() {
   function openNew() {
     setForm(EMPTY_FORM);
     setFormError("");
+    setWorkshopDraftId(`ws-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`);
     setEditingId("new");
   }
 
   function openEdit(w: Workshop) {
     setForm(workshopToForm(w));
     setFormError("");
+    setWorkshopDraftId(w.id);
     setEditingId(w.id);
   }
 
   function closeModal() {
     setEditingId(null);
+    setWorkshopDraftId(null);
     setFormError("");
   }
 
@@ -192,7 +204,10 @@ export default function CsmCataloguePage() {
     if (!form.targetAudienceText.trim()) { setFormError("Au moins une cible est requise."); return; }
 
     if (editingId === "new") {
-      addWorkshop(formToWorkshop(form));
+      // Use the draft id we already wrote files against, otherwise the
+      // uploaded files would point to a path under a different id than
+      // the persisted row.
+      addWorkshop(formToWorkshop(form, workshopDraftId ?? undefined));
     } else if (editingId) {
       updateWorkshop(formToWorkshop(form, editingId));
     }
@@ -305,12 +320,13 @@ export default function CsmCataloguePage() {
       </div>
 
       {/* ADD / EDIT MODAL */}
-      {editingId !== null && (
+      {editingId !== null && workshopDraftId && (
         <WorkshopFormModal
           form={form}
           setForm={setForm}
           error={formError}
           isNew={editingId === "new"}
+          workshopId={workshopDraftId}
           onSubmit={handleSubmit}
           onClose={closeModal}
         />
@@ -452,6 +468,7 @@ function WorkshopFormModal({
   setForm,
   error,
   isNew,
+  workshopId,
   onSubmit,
   onClose,
 }: {
@@ -459,10 +476,12 @@ function WorkshopFormModal({
   setForm: React.Dispatch<React.SetStateAction<FormState>>;
   error: string;
   isNew: boolean;
+  workshopId: string;
   onSubmit: () => void;
   onClose: () => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [uploadError, setUploadError] = useState("");
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -474,6 +493,27 @@ function WorkshopFormModal({
 
   function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  async function handleKitUpload(file: File) {
+    setUploadError("");
+    const { path, error: err } = await uploadKitFile("workshops", workshopId, file);
+    if (err || !path) {
+      setUploadError(err ?? "Échec de l'envoi du fichier.");
+      return;
+    }
+    setForm((f) => ({
+      ...f,
+      kitFiles: [
+        ...f.kitFiles,
+        {
+          id: `wkf-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+          path,
+          name: file.name,
+          mimeType: file.type || "application/octet-stream",
+        },
+      ],
+    }));
   }
 
   function setStep(idx: number, key: "title" | "itemsText", value: string) {
@@ -612,6 +652,66 @@ function WorkshopFormModal({
             />
           </div>
 
+          {/* Kit de communication — fichiers téléchargeables par le client
+              (visuels, PDF, supports…). Stockés dans le bucket kit-files
+              sous workshops/<workshopId>/. */}
+          <div>
+            <label className={LABEL}>
+              Kit de communication
+              <span className="ml-1.5 text-[#6b7c75] normal-case font-normal">— téléchargeable par le client</span>
+            </label>
+            {form.kitFiles.length > 0 && (
+              <ul className="mb-2 space-y-1.5">
+                {form.kitFiles.map((f) => (
+                  <li
+                    key={f.id}
+                    className="flex items-center gap-2 rounded-[8px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.02)] px-2.5 py-2"
+                  >
+                    <span className="shrink-0 text-[14px]">📎</span>
+                    <span className="min-w-0 flex-1 truncate text-[12.5px] text-[#e8f5ef]">{f.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => void openKitFile(f.path, f.name)}
+                      className="shrink-0 text-[11px] font-semibold text-[#5eead4] hover:text-[#84d4a6]"
+                    >
+                      Aperçu
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setField("kitFiles", form.kitFiles.filter((x) => x.id !== f.id))
+                      }
+                      aria-label="Retirer ce fichier"
+                      className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] text-[#6b7c75] hover:bg-[rgba(230,170,153,0.12)] hover:text-[#E6AA99]"
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <label className="flex cursor-pointer items-center gap-2 rounded-[10px] border border-dashed border-[rgba(255,255,255,0.12)] bg-[rgba(255,255,255,0.02)] px-4 py-3 text-[12px] text-[#94a8a0] hover:border-[rgba(94,234,212,0.4)] hover:text-[#e8f5ef]">
+              📤 Uploader un fichier
+              <input
+                type="file"
+                accept="image/*,.pdf,.svg,.docx,.pptx,.xlsx"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) {
+                    void handleKitUpload(f);
+                    e.target.value = "";
+                  }
+                }}
+              />
+            </label>
+            {uploadError && (
+              <p className="mt-2 rounded-[8px] bg-[rgba(239,68,68,0.1)] px-3 py-2 text-[12px] font-medium text-[#fca5a5]">
+                {uploadError}
+              </p>
+            )}
+          </div>
+
           {error && (
             <p className="rounded-[8px] bg-[rgba(239,68,68,0.1)] px-3 py-2 text-[12px] font-medium text-[#fca5a5]">
               {error}
@@ -704,6 +804,25 @@ function PreviewModal({ workshop, onClose, onEdit }: { workshop: Workshop; onClo
               {workshop.targetAudience.map((t, i) => <li key={i}>{t}</li>)}
             </ul>
           </ModalBlock>
+          {workshop.communicationKit && workshop.communicationKit.length > 0 && (
+            <ModalBlock title="Kit de communication">
+              <ul className="flex flex-col gap-1.5">
+                {workshop.communicationKit.map((f) => (
+                  <li key={f.id}>
+                    <button
+                      type="button"
+                      onClick={() => void openKitFile(f.path, f.name)}
+                      className="flex w-full items-center gap-2.5 rounded-[10px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.02)] px-3 py-2 text-left transition-colors hover:border-[rgba(94,234,212,0.3)]"
+                    >
+                      <span className="shrink-0 text-[14px]">📎</span>
+                      <span className="min-w-0 flex-1 truncate text-[12.5px] text-[#e8f5ef]">{f.name}</span>
+                      <span className="shrink-0 text-[11px] font-semibold text-[#5eead4]">Télécharger ↓</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </ModalBlock>
+          )}
         </div>
       </div>
     </div>

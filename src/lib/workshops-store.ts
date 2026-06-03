@@ -6,12 +6,14 @@ import {
   type Workshop,
   type Theme,
   type ProgrammeStep,
+  type WorkshopKitFile,
 } from "@/app/(client)/catalogue-ateliers/data";
 
-export type { Workshop, Theme, ProgrammeStep };
+export type { Workshop, Theme, ProgrammeStep, WorkshopKitFile };
 export { themes };
 
 function fromRow(row: Record<string, unknown>): Workshop {
+  const kit = row.communication_kit as WorkshopKitFile[] | null;
   return {
     id: row.id as string,
     title: row.title as string,
@@ -21,6 +23,7 @@ function fromRow(row: Record<string, unknown>): Workshop {
     programme: row.programme as ProgrammeStep[],
     targetAudience: row.target_audience as string[],
     alreadyAnimated: row.already_animated as boolean,
+    communicationKit: kit && kit.length > 0 ? kit : undefined,
   };
 }
 
@@ -34,6 +37,7 @@ function toRow(w: Workshop) {
     programme: w.programme,
     target_audience: w.targetAudience,
     already_animated: w.alreadyAnimated ?? false,
+    communication_kit: w.communicationKit ?? [],
   };
 }
 

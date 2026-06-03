@@ -9,6 +9,15 @@ export type ProgrammeStep = {
   items?: string[];
 };
 
+// Fichier du kit de communication d'un atelier : visuels, PDF, etc.
+// Hébergé dans le bucket "kit-files" sous workshops/<workshopId>/...
+export type WorkshopKitFile = {
+  id: string;
+  path: string;
+  name: string;
+  mimeType: string;
+};
+
 export type Workshop = {
   id: string;
   title: string;
@@ -19,6 +28,7 @@ export type Workshop = {
   programme: ProgrammeStep[];
   targetAudience: string[];
   alreadyAnimated?: boolean;
+  communicationKit?: WorkshopKitFile[];
 };
 
 export const themes: Theme[] = [

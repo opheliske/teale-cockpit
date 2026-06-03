@@ -42,6 +42,7 @@ create table if not exists workshops (
   programme    jsonb not null default '[]',
   target_audience jsonb not null default '[]',
   already_animated boolean not null default false,
+  communication_kit jsonb not null default '[]',
   created_at   timestamptz not null default now()
 );
 

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { themes, type Workshop } from "./data";
 import { useWorkshops } from "@/lib/workshops-store";
+import { openKitFile } from "@/lib/storage";
 
 // --- helpers ---
 function workshopHaystack(w: Workshop): string {
@@ -853,6 +854,25 @@ function WorkshopModal({ workshop, onClose }: { workshop: Workshop; onClose: () 
               {workshop.targetAudience.map((t, i) => <li key={i}>{t}</li>)}
             </ul>
           </Block>
+          {workshop.communicationKit && workshop.communicationKit.length > 0 && (
+            <Block title="Kit de communication">
+              <ul className="flex flex-col gap-1.5">
+                {workshop.communicationKit.map((f) => (
+                  <li key={f.id}>
+                    <button
+                      type="button"
+                      onClick={() => void openKitFile(f.path, f.name)}
+                      className="flex w-full items-center gap-2.5 rounded-[10px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.02)] px-3 py-2 text-left transition-colors hover:border-[rgba(94,234,212,0.3)]"
+                    >
+                      <span className="shrink-0 text-[14px]">📎</span>
+                      <span className="min-w-0 flex-1 truncate text-[12.5px] text-[#e8f5ef]">{f.name}</span>
+                      <span className="shrink-0 text-[11px] font-semibold text-[#5eead4]">Télécharger ↓</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </Block>
+          )}
         </div>
 
         <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-[rgba(255,255,255,0.06)] pt-5">
