@@ -5,9 +5,12 @@ import {
   type AnimationItem,
   type EmailTopicKit,
   type LancementKit,
+  type VisuelKit,
+  type VisuelCategory,
+  VISUEL_CATEGORIES,
 } from "./data";
 import { useKitsStore } from "@/lib/kits-store";
-import { openKitFile, kitFileLabel } from "@/lib/storage";
+import { openKitFile, kitFileLabel, getKitFileUrl } from "@/lib/storage";
 import { useWorkshops, themes as workshopThemes, type Workshop } from "@/lib/workshops-store";
 
 const workshopThemeNameById = Object.fromEntries(
@@ -28,7 +31,7 @@ const workshopKitIcons: Record<WorkshopKitType, string> = {
   post: "💬",
 };
 
-type ThemeId = "lancement" | "animation" | "emails" | "kits-ateliers";
+type ThemeId = "lancement" | "animation" | "emails" | "kits-ateliers" | "visuels";
 
 type Theme = {
   id: ThemeId;
@@ -162,6 +165,7 @@ type ActiveCard =
   | { kind: "lancement"; data: LancementKit }
   | { kind: "animation"; data: AnimationItem }
   | { kind: "email"; data: EmailTopicKit }
+  | { kind: "visuel"; data: VisuelKit }
   | {
       kind: "workshop-kit";
       workshop: Workshop;
@@ -170,7 +174,7 @@ type ActiveCard =
     };
 
 export default function KitsCommunicationPage() {
-  const { lancementKits, animationItems, emailTopicKits } = useKitsStore();
+  const { lancementKits, animationItems, emailTopicKits, visuelKits } = useKitsStore();
   const { workshops } = useWorkshops();
 
   const [search, setSearch] = useState("");
@@ -214,8 +218,22 @@ export default function KitsCommunicationPage() {
           "Tous les contenus prêts à l'emploi pour l'annonce et l'activation de teale auprès de vos équipes.",
         count: lancementKits.length,
       },
+      {
+        id: "visuels",
+        name: "Visuels & icônes",
+        icon: "🎨",
+        description:
+          "Logos teale, icônes, pictos et bannières — téléchargez-les pour vos communications internes.",
+        count: visuelKits.length,
+      },
     ],
-    [animationItems.length, workshops.length, emailTopicKits.length, lancementKits.length]
+    [
+      animationItems.length,
+      workshops.length,
+      emailTopicKits.length,
+      lancementKits.length,
+      visuelKits.length,
+    ]
   );
 
   const filteredLancement = useMemo(
@@ -272,11 +290,27 @@ export default function KitsCommunicationPage() {
     [lower, activeTheme, workshops]
   );
 
+  // Visuels are language-agnostic (logos, icônes), so the language filter
+  // doesn't apply — only the search query and the active tab matter here.
+  const filteredVisuels = useMemo(
+    () =>
+      activeTheme !== "visuels"
+        ? []
+        : visuelKits.filter(
+            (v) =>
+              !lower ||
+              v.title.toLowerCase().includes(lower) ||
+              v.category.toLowerCase().includes(lower)
+          ),
+    [lower, activeTheme, visuelKits]
+  );
+
   const totalVisible =
     filteredLancement.length +
     filteredAnimation.length +
     filteredEmails.length +
-    filteredWorkshops.length;
+    filteredWorkshops.length +
+    filteredVisuels.length;
   const hasActiveFilters =
     !!lower || activeTheme !== "animation" || activeLanguage !== "FR";
   const resetFilters = () => {
@@ -289,12 +323,14 @@ export default function KitsCommunicationPage() {
   const showAnimation = activeTheme === "animation";
   const showEmails = activeTheme === "emails";
   const showWorkshopKits = activeTheme === "kits-ateliers";
+  const showVisuels = activeTheme === "visuels";
 
   const totalKits =
     animationItems.length +
     emailTopicKits.length +
     lancementKits.length +
-    workshops.length;
+    workshops.length +
+    visuelKits.length;
   const newInMay = animationItems.filter(
     (a) => a.month === TODAY_MONTH
   ).length;
@@ -369,20 +405,23 @@ export default function KitsCommunicationPage() {
                 </PillFilter>
               ))}
             </FilterLine>
-            <FilterLine label="Langue">
-              <PillFilter
-                selected={activeLanguage === "FR"}
-                onClick={() => setActiveLanguage("FR")}
-              >
-                🇫🇷 Français
-              </PillFilter>
-              <PillFilter
-                selected={activeLanguage === "EN"}
-                onClick={() => setActiveLanguage("EN")}
-              >
-                🇬🇧 English
-              </PillFilter>
-            </FilterLine>
+            {/* Visuels n'ont pas de variante FR/EN — masquer le filtre */}
+            {activeTheme !== "visuels" && (
+              <FilterLine label="Langue">
+                <PillFilter
+                  selected={activeLanguage === "FR"}
+                  onClick={() => setActiveLanguage("FR")}
+                >
+                  🇫🇷 Français
+                </PillFilter>
+                <PillFilter
+                  selected={activeLanguage === "EN"}
+                  onClick={() => setActiveLanguage("EN")}
+                >
+                  🇬🇧 English
+                </PillFilter>
+              </FilterLine>
+            )}
           </div>
         </div>
 
@@ -436,6 +475,12 @@ export default function KitsCommunicationPage() {
               <LancementSection
                 items={filteredLancement}
                 onOpen={(k) => setActiveCard({ kind: "lancement", data: k })}
+              />
+            )}
+            {showVisuels && filteredVisuels.length > 0 && (
+              <VisuelsSection
+                items={filteredVisuels}
+                onOpen={(v) => setActiveCard({ kind: "visuel", data: v })}
               />
             )}
           </div>
@@ -892,6 +937,94 @@ function EmailsSection({
   );
 }
 
+// ── Visuels & icônes — galerie groupée par catégorie ────────────────────────
+// Client view: vignettes (signed preview URL), titre, bouton télécharger.
+// Le client n'a aucun bouton d'édition — c'est géré uniquement côté CSM.
+function VisuelsSection({
+  items,
+  onOpen,
+}: {
+  items: VisuelKit[];
+  onOpen: (v: VisuelKit) => void;
+}) {
+  const grouped: Record<VisuelCategory, VisuelKit[]> = {
+    logo: [], icone: [], picto: [], banniere: [],
+  };
+  for (const v of items) grouped[v.category].push(v);
+
+  return (
+    <section>
+      <SectionTitle
+        icon="🎨"
+        title="Visuels & icônes teale"
+        description="Logos, icônes, pictos et bannières — cliquez sur une vignette pour télécharger le fichier source."
+      />
+      <div className="space-y-8">
+        {VISUEL_CATEGORIES.map((cat) => {
+          const list = grouped[cat.id];
+          if (list.length === 0) return null;
+          return (
+            <div key={cat.id}>
+              <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-muted-on-dark">
+                <span aria-hidden>{cat.icon}</span>
+                {cat.label}
+                <span className="text-brand-muted-on-dark/60">({list.length})</span>
+              </h3>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                {list.map((v) => (
+                  <VisuelCard key={v.id} item={v} onOpen={() => onOpen(v)} />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function VisuelCard({ item, onOpen }: { item: VisuelKit; onOpen: () => void }) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  // The preview is fetched once per mount via a 1 h signed URL. Stale URLs
+  // are harmless: clicking the card always re-issues a fresh signed URL
+  // through openKitFile (so old tabs in a downloaded preview keep working).
+  useEffect(() => {
+    let alive = true;
+    void getKitFileUrl(item.path).then((u) => {
+      if (alive) setPreviewUrl(u);
+    });
+    return () => { alive = false; };
+  }, [item.path]);
+  const isImage = item.mimeType.startsWith("image/");
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="group flex flex-col overflow-hidden rounded-xl border border-brand-border-dark bg-brand-surface text-left transition-colors hover:border-brand-accent/40"
+    >
+      <div className="relative grid aspect-square w-full place-items-center bg-brand-dark/40">
+        {isImage && previewUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={previewUrl}
+            alt={item.title}
+            className="h-full w-full object-contain p-3"
+            loading="lazy"
+          />
+        ) : (
+          <span className="text-3xl opacity-60" aria-hidden>📄</span>
+        )}
+      </div>
+      <div className="flex items-center justify-between gap-2 px-3 py-2.5">
+        <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-brand-cream">
+          {item.title}
+        </span>
+        <span className="shrink-0 text-brand-accent transition-transform group-hover:translate-x-0.5" aria-hidden>↓</span>
+      </div>
+    </button>
+  );
+}
+
 function TextKitCard({
   title,
   chip,
@@ -1246,8 +1379,58 @@ function KitModal({
         {active.kind === "animation" && (
           <AnimationModalBody item={active.data} />
         )}
+
+        {active.kind === "visuel" && (
+          <VisuelModalBody item={active.data} />
+        )}
       </div>
     </div>
+  );
+}
+
+function VisuelModalBody({ item }: { item: VisuelKit }) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void getKitFileUrl(item.path).then((u) => { if (alive) setPreviewUrl(u); });
+    return () => { alive = false; };
+  }, [item.path]);
+  const isImage = item.mimeType.startsWith("image/");
+  const categoryLabel =
+    VISUEL_CATEGORIES.find((c) => c.id === item.category)?.label ?? item.category;
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-2 pr-12">
+        <span className="rounded-full bg-brand-accent/15 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-brand-accent">
+          {categoryLabel}
+        </span>
+        <span className="rounded-full bg-brand-cream/10 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-brand-cream">
+          {kitFileLabel(item.path) || item.path}
+        </span>
+      </div>
+      <h2 className="mt-3 text-2xl font-medium tracking-tight text-brand-cream">
+        {item.title}
+      </h2>
+
+      <div className="mt-5 grid aspect-video w-full place-items-center overflow-hidden rounded-xl border border-brand-border-dark bg-brand-dark/40">
+        {isImage && previewUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={previewUrl} alt={item.title} className="max-h-full max-w-full object-contain p-4" />
+        ) : (
+          <span className="text-4xl opacity-60" aria-hidden>📄</span>
+        )}
+      </div>
+
+      <div className="mt-6 flex flex-wrap items-center justify-end gap-2 border-t border-brand-border-dark pt-5">
+        <button
+          type="button"
+          onClick={() => void openKitFile(item.path, kitFileLabel(item.path) || item.title)}
+          className="inline-flex items-center gap-1.5 rounded-full bg-brand-accent px-4 py-2 text-xs font-medium text-brand-dark transition-colors hover:bg-brand-accent/90"
+        >
+          <DownloadIcon /> Télécharger
+        </button>
+      </div>
+    </>
   );
 }
 

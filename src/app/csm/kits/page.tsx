@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState, useRef, type ReactNode } from "react";
-import { useKitsStore, type LancementKit, type AnimationItem, type EmailTopicKit } from "@/lib/kits-store";
-import { uploadKitFile } from "@/lib/storage";
+import { useKitsStore, type LancementKit, type AnimationItem, type EmailTopicKit, type VisuelKit } from "@/lib/kits-store";
+import { VISUEL_CATEGORIES, type VisuelCategory } from "@/app/(client)/kits-communication/data";
+import { uploadKitFile, getKitFileUrl, kitFileLabel, openKitFile } from "@/lib/storage";
 import { useWorkshops, themes as workshopThemes, type Workshop } from "@/lib/workshops-store";
 
 // ─── constants ───────────────────────────────────────────────────────────────
@@ -110,11 +111,36 @@ const workshopThemeNameById = Object.fromEntries(
 
 // ─── tab types ────────────────────────────────────────────────────────────────
 
-type ThemeId = "lancement" | "animation" | "emails" | "kits-ateliers";
+type ThemeId = "lancement" | "animation" | "emails" | "kits-ateliers" | "visuels";
 
 // ─── form types ───────────────────────────────────────────────────────────────
 
-type EditingKind = "lancement" | "animation" | "email";
+type EditingKind = "lancement" | "animation" | "email" | "visuel";
+
+interface VisuelForm {
+  title: string;
+  category: VisuelCategory;
+  path: string;       // populated by the upload helper
+  mimeType: string;
+}
+
+const EMPTY_VISUEL: VisuelForm = {
+  title: "", category: "logo", path: "", mimeType: "",
+};
+
+function visuelToForm(v: VisuelKit): VisuelForm {
+  return { title: v.title, category: v.category, path: v.path, mimeType: v.mimeType };
+}
+
+function formToVisuel(f: VisuelForm, existingId?: string): VisuelKit {
+  return {
+    id: existingId ?? "vis-" + Date.now().toString(36),
+    title: f.title.trim(),
+    category: f.category,
+    path: f.path,
+    mimeType: f.mimeType,
+  };
+}
 
 interface LancementForm {
   title: string;
@@ -229,10 +255,11 @@ function formToEmail(f: EmailForm, existingId?: string): EmailTopicKit {
 
 export default function CsmKitsPage() {
   const {
-    lancementKits, animationItems, emailTopicKits,
+    lancementKits, animationItems, emailTopicKits, visuelKits,
     addLancementKit, updateLancementKit, deleteLancementKit,
     addAnimationItem, updateAnimationItem, deleteAnimationItem,
     addEmailTopicKit, updateEmailTopicKit, deleteEmailTopicKit,
+    addVisuelKit, updateVisuelKit, deleteVisuelKit,
   } = useKitsStore();
   const { workshops } = useWorkshops();
 
@@ -249,6 +276,7 @@ export default function CsmKitsPage() {
   const [lancementForm, setLancementForm] = useState<LancementForm>(EMPTY_LANCEMENT);
   const [animationForm, setAnimationForm] = useState<AnimationForm>(EMPTY_ANIMATION);
   const [emailForm, setEmailForm] = useState<EmailForm>(EMPTY_EMAIL);
+  const [visuelForm, setVisuelForm] = useState<VisuelForm>(EMPTY_VISUEL);
   const [formError, setFormError] = useState("");
 
   // delete confirm
@@ -266,7 +294,8 @@ export default function CsmKitsPage() {
     { id: "kits-ateliers" as ThemeId, name: "Kits par atelier", icon: "🎓", count: workshops.length },
     { id: "emails" as ThemeId, name: "Emails par thématique", icon: "💌", count: emailTopicKits.length },
     { id: "lancement" as ThemeId, name: "Kit de lancement", icon: "🚀", count: lancementKits.length },
-  ], [animationItems.length, workshops.length, emailTopicKits.length, lancementKits.length]);
+    { id: "visuels" as ThemeId, name: "Visuels & icônes", icon: "🎨", count: visuelKits.length },
+  ], [animationItems.length, workshops.length, emailTopicKits.length, lancementKits.length, visuelKits.length]);
 
   const filteredLancement = useMemo(
     () => lancementKits.filter((k) =>
@@ -300,9 +329,17 @@ export default function CsmKitsPage() {
     [lower, activeTheme, workshops]
   );
 
+  // Visuels are language-agnostic — only the active tab + search query apply.
+  const filteredVisuels = useMemo(
+    () => activeTheme !== "visuels" ? [] : visuelKits.filter((v) =>
+      !lower || v.title.toLowerCase().includes(lower) || v.category.toLowerCase().includes(lower)
+    ),
+    [lower, activeTheme, visuelKits]
+  );
+
   const totalVisible =
     filteredLancement.length + filteredAnimation.length +
-    filteredEmails.length + filteredWorkshops.length;
+    filteredEmails.length + filteredWorkshops.length + filteredVisuels.length;
 
   const hasActiveFilters = !!lower || activeTheme !== "animation" || activeLanguage !== "FR";
 
@@ -312,7 +349,7 @@ export default function CsmKitsPage() {
     setActiveLanguage("FR");
   };
 
-  const totalKits = animationItems.length + emailTopicKits.length + lancementKits.length + workshops.length;
+  const totalKits = animationItems.length + emailTopicKits.length + lancementKits.length + workshops.length + visuelKits.length;
   const newInMay = animationItems.filter((a) => a.month === TODAY_MONTH).length;
 
   // open form helpers
@@ -320,11 +357,16 @@ export default function CsmKitsPage() {
     setEditingKind(kind);
     setEditingId("new");
     setFormError("");
-    const prefix = kind === "lancement" ? "lan" : kind === "animation" ? "ani" : "email";
+    const prefix =
+      kind === "lancement" ? "lan"
+      : kind === "animation" ? "ani"
+      : kind === "email" ? "email"
+      : "vis";
     setKitDraftId(`${prefix}-${Date.now().toString(36)}`);
     if (kind === "lancement") setLancementForm(EMPTY_LANCEMENT);
     if (kind === "animation") setAnimationForm(EMPTY_ANIMATION);
     if (kind === "email") setEmailForm(EMPTY_EMAIL);
+    if (kind === "visuel") setVisuelForm(EMPTY_VISUEL);
   }
 
   function openEdit(kind: EditingKind, id: string) {
@@ -340,6 +382,9 @@ export default function CsmKitsPage() {
     } else if (kind === "email") {
       const item = emailTopicKits.find((e) => e.id === id);
       if (item) setEmailForm(emailToForm(item));
+    } else if (kind === "visuel") {
+      const item = visuelKits.find((v) => v.id === id);
+      if (item) setVisuelForm(visuelToForm(item));
     }
   }
 
@@ -365,6 +410,11 @@ export default function CsmKitsPage() {
       if (!emailForm.title.trim()) { setFormError("Le titre est obligatoire."); return; }
       const item = formToEmail(emailForm, editingId === "new" ? undefined : editingId!);
       if (editingId === "new") addEmailTopicKit(item); else updateEmailTopicKit(item);
+    } else if (editingKind === "visuel") {
+      if (!visuelForm.title.trim()) { setFormError("Le titre est obligatoire."); return; }
+      if (!visuelForm.path) { setFormError("Uploadez un fichier avant d'enregistrer."); return; }
+      const item = formToVisuel(visuelForm, editingId === "new" ? kitDraftId ?? undefined : editingId!);
+      if (editingId === "new") addVisuelKit(item); else updateVisuelKit(item);
     }
     closeForm();
   }
@@ -375,6 +425,7 @@ export default function CsmKitsPage() {
     if (kind === "lancement") deleteLancementKit(id);
     else if (kind === "animation") deleteAnimationItem(id);
     else if (kind === "email") deleteEmailTopicKit(id);
+    else if (kind === "visuel") deleteVisuelKit(id);
     setConfirmDelete(null);
   }
 
@@ -384,6 +435,7 @@ export default function CsmKitsPage() {
     if (kind === "lancement") return lancementKits.find((k) => k.id === id)?.title ?? "";
     if (kind === "animation") return animationItems.find((a) => a.id === id)?.title ?? "";
     if (kind === "email") return emailTopicKits.find((e) => e.id === id)?.title ?? "";
+    if (kind === "visuel") return visuelKits.find((v) => v.id === id)?.title ?? "";
     return "";
   }
 
@@ -514,6 +566,22 @@ export default function CsmKitsPage() {
                 </button>
               </div>
             )}
+            {activeTheme === "visuels" && filteredVisuels.length > 0 && (
+              <AdminVisuelsSection
+                items={filteredVisuels}
+                onAdd={() => openNew("visuel")}
+                onEdit={(id) => openEdit("visuel", id)}
+                onDelete={(id) => setConfirmDelete({ kind: "visuel", id })}
+              />
+            )}
+            {activeTheme === "visuels" && filteredVisuels.length === 0 && (
+              <div className="flex items-center justify-between">
+                <EmptyState onReset={resetFilters} query={search} />
+                <button type="button" onClick={() => openNew("visuel")} className="ml-4 flex shrink-0 items-center gap-2 rounded-[10px] bg-[#5eead4] px-4 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#84d4a6]">
+                  <PlusIcon /> Ajouter
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -530,6 +598,8 @@ export default function CsmKitsPage() {
           setAnimationForm={setAnimationForm}
           emailForm={emailForm}
           setEmailForm={setEmailForm}
+          visuelForm={visuelForm}
+          setVisuelForm={setVisuelForm}
           error={formError}
           onSubmit={handleSubmit}
           onClose={closeForm}
@@ -954,6 +1024,112 @@ function AdminWorkshopKitsSection({ workshops: items }: { workshops: Workshop[] 
   );
 }
 
+// ─── admin visuels section ────────────────────────────────────────────────────
+
+function AdminVisuelsSection({
+  items,
+  onAdd,
+  onEdit,
+  onDelete,
+}: {
+  items: VisuelKit[];
+  onAdd: () => void;
+  onEdit: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const grouped: Record<VisuelCategory, VisuelKit[]> = {
+    logo: [], icone: [], picto: [], banniere: [],
+  };
+  for (const v of items) grouped[v.category].push(v);
+  return (
+    <section>
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <header>
+          <h2 className="flex items-center gap-2 text-xl font-medium text-brand-cream">
+            <span aria-hidden>🎨</span> Visuels & icônes teale
+          </h2>
+          <p className="mt-1 max-w-2xl text-sm text-brand-muted-on-dark">
+            Logos, icônes, pictos et bannières partagés avec les clients. Une modification ou un retrait est visible immédiatement côté client.
+          </p>
+        </header>
+        <button type="button" onClick={onAdd} className="flex shrink-0 items-center gap-2 rounded-[10px] bg-[#5eead4] px-4 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#84d4a6]">
+          <PlusIcon /> Ajouter
+        </button>
+      </div>
+      <div className="space-y-8">
+        {VISUEL_CATEGORIES.map((cat) => {
+          const list = grouped[cat.id];
+          if (list.length === 0) return null;
+          return (
+            <div key={cat.id}>
+              <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-muted-on-dark">
+                <span aria-hidden>{cat.icon}</span>{cat.label}
+                <span className="text-brand-muted-on-dark/60">({list.length})</span>
+              </h3>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+                {list.map((v) => (
+                  <AdminVisuelCard
+                    key={v.id}
+                    item={v}
+                    onEdit={() => onEdit(v.id)}
+                    onDelete={() => onDelete(v.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function AdminVisuelCard({
+  item,
+  onEdit,
+  onDelete,
+}: {
+  item: VisuelKit;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void getKitFileUrl(item.path).then((u) => { if (alive) setPreviewUrl(u); });
+    return () => { alive = false; };
+  }, [item.path]);
+  const isImage = item.mimeType.startsWith("image/");
+  return (
+    <div className="group flex flex-col overflow-hidden rounded-xl border border-brand-border-dark bg-brand-surface">
+      <button
+        type="button"
+        onClick={onEdit}
+        className="grid aspect-square w-full place-items-center bg-brand-dark/40 transition-colors hover:bg-brand-dark/60"
+        title="Modifier"
+      >
+        {isImage && previewUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={previewUrl} alt={item.title} className="h-full w-full object-contain p-3" loading="lazy" />
+        ) : (
+          <span className="text-3xl opacity-60" aria-hidden>📄</span>
+        )}
+      </button>
+      <div className="flex items-center gap-2 px-3 py-2.5">
+        <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-brand-cream">
+          {item.title}
+        </span>
+        <button type="button" onClick={onEdit} title="Modifier" className="grid h-6 w-6 place-items-center rounded-full text-[#94a8a0] hover:bg-white/[0.06] hover:text-[#e8f5ef]">
+          <PencilIcon />
+        </button>
+        <button type="button" onClick={onDelete} title="Supprimer" className="grid h-6 w-6 place-items-center rounded-full text-[#94a8a0] hover:bg-[rgba(239,68,68,0.15)] hover:text-[#fca5a5]">
+          <TrashIcon />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── admin text kit card ──────────────────────────────────────────────────────
 
 function AdminTextKitCard({
@@ -1058,6 +1234,8 @@ function KitsFormSlideOver({
   setAnimationForm,
   emailForm,
   setEmailForm,
+  visuelForm,
+  setVisuelForm,
   error,
   onSubmit,
   onClose,
@@ -1071,6 +1249,8 @@ function KitsFormSlideOver({
   setAnimationForm: React.Dispatch<React.SetStateAction<AnimationForm>>;
   emailForm: EmailForm;
   setEmailForm: React.Dispatch<React.SetStateAction<EmailForm>>;
+  visuelForm: VisuelForm;
+  setVisuelForm: React.Dispatch<React.SetStateAction<VisuelForm>>;
   error: string;
   onSubmit: () => void;
   onClose: () => void;
@@ -1093,6 +1273,18 @@ function KitsFormSlideOver({
       [field]: f[field] ? `${f[field]}\n${path}` : path,
     }));
   };
+  // Single-file upload for a visuel. Replaces the form's path/mimeType — a
+  // visuel is one row = one asset. The kit-files bucket is shared, so the
+  // CSM-only RLS policy enforces write protection.
+  const handleVisuelUpload = async (file: File) => {
+    setUploadError("");
+    const { path, error: err } = await uploadKitFile("visuels", kitId, file);
+    if (err || !path) {
+      setUploadError(err ?? "Échec de l'envoi du fichier.");
+      return;
+    }
+    setVisuelForm((f) => ({ ...f, path, mimeType: file.type || "application/octet-stream" }));
+  };
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1107,7 +1299,11 @@ function KitsFormSlideOver({
   const TEXTAREA = `${INPUT} resize-none`;
   const LABEL = "mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[#94a8a0]";
 
-  const titleLabel = kind === "lancement" ? "Kit de lancement" : kind === "animation" ? "Temps fort mensuel" : "Email thématique";
+  const titleLabel =
+    kind === "lancement" ? "Kit de lancement"
+    : kind === "animation" ? "Temps fort mensuel"
+    : kind === "email" ? "Email thématique"
+    : "Visuel teale";
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-end bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -1287,6 +1483,54 @@ function KitsFormSlideOver({
                   placeholder="Texte de l'email tel qu'il sera proposé au client. Laissé vide : le client voit le modèle auto-généré."
                 />
               </div>
+            </>
+          )}
+
+          {kind === "visuel" && (
+            <>
+              <div>
+                <label className={LABEL}>Titre *</label>
+                <input className={INPUT} value={visuelForm.title} onChange={(e) => setVisuelForm((f) => ({ ...f, title: e.target.value }))} placeholder="Ex: Logo teale fond clair" />
+              </div>
+              <div>
+                <label className={LABEL}>Catégorie *</label>
+                <select
+                  className={`${INPUT} field-select`}
+                  value={visuelForm.category}
+                  onChange={(e) => setVisuelForm((f) => ({ ...f, category: e.target.value as VisuelCategory }))}
+                >
+                  {VISUEL_CATEGORIES.map((c) => (
+                    <option key={c.id} value={c.id}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={LABEL}>Fichier *</label>
+                <label className="flex cursor-pointer items-center gap-2 rounded-[10px] border border-dashed border-[rgba(255,255,255,0.12)] bg-[rgba(255,255,255,0.02)] px-4 py-3 text-[12px] text-[#94a8a0] hover:border-[rgba(94,234,212,0.4)] hover:text-[#e8f5ef]">
+                  📤 {visuelForm.path ? "Remplacer le fichier" : "Uploader un fichier"}
+                  <input
+                    type="file"
+                    accept="image/*,.svg,.pdf"
+                    className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) { void handleVisuelUpload(f); e.target.value = ""; } }}
+                  />
+                </label>
+                {visuelForm.path && (
+                  <div className="mt-2 flex items-center justify-between gap-2 rounded-[8px] border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] px-3 py-2 text-[12px] text-[#c1d4cc]">
+                    <span className="min-w-0 flex-1 truncate">📎 {kitFileLabel(visuelForm.path)}</span>
+                    <button
+                      type="button"
+                      onClick={() => void openKitFile(visuelForm.path, kitFileLabel(visuelForm.path) || visuelForm.title)}
+                      className="shrink-0 text-[11px] font-semibold text-[#5eead4] hover:text-[#84d4a6]"
+                    >Aperçu</button>
+                  </div>
+                )}
+              </div>
+              {uploadError && (
+                <p className="rounded-[8px] bg-[rgba(239,68,68,0.1)] px-3 py-2 text-[12px] font-medium text-[#fca5a5]">
+                  {uploadError}
+                </p>
+              )}
             </>
           )}
 

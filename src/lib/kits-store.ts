@@ -5,9 +5,30 @@ import {
   type LancementKit,
   type AnimationItem,
   type EmailTopicKit,
+  type VisuelKit,
 } from "@/app/(client)/kits-communication/data";
 
-export type { LancementKit, AnimationItem, EmailTopicKit };
+export type { LancementKit, AnimationItem, EmailTopicKit, VisuelKit };
+
+function visuelFromRow(row: Record<string, unknown>): VisuelKit {
+  return {
+    id: row.id as string,
+    title: row.title as string,
+    category: row.category as VisuelKit["category"],
+    path: row.path as string,
+    mimeType: row.mime_type as string,
+  };
+}
+
+function visuelToRow(v: VisuelKit) {
+  return {
+    id: v.id,
+    title: v.title,
+    category: v.category,
+    path: v.path,
+    mime_type: v.mimeType,
+  };
+}
 
 function animationFromRow(row: Record<string, unknown>): AnimationItem {
   return {
@@ -47,6 +68,7 @@ export function useKitsStore() {
   const [lancementKits, setLancementKits] = useState<LancementKit[]>([]);
   const [animationItems, setAnimationItems] = useState<AnimationItem[]>([]);
   const [emailTopicKits, setEmailTopicKits] = useState<EmailTopicKit[]>([]);
+  const [visuelKits, setVisuelKits] = useState<VisuelKit[]>([]);
 
   useEffect(() => {
     // No front-side seeding (avoids concurrent re-seed races): an empty table
@@ -58,20 +80,25 @@ export function useKitsStore() {
       // If the session can't be made usable, skip rather than blanking the
       // current lists (see supabase.ts for the rationale).
       if (!(await ensureSession())) return;
-      const [lancement, animation, emails] = await Promise.all([
+      const [lancement, animation, emails, visuels] = await Promise.all([
         supabase.from("kits_lancement").select("*").order("id"),
         supabase.from("kits_animation").select("*").order("id"),
         supabase.from("kits_email").select("*").order("id"),
+        supabase.from("kits_visuels").select("*").order("created_at", { ascending: false }),
       ]);
       if (!alive) return;
-      if (lancement.error || animation.error || emails.error) {
+      if (lancement.error || animation.error || emails.error || visuels.error) {
         // Transient failure — keep the current lists rather than blanking them.
-        console.error("[kits-store] load", lancement.error ?? animation.error ?? emails.error);
+        console.error(
+          "[kits-store] load",
+          lancement.error ?? animation.error ?? emails.error ?? visuels.error,
+        );
         return;
       }
       setLancementKits((lancement.data ?? []) as LancementKit[]);
       setAnimationItems((animation.data ?? []).map(animationFromRow));
       setEmailTopicKits((emails.data ?? []) as EmailTopicKit[]);
+      setVisuelKits((visuels.data ?? []).map(visuelFromRow));
     };
     void load();
     // Re-fetch after a token refresh — the initial load may have raced an
@@ -130,10 +157,26 @@ export function useKitsStore() {
     setEmailTopicKits((prev) => prev.filter((e) => e.id !== id));
   }, []);
 
+  const addVisuelKit = useCallback(async (item: VisuelKit) => {
+    const { data } = await supabase.from("kits_visuels").insert(visuelToRow(item)).select().single();
+    if (data) setVisuelKits((prev) => [visuelFromRow(data), ...prev]);
+  }, []);
+
+  const updateVisuelKit = useCallback(async (updated: VisuelKit) => {
+    const { data } = await supabase.from("kits_visuels").update(visuelToRow(updated)).eq("id", updated.id).select().single();
+    if (data) setVisuelKits((prev) => prev.map((v) => (v.id === updated.id ? visuelFromRow(data) : v)));
+  }, []);
+
+  const deleteVisuelKit = useCallback(async (id: string) => {
+    await supabase.from("kits_visuels").delete().eq("id", id);
+    setVisuelKits((prev) => prev.filter((v) => v.id !== id));
+  }, []);
+
   return {
     lancementKits,
     animationItems,
     emailTopicKits,
+    visuelKits,
     addLancementKit,
     updateLancementKit,
     deleteLancementKit,
@@ -143,5 +186,8 @@ export function useKitsStore() {
     addEmailTopicKit,
     updateEmailTopicKit,
     deleteEmailTopicKit,
+    addVisuelKit,
+    updateVisuelKit,
+    deleteVisuelKit,
   };
 }

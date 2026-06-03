@@ -59,7 +59,7 @@ const KIT_BUCKET = "kit-files";
 
 /** Uploads a kit asset under "<category>/<itemId>/…". Returns path or error. */
 export async function uploadKitFile(
-  category: "lancement" | "animation" | "email",
+  category: "lancement" | "animation" | "email" | "visuels",
   itemId: string,
   file: File,
 ): Promise<{ path: string | null; error: string | null }> {
@@ -89,6 +89,20 @@ export async function openKitFile(path: string, downloadName?: string) {
     return;
   }
   window.open(data.signedUrl, "_blank", "noopener");
+}
+
+/** Returns a short-lived (1 h) signed URL for a kit asset, or null. Used for
+ *  in-page thumbnail previews (no download attribute). */
+export async function getKitFileUrl(path: string): Promise<string | null> {
+  if (!path || !path.includes("/")) return null;
+  const { data, error } = await supabase.storage
+    .from(KIT_BUCKET)
+    .createSignedUrl(path, 3600);
+  if (error) {
+    console.error("[storage] kit preview url", error);
+    return null;
+  }
+  return data.signedUrl;
 }
 
 /** Friendly filename for a kit path. Strips the "<timestamp>-<rand>-" prefix. */

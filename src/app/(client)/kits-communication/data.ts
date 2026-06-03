@@ -36,6 +36,24 @@ export type EmailTopicKit = {
   body?: string;
 };
 
+export type VisuelCategory = 'logo' | 'icone' | 'picto' | 'banniere';
+
+export type VisuelKit = {
+  id: string;
+  title: string;
+  category: VisuelCategory;
+  path: string;       // storage path inside "kit-files"
+  mimeType: string;
+};
+
+export const VISUEL_CATEGORIES: { id: VisuelCategory; label: string; icon: string }[] = [
+  { id: 'logo', label: 'Logos teale', icon: '🟢' },
+  { id: 'icone', label: 'Icônes', icon: '✨' },
+  { id: 'picto', label: 'Pictos thématiques', icon: '🎨' },
+  { id: 'banniere', label: 'Bannières & visuels', icon: '🖼' },
+];
+
 export const lancementKits: LancementKit[] = [];
 export const animationItems: AnimationItem[] = [];
 export const emailTopicKits: EmailTopicKit[] = [];
+export const visuelKits: VisuelKit[] = [];

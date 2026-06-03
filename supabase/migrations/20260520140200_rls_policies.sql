@@ -121,7 +121,7 @@ declare
   t text;
 begin
   foreach t in array array[
-    'workshops', 'kits_lancement', 'kits_animation', 'kits_email'
+    'workshops', 'kits_lancement', 'kits_animation', 'kits_email', 'kits_visuels'
   ]
   loop
     execute format('alter table public.%I enable row level security;', t);

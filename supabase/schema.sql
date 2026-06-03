@@ -77,6 +77,16 @@ create table if not exists kits_email (
   body     text
 );
 
+create table if not exists kits_visuels (
+  id          text primary key,
+  title       text not null,
+  category    text not null check (category in ('logo', 'icone', 'picto', 'banniere')),
+  path        text not null,
+  mime_type   text not null,
+  created_at  timestamptz not null default now()
+);
+create index if not exists kits_visuels_category_idx on kits_visuels (category);
+
 -- ─── Client actions (CSM home to-do list, per-CSM ownership) ────────────────
 create table if not exists client_actions (
   id            bigint primary key generated always as identity,
