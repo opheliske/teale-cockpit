@@ -708,13 +708,15 @@ export default function MonPlanningPage() {
             <QuarterTabs active={activeQuarterId} onSelect={handlePickQuarter} quarterList={displayQuarters} />
           </div>
 
-          {/* Section header */}
+          {/* Section header — affiche les mois du trimestre actif plutôt que
+              "Q1/Q2/…" : le client se repère par les mois, pas par un libellé
+              de trimestre abstrait. */}
           <div className="mb-5 flex items-baseline justify-between">
             <div className="text-[14px] font-semibold tracking-[0.3px] text-[#e8f5ef]">
               Événements du trimestre{" "}
               <span className="text-[#5eead4]">·</span>{" "}
               <span className="font-medium text-[#94a8a0]">
-                {activeQuarter.id} {activeYear}
+                {activeQuarter.months.map((m) => monthLabel[m] ?? m).join(" · ")} {activeYear}
               </span>
             </div>
             <div className="text-[11px] uppercase tracking-[0.5px] text-[#6b7c75]">
@@ -901,7 +903,7 @@ function FocusBar({
         <div className="flex-1">
           <div className="mb-2.5 inline-flex items-center gap-1.5 rounded-[5px] bg-[#5eead4] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[1.2px] text-[#042f2a]">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#042f2a]" aria-hidden />
-            {status === "current" ? "En cours" : status === "past" ? "Terminé" : "À venir"} · {quarter.id} {year}
+            {status === "current" ? "En cours" : status === "past" ? "Terminé" : "À venir"} · {quarter.months.map((m) => monthLabel[m]?.slice(0, 3) ?? m.slice(0, 3)).join(" · ")} {year}
           </div>
           <div className="mb-1.5 text-[20px] font-semibold text-[#e8f5ef]">{quarter.theme}</div>
           <div className="text-[13px] leading-relaxed text-[#c1d4cc]">{quarter.subtitle}</div>

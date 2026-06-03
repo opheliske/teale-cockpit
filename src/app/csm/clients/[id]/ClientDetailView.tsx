@@ -2138,14 +2138,14 @@ export default function ClientDetailView({ id }: { id: string }) {
           {planYear === "prev" && (
             detail.prevYear ? (
               <div className="grid grid-cols-4 gap-4">
-                {(["q1", "q2", "q3", "q4"] as const).map((q, i) => {
+                {(["q1", "q2", "q3", "q4"] as const).map((q) => {
                   const qd = detail.prevYear![q];
                   const pct = Math.round((qd.done / Math.max(qd.total, 1)) * 100);
                   return (
                     <article key={q} className="overflow-hidden rounded-[18px] border border-[#1a3530] bg-[rgba(14,37,32,0.30)] p-5">
                       <div className="mb-3 flex items-center justify-between">
                         <span className="rounded-[6px] bg-[rgba(168,232,149,0.10)] px-[9px] py-1 text-[10px] font-bold uppercase tracking-[1.2px] text-[#a8e895]">
-                          Q{i + 1} · Terminé
+                          Terminé
                         </span>
                         <span className="text-[11px] font-semibold text-[#a8e895]">{pct}%</span>
                       </div>
@@ -2234,6 +2234,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                   const fPct = activeItems.length > 0 ? Math.round((fDone / activeItems.length) * 100) : 0;
                   const fStatus = qStatusLabel[activePlanQ];
                   const fTheme = qThemeMap[activePlanQ];
+                  const fMonths = getPQ(activePlanQ).months.map((m) => m.label.slice(0, 3)).join(" · ");
                   return (
                     <div className="relative mb-4 overflow-hidden rounded-2xl border border-[rgba(94,234,212,0.22)] px-7 py-5"
                       style={{ background: "linear-gradient(135deg, rgba(94,234,212,0.12) 0%, rgba(94,234,212,0.03) 100%)" }}>
@@ -2242,7 +2243,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                         <div className="flex-1">
                           <div className="mb-2.5 inline-flex items-center gap-1.5 rounded-[5px] bg-[#5eead4] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[1.2px] text-[#042f2a]">
                             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#042f2a]" />
-                            {QUARTER_EMOJI[activePlanQ]} {fStatus} · {activePlanQ}
+                            {QUARTER_EMOJI[activePlanQ]} {fStatus} · {fMonths}
                           </div>
                           <div className="text-[20px] font-semibold text-[#e8f5ef]">{fTheme || "Thème à définir"}</div>
                         </div>

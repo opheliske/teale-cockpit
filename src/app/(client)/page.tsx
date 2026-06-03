@@ -125,7 +125,6 @@ export default function ClientHomePage() {
     () => planQuarters.find((q) => q.status === "current") ?? planQuarters[0],
     [planQuarters],
   );
-  const currentQuarter = currentPlanQuarter?.id ?? "Q1";
   const currentQuarterMonths = useMemo(() => {
     if (!currentPlanQuarter) return "";
     const labels = currentPlanQuarter.months.map((m) => m.label);
@@ -238,7 +237,7 @@ export default function ClientHomePage() {
                   Votre plan annuel
                 </h2>
                 <p className="mt-0.5 text-[11px] uppercase tracking-[0.06em] text-[#6b7c75]">
-                  Trimestre en cours · {currentQuarter}{currentQuarterMonths ? ` · ${currentQuarterMonths}` : ""}
+                  Trimestre en cours{currentQuarterMonths ? ` · ${currentQuarterMonths}` : ""}
                 </p>
               </div>
               <Link href="/mon-planning" className="shrink-0 text-[12px] text-[#5eead4] hover:underline">
@@ -276,7 +275,7 @@ export default function ClientHomePage() {
                   >
                     <div className="mb-1.5 flex items-center justify-between gap-1">
                       <span className={`text-[11px] font-bold tracking-[0.5px] ${isCurrent ? "text-[#5eead4]" : "text-[#94a8a0]"}`}>
-                        {q.emoji} {q.id}
+                        {q.emoji}
                       </span>
                       <span
                         className="rounded-[3px] px-[5px] py-[1px] text-[8px] font-bold uppercase tracking-[0.4px]"
@@ -415,7 +414,7 @@ export default function ClientHomePage() {
                 Communications du trimestre
               </h2>
               <p className="mt-0.5 text-[11px] uppercase tracking-[0.06em] text-[#6b7c75]">
-                Kits à relayer chaque mois auprès de vos collaborateurs · {currentQuarter}
+                Kits à relayer chaque mois auprès de vos collaborateurs
                 {currentQuarterMonths ? ` · ${currentQuarterMonths}` : ""}
               </p>
             </div>

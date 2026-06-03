@@ -671,7 +671,9 @@ function AnimationSection({
         <div className="text-[14px] font-semibold tracking-[0.3px] text-[#e8f5ef]">
           Communications du trimestre{" "}
           <span className="text-[#5eead4]">·</span>{" "}
-          <span className="font-medium text-[#94a8a0]">{activeQId} 2026</span>
+          <span className="font-medium text-[#94a8a0]">
+            {quarter.months.map((m) => monthLabel[m] ?? m).join(" · ")} 2026
+          </span>
         </div>
         <div className="text-[11px] uppercase tracking-[0.5px] text-[#6b7c75]">
           {quarterItems.length} kit{quarterItems.length > 1 ? "s" : ""} · {upcomingCount} à venir
@@ -720,13 +722,13 @@ function QuarterTabComm({
             : "border-transparent hover:bg-white/[0.03]"
       }`}
     >
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-[10px] flex items-center justify-between gap-2">
         <span
-          className={`text-[11px] font-bold tracking-[1px] ${
+          className={`text-[11px] font-bold tracking-[0.6px] ${
             isActive ? "text-[#5eead4]" : "text-[#94a8a0]"
           }`}
         >
-          {quarter.id}
+          {monthAbbrs}
         </span>
         <span
           className={`text-[9px] uppercase tracking-[0.5px] ${
@@ -738,7 +740,6 @@ function QuarterTabComm({
           {status === "past" ? "Passé" : status === "current" ? "Maintenant" : "À venir"}
         </span>
       </div>
-      <div className="mb-[10px] text-[10px] tracking-[0.3px] text-[#6b7c75]">{monthAbbrs}</div>
       <div className="h-[3px] overflow-hidden rounded-[2px] bg-white/[0.05]">
         <div
           className={`h-full rounded-[2px] ${
