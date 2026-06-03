@@ -5,7 +5,6 @@ import {
   useMemo,
   useRef,
   useState,
-  Fragment,
   type ReactNode,
   type Dispatch,
   type SetStateAction,
@@ -448,6 +447,11 @@ export default function KitsCommunicationPage() {
     return sorted;
   }, [cards, q, collection, types, themesSel, auds, langs, sort, currentMonth]);
 
+  // Les temps forts vont dans la section calendrier (en haut) ; les autres kits
+  // dans la grille en dessous.
+  const tempsfortCards = useMemo(() => visible.filter((c) => c.type === "tempsfort"), [visible]);
+  const otherCards = useMemo(() => visible.filter((c) => c.type !== "tempsfort"), [visible]);
+
   const activeFacetCount = types.size + themesSel.size + auds.size + langs.size;
   const hasActiveFilters = activeFacetCount > 0 || !!q.trim() || collection !== "all";
 
@@ -709,16 +713,32 @@ export default function KitsCommunicationPage() {
               </div>
             )}
 
-            {/* Grille / état vide */}
+            {/* Calendrier des temps forts + grille des autres kits / état vide */}
             {visible.length === 0 ? (
               <EmptyState onReset={resetFilters} query={q} />
-            ) : sort === "period" ? (
-              <GroupedGrid cards={visible} onOpen={setActiveCard} />
             ) : (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(248px,1fr))] gap-4">
-                {visible.map((c) => (
-                  <Card key={c.id} card={c} onOpen={() => setActiveCard(c.payload)} />
-                ))}
+              <div className="space-y-10">
+                {tempsfortCards.length > 0 && (
+                  <TempsFortCalendar
+                    cards={tempsfortCards}
+                    currentMonth={currentMonth}
+                    onOpen={setActiveCard}
+                  />
+                )}
+                {otherCards.length > 0 && (
+                  <section>
+                    {tempsfortCards.length > 0 && (
+                      <h2 className="mb-4 text-[13px] font-bold uppercase tracking-[0.12em] text-brand-muted-on-dark">
+                        Autres kits
+                      </h2>
+                    )}
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(248px,1fr))] gap-4">
+                      {otherCards.map((c) => (
+                        <Card key={c.id} card={c} onOpen={() => setActiveCard(c.payload)} />
+                      ))}
+                    </div>
+                  </section>
+                )}
               </div>
             )}
           </section>
@@ -849,36 +869,306 @@ function Card({ card, onOpen }: { card: KitCard; onOpen: () => void }) {
   );
 }
 
-function GroupedGrid({
+// ─────────────────────────────────────────────────────────────────────────────
+// Calendrier des temps forts (trimestre → mois)
+// ─────────────────────────────────────────────────────────────────────────────
+
+type CommQuarterId = "Q1" | "Q2" | "Q3" | "Q4";
+type CommQuarter = { id: CommQuarterId; months: string[] };
+const commQuarters: CommQuarter[] = [
+  { id: "Q1", months: ["January", "February", "March"] },
+  { id: "Q2", months: ["April", "May", "June"] },
+  { id: "Q3", months: ["July", "August", "September"] },
+  { id: "Q4", months: ["October", "November", "December"] },
+];
+type MonthStatus = "past" | "current" | "upcoming";
+
+function monthStatusOf(month: string, curIdx: number): MonthStatus {
+  const i = allMonths.indexOf(month);
+  if (i < curIdx) return "past";
+  if (i === curIdx) return "current";
+  return "upcoming";
+}
+function quarterIdOfIdx(idx: number): CommQuarterId {
+  if (idx <= 2) return "Q1";
+  if (idx <= 5) return "Q2";
+  if (idx <= 8) return "Q3";
+  return "Q4";
+}
+function quarterStatusOf(q: CommQuarter, curIdx: number): "past" | "current" | "upcoming" {
+  if (monthStatusOf(q.months[q.months.length - 1], curIdx) === "past") return "past";
+  if (monthStatusOf(q.months[0], curIdx) === "upcoming") return "upcoming";
+  return "current";
+}
+function commQuarterProgressOf(q: CommQuarter, curIdx: number): number {
+  const s = quarterStatusOf(q, curIdx);
+  if (s === "past") return 100;
+  if (s === "upcoming") return 0;
+  const startIdx = allMonths.indexOf(q.months[0]);
+  return Math.round((curIdx - startIdx) * 33 + 15);
+}
+function cleanTitle(t: string): string {
+  return t.replace(/^[^\p{L}\p{N}]+/u, "").trim();
+}
+function animOf(card: KitCard): AnimationItem | null {
+  return card.payload.kind === "animation" ? card.payload.data : null;
+}
+
+function TempsFortCalendar({
   cards,
+  currentMonth,
   onOpen,
 }: {
   cards: KitCard[];
-  onOpen: (c: ActiveCard) => void;
+  currentMonth: number;
+  onOpen: (p: ActiveCard) => void;
 }) {
-  const groups: { month: number | null; items: KitCard[] }[] = [];
-  for (const c of cards) {
-    const last = groups[groups.length - 1];
-    if (last && last.month === c.month) last.items.push(c);
-    else groups.push({ month: c.month, items: [c] });
-  }
+  const curIdx = currentMonth - 1;
+  const [activeQId, setActiveQId] = useState<CommQuarterId>(quarterIdOfIdx(curIdx));
+  const quarter = commQuarters.find((q) => q.id === activeQId)!;
+
+  const cardsOfMonth = (m: string) =>
+    cards.filter((c) => c.month === allMonths.indexOf(m) + 1);
+  const quarterCards = cards.filter(
+    (c) => c.month !== null && quarter.months.includes(allMonths[c.month - 1])
+  );
+  const upcomingCount = quarterCards.filter(
+    (c) => c.month !== null && monthStatusOf(allMonths[c.month - 1], curIdx) !== "past"
+  ).length;
+  const countOfQuarter = (q: CommQuarter) =>
+    cards.filter((c) => c.month !== null && q.months.includes(allMonths[c.month - 1])).length;
+
+  const nextCardId = useMemo(() => {
+    for (const m of quarter.months) {
+      if (monthStatusOf(m, curIdx) !== "past") {
+        const found = quarterCards.find((c) => c.month === allMonths.indexOf(m) + 1);
+        if (found) return found.id;
+      }
+    }
+    return null;
+  }, [quarterCards, quarter, curIdx]);
+
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(248px,1fr))] gap-4">
-      {groups.map((g) => (
-        <Fragment key={g.month ?? "none"}>
-          <div className="col-span-full mt-2 flex items-center gap-3 text-[13px] font-bold uppercase tracking-[0.12em] text-brand-accent first:mt-0">
-            {g.month ? monthName(g.month) : "Sans période"}
-            <span className="rounded-full bg-brand-accent/15 px-2 py-0.5 text-[10px]">
-              {g.items.length}
+    <section>
+      <header className="mb-5">
+        <h2 className="flex items-center gap-3 text-[22px] font-medium tracking-tight text-brand-cream">
+          <span aria-hidden>📅</span>
+          Temps forts du calendrier
+        </h2>
+        <p className="ml-1 mt-1.5 text-sm text-brand-muted-on-dark">
+          Les communications mensuelles à relayer, trimestre par trimestre.
+        </p>
+      </header>
+
+      <div className="mb-7 grid grid-cols-2 gap-[10px] sm:grid-cols-4">
+        {commQuarters.map((q) => (
+          <QuarterTab
+            key={q.id}
+            quarter={q}
+            curIdx={curIdx}
+            isActive={q.id === activeQId}
+            count={countOfQuarter(q)}
+            onClick={() => setActiveQId(q.id)}
+          />
+        ))}
+      </div>
+
+      <div className="mb-[18px] flex flex-wrap items-baseline justify-between gap-2">
+        <div className="text-[14px] font-semibold tracking-[0.3px] text-brand-cream">
+          Communications du trimestre <span className="text-brand-accent">·</span>{" "}
+          <span className="font-medium text-brand-muted-on-dark">
+            {quarter.months.map((m) => monthLabel[m] ?? m).join(" · ")} 2026
+          </span>
+        </div>
+        <div className="text-[11px] uppercase tracking-[0.5px] text-brand-muted-on-dark/70">
+          {quarterCards.length} kit{quarterCards.length > 1 ? "s" : ""} · {upcomingCount} à venir
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-[14px] md:grid-cols-3">
+        {quarter.months.map((month) => (
+          <MonthColumn
+            key={month}
+            month={month}
+            curIdx={curIdx}
+            cards={cardsOfMonth(month)}
+            nextCardId={nextCardId}
+            onOpen={onOpen}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function QuarterTab({
+  quarter,
+  curIdx,
+  isActive,
+  count,
+  onClick,
+}: {
+  quarter: CommQuarter;
+  curIdx: number;
+  isActive: boolean;
+  count: number;
+  onClick: () => void;
+}) {
+  const status = quarterStatusOf(quarter, curIdx);
+  const progress = commQuarterProgressOf(quarter, curIdx);
+  const monthAbbrs = quarter.months.map((m) => (monthLabel[m] ?? m).slice(0, 3)).join(" · ");
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={isActive}
+      className={`rounded-[11px] border p-[14px_16px] text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60 ${
+        status === "past" && !isActive
+          ? "border-transparent opacity-60 hover:opacity-90"
+          : isActive
+            ? "border-brand-accent/30 bg-brand-accent/[0.07] shadow-[0_0_0_1px_rgba(132,212,166,0.15)]"
+            : "border-transparent hover:bg-white/[0.03]"
+      }`}
+    >
+      <div className="mb-[10px] flex items-center justify-between gap-2">
+        <span className={`text-[11px] font-bold tracking-[0.6px] ${isActive ? "text-brand-accent" : "text-brand-muted-on-dark"}`}>
+          {monthAbbrs}
+        </span>
+        <span className="rounded-full bg-brand-dark/60 px-1.5 py-0.5 text-[10px] font-semibold text-brand-muted-on-dark">
+          {count}
+        </span>
+      </div>
+      <div className="h-[3px] overflow-hidden rounded-[2px] bg-white/[0.05]">
+        <div
+          className={`h-full rounded-[2px] ${status === "past" ? "bg-brand-muted-on-dark/40" : "bg-gradient-to-r from-brand-teal-bright to-brand-accent"}`}
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+    </button>
+  );
+}
+
+function MonthColumn({
+  month,
+  curIdx,
+  cards,
+  nextCardId,
+  onOpen,
+}: {
+  month: string;
+  curIdx: number;
+  cards: KitCard[];
+  nextCardId: string | null;
+  onOpen: (p: ActiveCard) => void;
+}) {
+  const status = monthStatusOf(month, curIdx);
+  return (
+    <div
+      className={`rounded-[13px] border p-[18px] transition-colors ${
+        status === "current"
+          ? "border-brand-accent/15 bg-brand-accent/[0.04]"
+          : "border-white/[0.04] bg-white/[0.012]"
+      }`}
+    >
+      <div className="mb-4 flex items-center justify-between border-b border-white/5 pb-3">
+        <div className="flex items-center gap-[9px]">
+          <h4 className={`text-[12px] font-bold uppercase tracking-[1.8px] ${status === "past" ? "text-brand-muted-on-dark/70" : "text-brand-cream"}`}>
+            {monthLabel[month]}
+          </h4>
+          {status === "current" && (
+            <span className="rounded-[4px] bg-brand-accent px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] text-brand-dark">
+              En cours
             </span>
-            <span className="h-px flex-1 bg-brand-border-dark/60" />
-          </div>
-          {g.items.map((c) => (
-            <Card key={c.id} card={c} onOpen={() => onOpen(c.payload)} />
+          )}
+        </div>
+        <span className="text-[10px] tracking-[0.5px] text-brand-muted-on-dark/70">
+          {cards.length === 0 ? "—" : `${cards.length} kit${cards.length > 1 ? "s" : ""}`}
+        </span>
+      </div>
+      {cards.length === 0 ? (
+        <p className="py-5 text-center text-[11px] italic text-brand-muted-on-dark/70">
+          Pas de communication programmée.
+        </p>
+      ) : (
+        <ul className="space-y-0">
+          {cards.map((c) => (
+            <CommEventRow
+              key={c.id}
+              card={c}
+              curIdx={curIdx}
+              isNext={c.id === nextCardId}
+              onOpen={() => onOpen(c.payload)}
+            />
           ))}
-        </Fragment>
-      ))}
+        </ul>
+      )}
     </div>
+  );
+}
+
+function CommEventRow({
+  card,
+  curIdx,
+  isNext,
+  onOpen,
+}: {
+  card: KitCard;
+  curIdx: number;
+  isNext: boolean;
+  onOpen: () => void;
+}) {
+  const a = animOf(card);
+  const isDone =
+    card.month !== null && monthStatusOf(allMonths[card.month - 1], curIdx) === "past";
+  const isLetsTalk = a?.type === "Let's talk";
+  return (
+    <li className="relative">
+      {isNext && (
+        <span className="absolute -top-2 right-2.5 z-10 rounded-[4px] bg-brand-accent px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] text-brand-dark">
+          Prochain
+        </span>
+      )}
+      <button
+        type="button"
+        onClick={onOpen}
+        className={`group mb-2.5 flex w-full gap-2.5 rounded-[10px] border p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60 ${
+          isDone
+            ? "border-transparent opacity-[0.45] hover:opacity-75"
+            : isNext
+              ? "border-brand-accent/20 bg-brand-accent/5"
+              : "border-transparent hover:border-white/5 hover:bg-white/[0.025]"
+        }`}
+      >
+        <div className="w-9 shrink-0 pt-0.5 text-center text-xl leading-none">
+          {isLetsTalk ? "📺" : "🎵"}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="mb-1.5 flex items-center gap-1.5">
+            <span
+              className={`rounded-[4px] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] ${
+                isLetsTalk ? "bg-brand-salmon/20 text-brand-salmon" : "bg-brand-accent/15 text-brand-accent"
+              }`}
+            >
+              {isLetsTalk ? "LET'S TALK" : "PLAYLIST"}
+            </span>
+            {card.isNew && (
+              <span className="rounded-[4px] bg-brand-accent px-[6px] py-[2px] text-[8.5px] font-bold uppercase tracking-[0.4px] text-brand-dark">
+                Nouveau
+              </span>
+            )}
+            {isDone && (
+              <span className="ml-auto flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-full bg-brand-accent/20 text-[9px] text-brand-accent" aria-hidden>
+                ✓
+              </span>
+            )}
+          </div>
+          <div className={`mb-1 text-[13px] font-medium leading-snug ${isDone ? "text-brand-muted-on-dark/70 line-through" : "text-brand-cream"}`}>
+            {cleanTitle(card.title)}
+          </div>
+          <div className="text-[10px] text-brand-muted-on-dark/70">{langFlag(card.lang)}</div>
+        </div>
+      </button>
+    </li>
   );
 }
 
