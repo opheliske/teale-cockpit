@@ -12,6 +12,7 @@ import {
 import { useKitsStore } from "@/lib/kits-store";
 import { openKitFile, kitFileLabel, getKitFileUrl } from "@/lib/storage";
 import { useWorkshops, themes as workshopThemes, type Workshop } from "@/lib/workshops-store";
+import { setSeenIds } from "@/lib/catalogue-read-state";
 
 const workshopThemeNameById = Object.fromEntries(
   workshopThemes.map((t) => [t.id, t.name])
@@ -176,6 +177,17 @@ type ActiveCard =
 export default function KitsCommunicationPage() {
   const { lancementKits, animationItems, emailTopicKits, visuelKits } = useKitsStore();
   const { workshops } = useWorkshops();
+  // Visiting kits-communication clears the "new kits" badge on the home —
+  // every currently visible kit (toutes catégories) is marked as seen.
+  useEffect(() => {
+    const ids = [
+      ...lancementKits.map((k) => `lan:${k.id}`),
+      ...animationItems.map((a) => `ani:${a.id}`),
+      ...emailTopicKits.map((e) => `email:${e.id}`),
+      ...visuelKits.map((v) => `vis:${v.id}`),
+    ];
+    if (ids.length > 0) setSeenIds("kits", ids);
+  }, [lancementKits, animationItems, emailTopicKits, visuelKits]);
 
   const [search, setSearch] = useState("");
   const [activeTheme, setActiveTheme] = useState<ThemeId>("animation");

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { themes, type Workshop } from "./data";
 import { useWorkshops } from "@/lib/workshops-store";
 import { openKitFile } from "@/lib/storage";
+import { setSeenIds } from "@/lib/catalogue-read-state";
 
 // --- helpers ---
 function workshopHaystack(w: Workshop): string {
@@ -185,6 +186,11 @@ ${workshopsHTML}
 
 export default function CatalogueAteliersPage() {
   const { workshops } = useWorkshops();
+  // Visiting the catalogue clears the "new ateliers" badge on the home —
+  // every currently visible workshop is marked as seen.
+  useEffect(() => {
+    if (workshops.length > 0) setSeenIds("ateliers", workshops.map((w) => w.id));
+  }, [workshops]);
   const totalWorkshops = workshops.length;
   const animatedCount = workshops.filter((w) => w.alreadyAnimated).length;
   const remainingCount = totalWorkshops - animatedCount;

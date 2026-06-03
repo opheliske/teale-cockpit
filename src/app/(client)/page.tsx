@@ -12,6 +12,7 @@ import { openClientFile } from "@/lib/storage";
 import { countAtelierConsumed } from "@/lib/plan-dates";
 import { buildPlanQuarters, calendarQuarter } from "@/lib/plan-quarters";
 import { useUnreadComments } from "@/lib/use-unread-comments";
+import { useNewCatalogueItems } from "@/lib/use-new-catalogue-items";
 
 // Strip leading emojis / punctuation so the title reads cleanly in the compact
 // list — mirrors the same util in the kits-communication page.
@@ -103,6 +104,7 @@ export default function ClientHomePage() {
   // is the lookup table — `threadId` is `String(planItem.id)` everywhere
   // we persist a thread.
   const { unread: unreadCommentsClient } = useUnreadComments("client", CLIENT_ID);
+  const newCatalogue = useNewCatalogueItems();
   const unreadInbox = useMemo(() => {
     const list: Array<{ threadId: string; title: string; latestText: string; latestDate: string; count: number }> = [];
     for (const u of unreadCommentsClient.values()) {
@@ -381,6 +383,54 @@ export default function ClientHomePage() {
                       </Link>
                     </li>
                   ))}
+                </ul>
+              </section>
+            )}
+
+            {/* Nouveautés catalogues — un badge par catalogue, visible
+                uniquement quand quelque chose a été ajouté depuis la
+                dernière visite de la page correspondante. Le clic ouvre
+                le catalogue et clear le badge. */}
+            {(newCatalogue.ateliers.length > 0 || newCatalogue.kits.length > 0) && (
+              <section className="rounded-[14px] border border-[rgba(94,234,212,0.30)] bg-[rgba(94,234,212,0.05)] p-5">
+                <h2 className="mb-3 text-[15px] font-semibold text-brand-cream">
+                  ✨ Nouveautés dans vos catalogues
+                </h2>
+                <ul className="space-y-2">
+                  {newCatalogue.ateliers.length > 0 && (
+                    <li>
+                      <Link
+                        href="/catalogue-ateliers"
+                        className="flex items-center gap-2.5 rounded-[10px] border border-[rgba(94,234,212,0.18)] bg-[rgba(94,234,212,0.04)] px-3 py-2.5 transition-colors hover:border-[rgba(94,234,212,0.4)]"
+                      >
+                        <span className="shrink-0 text-sm">🎓</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[13px] font-medium text-[#e8f5ef]">
+                            {newCatalogue.ateliers.length} nouveau{newCatalogue.ateliers.length > 1 ? "x" : ""} atelier{newCatalogue.ateliers.length > 1 ? "s" : ""}
+                          </div>
+                          <div className="text-[11px] text-[#94a8a0]">Découvrir le catalogue d&apos;ateliers</div>
+                        </div>
+                        <span className="shrink-0 text-[12px] font-semibold text-[#5eead4]">Voir →</span>
+                      </Link>
+                    </li>
+                  )}
+                  {newCatalogue.kits.length > 0 && (
+                    <li>
+                      <Link
+                        href="/kits-communication"
+                        className="flex items-center gap-2.5 rounded-[10px] border border-[rgba(94,234,212,0.18)] bg-[rgba(94,234,212,0.04)] px-3 py-2.5 transition-colors hover:border-[rgba(94,234,212,0.4)]"
+                      >
+                        <span className="shrink-0 text-sm">📦</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[13px] font-medium text-[#e8f5ef]">
+                            {newCatalogue.kits.length} nouveau{newCatalogue.kits.length > 1 ? "x" : ""} kit{newCatalogue.kits.length > 1 ? "s" : ""} de communication
+                          </div>
+                          <div className="text-[11px] text-[#94a8a0]">Découvrir la bibliothèque</div>
+                        </div>
+                        <span className="shrink-0 text-[12px] font-semibold text-[#5eead4]">Voir →</span>
+                      </Link>
+                    </li>
+                  )}
                 </ul>
               </section>
             )}
