@@ -132,25 +132,17 @@ export default function ClientHomePage() {
     const year = currentPlanQuarter.months[0]?.year;
     return `${labels.join(" · ")}${year ? ` ${year}` : ""}`;
   }, [currentPlanQuarter]);
-  // "Temps forts mensuels" (kits_animation) for the current contract quarter.
-  // Sorted in the quarter's month order so the next month surfaces first.
-  // PlanQuarterMonth exposes `.en` which matches the animationItem.month
-  // values (English month names).
-  const currentQuarterComms = useMemo(() => {
+  // "Temps forts mensuels" (kits_animation) for the current contract quarter,
+  // bucketed per month. Each month becomes a card in the home view, so we
+  // pre-group here to keep the render lean. PlanQuarterMonth exposes `.en`
+  // which matches the animationItem.month values (English month names).
+  const currentQuarterMonthsWithKits = useMemo(() => {
     if (!currentPlanQuarter) return [];
-    const order = currentPlanQuarter.months.map((m) => m.en);
-    const monthsEn = new Set(order);
-    return animationItems
-      .filter((a) => monthsEn.has(a.month))
-      .sort((a, b) => order.indexOf(a.month) - order.indexOf(b.month));
+    return currentPlanQuarter.months.map((m) => ({
+      ...m,
+      items: animationItems.filter((a) => a.month === m.en),
+    }));
   }, [animationItems, currentPlanQuarter]);
-  const monthLabelByEn = useMemo(() => {
-    const m: Record<string, string> = {};
-    if (currentPlanQuarter) {
-      for (const month of currentPlanQuarter.months) m[month.en] = month.label;
-    }
-    return m;
-  }, [currentPlanQuarter]);
 
   // Per-quarter overview rendered on the home — themes + progress for the
   // 4 quarters of the contract year. The user wanted a snapshot of "where
@@ -357,55 +349,6 @@ export default function ClientHomePage() {
               )}
             </section>
 
-            {/* Communications du trimestre — aperçu compact des Temps forts
-                mensuels (kits_animation) pour le trimestre en cours. */}
-            <section className="rounded-[14px] border border-[#1a3530] bg-[rgba(14,37,32,0.4)] p-5">
-              <div className="mb-3 flex items-baseline justify-between gap-3">
-                <h2 className="text-[15px] font-semibold text-[#e8f5ef]">
-                  Communications du trimestre
-                  {currentQuarterComms.length > 0 && (
-                    <span className="ml-2 text-[12px] font-normal text-[#94a8a0]">
-                      {currentQuarterComms.length > 4 ? `4 sur ${currentQuarterComms.length}` : currentQuarterComms.length}
-                    </span>
-                  )}
-                </h2>
-                <Link href="/kits-communication" className="shrink-0 text-[12px] text-[#5eead4] hover:underline">
-                  Voir tout →
-                </Link>
-              </div>
-              {currentQuarterComms.length === 0 ? (
-                <p className="py-4 text-center text-[13px] text-[#94a8a0]">
-                  Aucune communication ce trimestre.
-                </p>
-              ) : (
-                <ul className="space-y-2">
-                  {currentQuarterComms.slice(0, 4).map((a) => {
-                    const isLetsTalk = a.type.toLowerCase().includes("let's talk");
-                    return (
-                      <li key={a.id}>
-                        <Link
-                          href="/kits-communication"
-                          className="flex items-center gap-2.5 rounded-[10px] border border-[#1a3530] bg-[rgba(255,255,255,0.02)] px-3 py-2 transition-colors hover:border-[rgba(94,234,212,0.3)]"
-                        >
-                          <span className="shrink-0 text-sm">{isLetsTalk ? "📺" : "🎵"}</span>
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-[13px] font-medium text-[#e8f5ef]">
-                              {cleanTitle(a.title)}
-                            </div>
-                            <div className="text-[11px] text-[#94a8a0]">
-                              {monthLabelByEn[a.month] ?? a.month}
-                              {" · "}
-                              {isLetsTalk ? "Let's talk" : "Playlist"}
-                            </div>
-                          </div>
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </section>
-
             {/* Documents */}
             <section className="rounded-[14px] border border-[#1a3530] bg-[rgba(14,37,32,0.4)] p-5">
               <div className="mb-3 flex items-baseline justify-between gap-3">
@@ -462,6 +405,96 @@ export default function ClientHomePage() {
 
           </div>
         </div>
+
+        {/* ── Communications du trimestre ── 3 cards (1 par mois du trimestre
+            en cours) listant les Temps forts mensuels (kits_animation). */}
+        <section className="mt-4 rounded-[14px] border border-[#1a3530] bg-[rgba(14,37,32,0.4)] p-5">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-[15px] font-semibold text-[#e8f5ef]">
+                Communications du trimestre
+              </h2>
+              <p className="mt-0.5 text-[11px] uppercase tracking-[0.06em] text-[#6b7c75]">
+                Kits à relayer chaque mois auprès de vos collaborateurs · {currentQuarter}
+                {currentQuarterMonths ? ` · ${currentQuarterMonths}` : ""}
+              </p>
+            </div>
+            <Link href="/kits-communication" className="shrink-0 text-[12px] text-[#5eead4] hover:underline">
+              Voir tout →
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            {currentQuarterMonthsWithKits.map((m) => {
+              const isCurrent = m.status === "current";
+              const isPast = m.status === "past";
+              return (
+                <Link
+                  key={m.key}
+                  href="/kits-communication"
+                  className={`group flex flex-col rounded-[12px] border p-4 transition-all ${
+                    isCurrent
+                      ? "border-[rgba(94,234,212,0.35)] bg-[rgba(94,234,212,0.05)] hover:border-[rgba(94,234,212,0.55)] hover:bg-[rgba(94,234,212,0.08)]"
+                      : isPast
+                        ? "border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.015)] opacity-70 hover:opacity-100 hover:border-[rgba(94,234,212,0.18)]"
+                        : "border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.02)] hover:border-[rgba(94,234,212,0.25)] hover:bg-[rgba(255,255,255,0.035)]"
+                  }`}
+                >
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <h3 className={`text-[14px] font-semibold tracking-[0.2px] ${isCurrent ? "text-[#5eead4]" : isPast ? "text-[#6b7c75]" : "text-[#e8f5ef]"}`}>
+                      {m.label}
+                      <span className="ml-1.5 text-[10px] font-normal text-[#6b7c75]">{m.year}</span>
+                    </h3>
+                    {isCurrent && (
+                      <span className="rounded-[4px] bg-[#5eead4] px-1.5 py-[2px] text-[9px] font-bold uppercase tracking-[0.5px] text-[#042f2a]">
+                        En cours
+                      </span>
+                    )}
+                    {isPast && (
+                      <span className="text-[9px] uppercase tracking-[0.5px] text-[#6b7c75]">Passé</span>
+                    )}
+                  </div>
+
+                  {m.items.length === 0 ? (
+                    <p className="py-3 text-center text-[11px] italic text-[#6b7c75]">
+                      Pas de communication programmée
+                    </p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {m.items.map((a) => {
+                        const isLetsTalk = a.type.toLowerCase().includes("let's talk");
+                        return (
+                          <li
+                            key={a.id}
+                            className="flex items-start gap-2 rounded-[8px] bg-[rgba(255,255,255,0.025)] p-2.5"
+                          >
+                            <span className="shrink-0 text-[15px] leading-none" aria-hidden>
+                              {isLetsTalk ? "📺" : "🎵"}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <span
+                                className={`mb-1 inline-block rounded-[3px] px-1.5 py-[1px] text-[8px] font-bold uppercase tracking-[0.5px] ${
+                                  isLetsTalk
+                                    ? "bg-[rgba(244,168,154,0.18)] text-[#f4a89a]"
+                                    : "bg-[rgba(94,234,212,0.15)] text-[#5eead4]"
+                                }`}
+                              >
+                                {isLetsTalk ? "Let's talk" : "Playlist"}
+                              </span>
+                              <div className="text-[12px] font-medium leading-snug text-[#e8f5ef]">
+                                {cleanTitle(a.title)}
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        </section>
       </div>
     </div>
   );
