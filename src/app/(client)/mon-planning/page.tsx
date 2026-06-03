@@ -592,7 +592,7 @@ export default function MonPlanningPage() {
                 Suivi projet
               </h1>
               <p className="max-w-[480px] text-[13px] leading-relaxed text-[#94a8a0]">
-                Plan annuel co-construit avec votre Customer Success Manager.
+                Plan annuel co-construit avec votre chargé de partenariat.
               </p>
             </div>
             <a
