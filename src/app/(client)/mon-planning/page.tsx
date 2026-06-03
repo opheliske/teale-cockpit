@@ -109,7 +109,6 @@ function quarterStatus(q: Quarter): QuarterStatus {
 type EventType =
   | "atelier"
   | "kit"
-  | "point"
   | "qbr"
   | "onboarding"
   | "urgence";
@@ -127,11 +126,6 @@ const eventTypeConfig: Record<
     label: "Kit comm",
     emoji: "📢",
     pillClass: "bg-[rgba(94,234,212,0.15)] text-[#5eead4]",
-  },
-  point: {
-    label: "Point CSM",
-    emoji: "📞",
-    pillClass: "bg-[rgba(250,204,21,0.15)] text-[#fde047]",
   },
   qbr: {
     label: "QBR",
@@ -238,8 +232,6 @@ function defaultDescription(type: EventType): string {
       return "Atelier collectif animé par un·e psychologue teale formé·e aux enjeux du monde du travail. Format live d'1 heure, ouvert à tous vos collaborateurs sur inscription.";
     case "kit":
       return "Kit de communication clé-en-main fourni par teale : emails prêts à diffuser, visuels (bannières Slack / Teams, fonds de mail), affiches et conseils de relais.";
-    case "point":
-      return "Point mensuel avec votre Customer Success Manager pour faire le bilan des actions menées, ajuster le plan et anticiper les prochaines échéances.";
     case "qbr":
       return "Quarterly Business Review — moment partagé avec votre direction pour mesurer l'impact du programme teale et planifier la suite.";
     case "onboarding":
@@ -357,7 +349,7 @@ const frMonthAbbr: Record<string, string> = {
 
 
 const PLAN_EVENT_TYPE_MAP: Record<StoredPlanItemType, EventType> = {
-  atelier: "atelier", kit: "kit", csm: "point", qbr: "qbr", custom: "atelier",
+  atelier: "atelier", kit: "kit", qbr: "qbr", custom: "atelier",
 };
 
 const FR_MONTH_EN: Record<string, string> = {

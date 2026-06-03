@@ -2,7 +2,7 @@ import { supabase, ensureSession } from "@/lib/supabase";
 import { notifyChange, watchChanges } from "@/lib/sync";
 import type { PlanItemFile, ChecklistItem } from "@/lib/clients-data";
 
-export type StoredPlanItemType = "atelier" | "kit" | "csm" | "qbr" | "custom";
+export type StoredPlanItemType = "atelier" | "kit" | "qbr" | "custom";
 
 export type QuarterThemes = { Q1: string; Q2: string; Q3: string; Q4: string };
 

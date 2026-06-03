@@ -64,7 +64,7 @@ const TAG_STYLE: Record<string, { bg: string; color: string; dot: string }> = {
 };
 
 const PLAN_ITEM_DEFAULT_ICONS: Record<string, string> = {
-  atelier: "🎓", kit: "📢", csm: "📞", qbr: "📊", custom: "⚡",
+  atelier: "🎓", kit: "📢", qbr: "📊", custom: "⚡",
 };
 
 const CHIP_TYPE_MAP: Record<string, "atelier" | "kit" | "qbr" | "custom"> = {
@@ -74,7 +74,6 @@ const CHIP_TYPE_MAP: Record<string, "atelier" | "kit" | "qbr" | "custom"> = {
 const PLAN_STYLE: Record<string, { border: string; bg: string; hoverBg: string }> = {
   atelier: { border: "#c4b5fd", bg: "rgba(196,181,253,0.05)", hoverBg: "rgba(196,181,253,0.10)" },
   kit:     { border: "#5eead4", bg: "rgba(94,234,212,0.04)",  hoverBg: "rgba(94,234,212,0.09)" },
-  csm:     { border: "#fde047", bg: "rgba(253,224,71,0.04)",  hoverBg: "rgba(253,224,71,0.09)" },
   qbr:     { border: "#93c5fd", bg: "rgba(96,165,250,0.05)",  hoverBg: "rgba(96,165,250,0.10)" },
   custom:  { border: "#dced63", bg: "rgba(220,236,99,0.05)",  hoverBg: "rgba(220,236,99,0.10)" },
 };
@@ -1531,12 +1530,12 @@ export default function ClientDetailView({ id }: { id: string }) {
                 const avDone = doneItems.length;
                 const atelierN = doneItems.filter((i) => i.type === "atelier").length;
                 const kitN = doneItems.filter((i) => i.type === "kit").length;
-                const csmN = doneItems.filter((i) => i.type === "csm" || i.type === "qbr").length;
+                const qbrN = doneItems.filter((i) => i.type === "qbr").length;
                 const notDone = total - avDone;
                 const atelierPct = total > 0 ? Math.round((atelierN / total) * 100) : 0;
                 const kitPct = total > 0 ? Math.round((kitN / total) * 100) : 0;
-                const csmPct = total > 0 ? Math.round((csmN / total) * 100) : 0;
-                const notDonePct = 100 - atelierPct - kitPct - csmPct;
+                const qbrPct = total > 0 ? Math.round((qbrN / total) * 100) : 0;
+                const notDonePct = 100 - atelierPct - kitPct - qbrPct;
                 const av = { done: avDone, total, progress: total > 0 ? Math.round((avDone / total) * 100) : 0, footer: "" };
 
                 const now = new Date();
@@ -1568,13 +1567,13 @@ export default function ClientDetailView({ id }: { id: string }) {
                       <div className="flex h-[14px] overflow-hidden rounded-[8px] bg-[rgba(255,255,255,0.05)]">
                         {atelierN > 0 && <div className="flex items-center justify-center text-[10px] font-bold text-[#06241d]" style={{ width: `${atelierPct}%`, background: "#c4b5fd" }}>{atelierN}</div>}
                         {kitN > 0 && <div className="flex items-center justify-center text-[10px] font-bold text-[#06241d]" style={{ width: `${kitPct}%`, background: "#5eead4" }}>{kitN}</div>}
-                        {csmN > 0 && <div className="flex items-center justify-center text-[10px] font-bold text-[#06241d]" style={{ width: `${csmPct}%`, background: "#fde047" }}>{csmN}</div>}
+                        {qbrN > 0 && <div className="flex items-center justify-center text-[10px] font-bold text-[#06241d]" style={{ width: `${qbrPct}%`, background: "#93c5fd" }}>{qbrN}</div>}
                         {notDone > 0 && <div className="flex items-center justify-center text-[10px] font-bold text-[#94a8a0]" style={{ width: `${notDonePct}%`, background: "rgba(255,255,255,0.06)" }}>+{notDone}</div>}
                       </div>
                       <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1">
                         {atelierN > 0 && <div className="flex items-center gap-1.5 text-[11px] text-[#94a8a0]"><span className="h-2 w-2 shrink-0 rounded-full bg-[#c4b5fd]" /><strong className="text-[#e8f5ef]">{atelierN}</strong> Ateliers</div>}
                         {kitN > 0 && <div className="flex items-center gap-1.5 text-[11px] text-[#94a8a0]"><span className="h-2 w-2 shrink-0 rounded-full bg-[#5eead4]" /><strong className="text-[#e8f5ef]">{kitN}</strong> Kits comm</div>}
-                        {csmN > 0 && <div className="flex items-center gap-1.5 text-[11px] text-[#94a8a0]"><span className="h-2 w-2 shrink-0 rounded-full bg-[#fde047]" /><strong className="text-[#e8f5ef]">{csmN}</strong> Points CSM</div>}
+                        {qbrN > 0 && <div className="flex items-center gap-1.5 text-[11px] text-[#94a8a0]"><span className="h-2 w-2 shrink-0 rounded-full bg-[#93c5fd]" /><strong className="text-[#e8f5ef]">{qbrN}</strong> QBR</div>}
                       </div>
                     </div>
                     <div className="mt-auto flex justify-between text-[11px] text-[#94a8a0]">
@@ -2890,8 +2889,8 @@ export default function ClientDetailView({ id }: { id: string }) {
             <div>
               <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Type</label>
               <div className="flex gap-2">
-                {(["atelier", "kit", "csm", "qbr", "custom"] as const).map((t) => {
-                  const labels: Record<string, string> = { atelier: "🎓 Atelier", kit: "📢 Kit", csm: "📞 Point CSM", qbr: "📊 QBR", custom: "⚡ Custom" };
+                {(["atelier", "kit", "qbr", "custom"] as const).map((t) => {
+                  const labels: Record<string, string> = { atelier: "🎓 Atelier", kit: "📢 Kit", qbr: "📊 QBR", custom: "⚡ Custom" };
                   const s = PLAN_STYLE[t];
                   return (
                     <button
