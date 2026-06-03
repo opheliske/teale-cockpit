@@ -605,6 +605,50 @@ export default function MonPlanningPage() {
             </a>
           </header>
 
+          {/* Documents — rubrique compacte placée en haut pour que le client
+              y accède sans scroller. Garde l'id "documents" utilisé par le
+              lien depuis l'accueil. */}
+          {storeDocs.length > 0 && (
+            <section
+              id="documents"
+              className="mb-7 rounded-[12px] border border-[#1a3530] bg-[rgba(14,37,32,0.4)] px-4 py-3 scroll-mt-20"
+            >
+              <div className="mb-2 flex items-center gap-2">
+                <span aria-hidden>📂</span>
+                <h2 className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[#94a8a0]">
+                  Documents partagés par votre CSM
+                </h2>
+                <span className="rounded-full bg-[rgba(94,234,212,0.1)] px-1.5 py-0.5 text-[10px] font-semibold text-[#5eead4]">
+                  {storeDocs.length}
+                </span>
+              </div>
+              <ul className="flex flex-wrap gap-2">
+                {storeDocs.map((doc) => {
+                  const file = doc.files?.[0];
+                  const icon = file ? getFileIcon(file.mimeType) : "📄";
+                  const handleClick = () => {
+                    if (file) void openClientFile(file.path, file.name);
+                  };
+                  return (
+                    <li key={doc.id}>
+                      <button
+                        type="button"
+                        onClick={handleClick}
+                        disabled={!file}
+                        title={file ? `${doc.title} · ${doc.date}` : "Bientôt disponible"}
+                        className="inline-flex items-center gap-2 rounded-[8px] border border-[#1a3530] bg-[rgba(255,255,255,0.02)] px-2.5 py-1.5 text-left transition-colors hover:border-[rgba(94,234,212,0.3)] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <span className="shrink-0 text-sm">{icon}</span>
+                        <span className="text-[12px] font-medium text-[#e8f5ef]">{doc.title}</span>
+                        <span className="text-[10px] text-[#94a8a0]">· {doc.type}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+
           {/* Focus bar */}
           <FocusBar
             quarter={activeQuarter}
@@ -670,26 +714,6 @@ export default function MonPlanningPage() {
                 />
               );
             })}
-          </div>
-        </div>
-      </div>
-
-      {/* Documents */}
-      <div id="documents" className="border-t border-white/[0.04] px-9 pb-12 pt-10 scroll-mt-20">
-        <div className="mx-auto max-w-[1280px]">
-          <header className="mb-5">
-            <h2 className="flex items-center gap-3 text-2xl font-medium tracking-tight text-[#e8f5ef]">
-              <span aria-hidden>📂</span>
-              Documents partagés par votre CSM
-            </h2>
-            <p className="mt-1.5 ml-1 text-sm text-[#94a8a0]">
-              Plans, bilans et guides pour suivre votre partenariat teale.
-            </p>
-          </header>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {storeDocs.map((d) => (
-              <DocumentCard key={d.id} doc={d} />
-            ))}
           </div>
         </div>
       </div>
@@ -837,17 +861,17 @@ function FocusBar({
         <div className="flex gap-7 border-l border-[rgba(94,234,212,0.18)] pl-8">
           <div className="text-center">
             <div className="text-[30px] font-bold leading-none tabular-nums text-[#5eead4]">{qUpcoming}</div>
-            <div className="mt-1.5 text-[10px] uppercase tracking-[1px] text-[#94a8a0]">À venir</div>
+            <div className="mt-1.5 text-[10px] uppercase tracking-[1px] text-[#94a8a0]">Actions à venir</div>
           </div>
           <div className="text-center">
             <div className="text-[30px] font-bold leading-none tabular-nums text-[#5eead4]">{qDone}</div>
-            <div className="mt-1.5 text-[10px] uppercase tracking-[1px] text-[#94a8a0]">Faits</div>
+            <div className="mt-1.5 text-[10px] uppercase tracking-[1px] text-[#94a8a0]">des actions réalisées</div>
           </div>
           <div className="text-center">
             <div className="text-[30px] font-bold leading-none tabular-nums text-[#5eead4]">
               {progress}<span className="text-[15px] text-[#94a8a0]">%</span>
             </div>
-            <div className="mt-1.5 text-[10px] uppercase tracking-[1px] text-[#94a8a0]">Trimestre</div>
+            <div className="mt-1.5 text-[10px] uppercase tracking-[1px] text-[#94a8a0]">des actions du trimestre réalisées</div>
           </div>
         </div>
       </div>
@@ -1683,21 +1707,13 @@ function EventModal({
         )}
 
         <p className="mt-6 border-t border-brand-border-dark pt-4 text-[11px] text-brand-muted-on-dark">
-          Vue lecture seule — votre planning est piloté par votre CSM. Pour
-          ajuster ou ajouter une action, contactez votre Customer Success
-          Manager.
+          Vue lecture seule — votre planning est piloté par votre chargé de partenariat. Pour
+          ajuster ou ajouter une action, contactez votre chargé de partenariat.
         </p>
       </div>
     </div>
   );
 }
-
-const docTypeStyle: Record<string, string> = {
-  Stratégie: "bg-brand-accent/15 text-brand-accent",
-  QBR: "bg-brand-salmon/15 text-brand-salmon",
-  Bilan: "bg-brand-green-bright/15 text-brand-green-bright",
-  Guide: "bg-brand-cream/10 text-brand-cream",
-};
 
 function getFileIcon(mimeType: string): string {
   if (mimeType.startsWith("image/")) return "🖼";
@@ -1706,100 +1722,6 @@ function getFileIcon(mimeType: string): string {
   if (mimeType.includes("presentation") || mimeType.includes("powerpoint")) return "📊";
   if (mimeType.includes("word") || mimeType.includes("document")) return "📝";
   return "📎";
-}
-
-function DocumentCard({ doc }: { doc: CsmDocument }) {
-  const hasFiles = doc.files && doc.files.length > 0;
-  const cardIcon = hasFiles ? getFileIcon(doc.files![0].mimeType) : "📄";
-
-  return (
-    <article className="flex flex-col gap-3 rounded-2xl border border-brand-border-dark bg-brand-surface p-5 transition-colors hover:border-brand-green-bright/40">
-      <div className="flex items-start gap-3">
-        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[#2d6b62] to-[#163834] text-2xl">
-          {cardIcon}
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="mb-1 flex flex-wrap items-center gap-1.5">
-            <span
-              className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] ${
-                docTypeStyle[doc.type] ?? "bg-brand-cream/10 text-brand-cream"
-              }`}
-            >
-              {doc.type}
-            </span>
-            <span className="text-[10px] text-brand-muted-on-dark">
-              · {doc.size}
-            </span>
-            {hasFiles && (
-              <span className="rounded-full bg-brand-green-bright/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand-green-bright">
-                {doc.files!.length} fichier{doc.files!.length > 1 ? "s" : ""}
-              </span>
-            )}
-          </div>
-          <h3 className="text-sm font-medium leading-snug text-brand-cream">
-            {doc.title}
-          </h3>
-          <p className="mt-1 text-[11px] text-brand-muted-on-dark">
-            {doc.author} · {doc.date}
-          </p>
-        </div>
-      </div>
-
-      {hasFiles ? (
-        <div className="flex flex-col gap-1.5">
-          {doc.files!.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => void openClientFile(f.path, f.name)}
-              className="inline-flex items-center gap-2 rounded-xl border border-brand-border-dark px-3 py-2 text-left text-[12px] font-medium text-brand-cream transition-colors hover:border-brand-green-bright/40 hover:bg-brand-green-bright/5"
-            >
-              <span className="text-[14px]">{getFileIcon(f.mimeType)}</span>
-              <span className="min-w-0 flex-1 truncate">{f.name}</span>
-              <span className="shrink-0 text-[11px] text-brand-muted-on-dark">{f.sizeLabel}</span>
-              <span className="shrink-0 text-brand-green-bright"><DownloadIcon /></span>
-            </button>
-          ))}
-        </div>
-      ) : (
-        <div className="flex gap-2">
-          <button
-            type="button"
-            title="Bientôt disponible"
-            className="inline-flex flex-1 cursor-not-allowed items-center justify-center gap-1.5 rounded-full border border-brand-border-dark px-3 py-2 text-[12px] font-medium text-brand-cream opacity-50"
-          >
-            <EyeIcon /> Voir
-          </button>
-          <button
-            type="button"
-            title="Bientôt disponible"
-            className="inline-flex flex-1 cursor-not-allowed items-center justify-center gap-1.5 rounded-full bg-brand-green-bright px-3 py-2 text-[12px] font-semibold text-brand-dark opacity-50"
-          >
-            <DownloadIcon /> Télécharger
-          </button>
-        </div>
-      )}
-    </article>
-  );
-}
-
-function EyeIcon(): ReactNode {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
 }
 
 function DownloadIcon(): ReactNode {
