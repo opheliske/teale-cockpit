@@ -1066,6 +1066,11 @@ function EventRow({
 }) {
   const cfg = eventTypeConfig[event.type];
   const parsed = event.date ? parseDateLabel(event.date) : null;
+  // Carte "checklist complète" : on signale visuellement quand toutes les
+  // sous-tâches sont cochées. Indépendant de event.done (qui est l'état
+  // global de l'action — pas piloté par le client).
+  const hasChecklist = !!event.checklist && event.checklist.length > 0;
+  const checklistComplete = hasChecklist && event.checklist!.every((c) => c.done);
 
   return (
     <li className="relative">
@@ -1080,9 +1085,11 @@ function EventRow({
         className={`group flex w-full gap-2.5 rounded-[10px] border p-3 text-left transition-all ${
           event.done
             ? "border-transparent opacity-[0.38] hover:opacity-70"
-            : isNext
-              ? "border-[rgba(94,234,212,0.18)] bg-[rgba(94,234,212,0.05)]"
-              : "border-transparent hover:border-white/5 hover:bg-white/[0.025]"
+            : checklistComplete
+              ? "border-[rgba(168,232,149,0.30)] bg-[rgba(168,232,149,0.04)] hover:border-[rgba(168,232,149,0.5)] hover:bg-[rgba(168,232,149,0.07)]"
+              : isNext
+                ? "border-[rgba(94,234,212,0.18)] bg-[rgba(94,234,212,0.05)]"
+                : "border-transparent hover:border-white/5 hover:bg-white/[0.025]"
         } mb-2.5`}
       >
         {/* Date block */}
@@ -1112,14 +1119,18 @@ function EventRow({
             <span className={`rounded-[4px] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] ${cfg.pillClass}`}>
               {cfg.label.toUpperCase()}
             </span>
-            {event.done && (
+            {event.done ? (
               <span
                 className="ml-auto flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-full bg-[rgba(94,234,212,0.2)] text-[9px] text-[#5eead4]"
                 aria-hidden
               >
                 ✓
               </span>
-            )}
+            ) : checklistComplete ? (
+              <span className="ml-auto inline-flex items-center gap-1 rounded-[4px] bg-[rgba(168,232,149,0.18)] px-[6px] py-[2px] text-[9px] font-bold uppercase tracking-[0.5px] text-[#a8e895]">
+                <span aria-hidden>✓</span> Checklist faite
+              </span>
+            ) : null}
           </div>
           <div className={`mb-1.5 text-[13px] font-medium leading-snug ${event.done ? "text-[#6b7c75] line-through" : "text-[#e8f5ef]"}`}>
             {event.title}
