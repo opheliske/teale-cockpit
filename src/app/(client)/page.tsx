@@ -11,6 +11,7 @@ import { useKitsStore } from "@/lib/kits-store";
 import { openClientFile } from "@/lib/storage";
 import { countAtelierConsumed } from "@/lib/plan-dates";
 import { buildPlanQuarters } from "@/lib/plan-quarters";
+import { useUnreadComments } from "@/lib/use-unread-comments";
 
 // Strip leading emojis / punctuation so the title reads cleanly in the compact
 // list — mirrors the same util in the kits-communication page.
@@ -96,6 +97,30 @@ export default function ClientHomePage() {
   // Memo so its identity is stable across renders — otherwise the
   // useMemo deriving `ateliersConsommes` below would re-run every render.
   const planItems = useMemo(() => plan?.items ?? [], [plan]);
+
+  // Unread chat messages from the CSM, resolved to action titles so the
+  // alert card on the home points to the right place. The plan items list
+  // is the lookup table — `threadId` is `String(planItem.id)` everywhere
+  // we persist a thread.
+  const { unread: unreadCommentsClient } = useUnreadComments("client", CLIENT_ID);
+  const unreadInbox = useMemo(() => {
+    const list: Array<{ threadId: string; title: string; latestText: string; latestDate: string; count: number }> = [];
+    for (const u of unreadCommentsClient.values()) {
+      const numericId = Number(u.threadId);
+      const item = Number.isFinite(numericId)
+        ? planItems.find((i) => i.id === numericId)
+        : undefined;
+      list.push({
+        threadId: u.threadId,
+        title: item?.title ?? "Action du plan",
+        latestText: u.latestText,
+        latestDate: u.latestDate,
+        count: u.count,
+      });
+    }
+    list.sort((a, b) => b.latestDate.localeCompare(a.latestDate));
+    return list;
+  }, [unreadCommentsClient, planItems]);
 
   const atelierTotal = company?.atelierTotal ?? 0;
   // Same semantics as the CSM detail view: an atelier counts as consumed
@@ -320,6 +345,41 @@ export default function ClientHomePage() {
 
           {/* Right column */}
           <div className="col-span-5 flex flex-col gap-4">
+
+            {/* Nouveaux messages — visible seulement quand il y en a, pour
+                ne pas occuper d'espace en temps normal. Lien direct vers le
+                suivi projet (la pastille y indique l'action concernée). */}
+            {unreadInbox.length > 0 && (
+              <section className="rounded-[14px] border border-brand-salmon/40 bg-brand-salmon/[0.06] p-5">
+                <div className="mb-3 flex items-baseline justify-between gap-3">
+                  <h2 className="text-[15px] font-semibold text-brand-cream">
+                    💬 Nouveaux messages de votre CSM
+                    <span className="ml-2 rounded-full bg-brand-salmon/20 px-1.5 py-0.5 text-[11px] font-semibold text-brand-salmon">
+                      {unreadInbox.length}
+                    </span>
+                  </h2>
+                  <Link href="/mon-planning" className="shrink-0 text-[12px] text-brand-salmon hover:underline">
+                    Voir →
+                  </Link>
+                </div>
+                <ul className="space-y-2">
+                  {unreadInbox.slice(0, 3).map((u) => (
+                    <li key={u.threadId}>
+                      <Link
+                        href="/mon-planning"
+                        className="flex items-start gap-2.5 rounded-[10px] border border-brand-salmon/15 bg-brand-salmon/[0.04] px-3 py-2 transition-colors hover:border-brand-salmon/35"
+                      >
+                        <span className="shrink-0 text-sm">💬</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[13px] font-medium text-[#e8f5ef]">{u.title}</div>
+                          <div className="line-clamp-1 text-[11px] text-[#94a8a0]">{u.latestText}</div>
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             {/* Upcoming events */}
             <section className="rounded-[14px] border border-[#1a3530] bg-[rgba(14,37,32,0.4)] p-5">

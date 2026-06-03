@@ -22,6 +22,8 @@ import { lancementKits, animationItems, emailTopicKits } from "@/app/(client)/ki
 import { useActiveClient } from "@/lib/client-context";
 import { buildPlanQuartersForCycle, type PlanQuarter } from "@/lib/plan-quarters";
 import { csmClientsStore } from "@/lib/csm-clients-store";
+import { useUnreadComments } from "@/lib/use-unread-comments";
+import { markThreadRead } from "@/lib/comments-read-state";
 
 // Today, computed once at module load — derives the month status (past /
 // current / upcoming) and the default active year of the planning view.
@@ -513,6 +515,7 @@ export default function MonPlanningPage() {
     event: PlanEvent;
     month: string;
   } | null>(null);
+  const { unread: unreadComments } = useUnreadComments("client", CLIENT_ID);
   const [urgencies, setUrgencies] = useState<Urgency[]>([]);
   const [storeState, setStoreState] = useState<StoredPlanState | null>(() => planStore.getState());
   const [storeDocs, setStoreDocs] = useState<CsmDocument[]>(() => docsStore.getDocs());
@@ -801,8 +804,16 @@ export default function MonPlanningPage() {
                   year={activeYear}
                   events={(yearEvents[m] ?? []).filter((e) => !targetFilter || (e.targets ?? []).includes(targetFilter))}
                   nextEvent={isNextMonth ? nextEvent : null}
-                  onOpen={(event) => setActiveEvent({ event, month: m })}
+                  onOpen={(event) => {
+                    // Clears the chat pastille on this card and on the
+                    // home alerts list — happens before the modal mounts
+                    // so the badge disappears even if the user closes
+                    // the modal immediately.
+                    if (event.threadId) markThreadRead("client", event.threadId);
+                    setActiveEvent({ event, month: m });
+                  }}
                   labels={clientLabels}
+                  unreadThreadIds={unreadComments}
                 />
               );
             })}
@@ -986,6 +997,7 @@ function MonthColumn({
   nextEvent,
   onOpen,
   labels = [],
+  unreadThreadIds,
 }: {
   month: string;
   year: Year;
@@ -993,6 +1005,7 @@ function MonthColumn({
   nextEvent: PlanEvent | null;
   onOpen: (event: PlanEvent) => void;
   labels?: TargetLabel[];
+  unreadThreadIds?: ReadonlyMap<string, unknown>;
 }) {
   const status = monthStatus(month, year);
   const doneCount = events.filter((e) => e.done).length;
@@ -1045,6 +1058,7 @@ function MonthColumn({
               isNext={e === nextEvent}
               onOpen={() => onOpen(e)}
               labels={labels}
+              hasUnread={!!(e.threadId && unreadThreadIds?.has(e.threadId))}
             />
           ))}
         </ul>
@@ -1058,11 +1072,13 @@ function EventRow({
   isNext,
   onOpen,
   labels = [],
+  hasUnread = false,
 }: {
   event: PlanEvent;
   isNext: boolean;
   onOpen: () => void;
   labels?: TargetLabel[];
+  hasUnread?: boolean;
 }) {
   const cfg = eventTypeConfig[event.type];
   const parsed = event.date ? parseDateLabel(event.date) : null;
@@ -1077,6 +1093,15 @@ function EventRow({
       {isNext && (
         <span className="absolute -top-2 right-2.5 z-10 rounded-[4px] bg-[#5eead4] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] text-[#042f2a]">
           Prochain
+        </span>
+      )}
+      {hasUnread && (
+        <span
+          aria-label="Nouveau message"
+          title="Nouveau message de votre chargé de partenariat"
+          className="absolute -left-1 -top-1 z-10 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-brand-salmon px-1 text-[10px] font-bold leading-none text-[#3a1410] shadow-[0_0_0_2px_rgba(6,26,22,1)]"
+        >
+          •
         </span>
       )}
       <button

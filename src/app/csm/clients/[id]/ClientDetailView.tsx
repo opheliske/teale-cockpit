@@ -8,6 +8,8 @@ import { type PlanItem, type PlanItemFile, type PlanItemType, type Note, type Pr
 import { csmClientsStore, toClient, toClientDetail } from "@/lib/csm-clients-store";
 import { useCsmProfiles } from "@/lib/use-csm-profiles";
 import { useClientContacts } from "@/lib/use-client-contacts";
+import { useUnreadComments } from "@/lib/use-unread-comments";
+import { markThreadRead } from "@/lib/comments-read-state";
 import ClientDetailSkeleton from "./ClientDetailSkeleton";
 import { clientActionsStore } from "@/lib/client-actions-store";
 import { notesStore } from "@/lib/notes-store";
@@ -89,11 +91,12 @@ function getFileIcon(mimeType: string): string {
   return "📎";
 }
 
-function PlanItemRow({ item, onEdit, labels = [], assignedTargets = [] }: {
+function PlanItemRow({ item, onEdit, labels = [], assignedTargets = [], hasUnread = false }: {
   item: PlanItem;
   onEdit?: () => void;
   labels?: TargetLabel[];
   assignedTargets?: string[];
+  hasUnread?: boolean;
 }) {
   const s = PLAN_STYLE[item.type];
   const hasExtra = !item.done && (item.detail || (item.files && item.files.length > 0));
@@ -105,6 +108,15 @@ function PlanItemRow({ item, onEdit, labels = [], assignedTargets = [] }: {
       className={`group relative flex items-start gap-2 rounded-[10px] px-[11px] py-[10px] transition-colors ${onEdit ? "cursor-pointer hover:brightness-110" : ""}`}
       style={{ borderLeft: `2.5px solid ${s.border}`, backgroundColor: s.bg }}
     >
+      {hasUnread && (
+        <span
+          aria-label="Nouveau message"
+          title="Nouveau message du client"
+          className="absolute -right-1 -top-1 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-[#E6AA99] px-1 text-[10px] font-bold leading-none text-[#3a1410] shadow-[0_0_0_2px_rgba(6,26,22,1)]"
+        >
+          •
+        </span>
+      )}
       <span className="mt-[1px] w-[18px] shrink-0 text-center text-sm">{item.icon}</span>
       <div className="min-w-0 flex-1">
         <div className={`text-[13px] font-medium leading-snug ${item.done ? "line-through text-[#94a8a0]" : "text-[#e8f5ef]"}`}>
@@ -488,6 +500,7 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [showStatutDropdown, setShowStatutDropdown] = useState(false);
   const { profiles: csmProfiles } = useCsmProfiles();
   const { contacts: clientContacts, loading: contactsLoading } = useClientContacts(id);
+  const { unread: unreadComments } = useUnreadComments("csm", id);
   const { workshops: workshopList } = useWorkshops();
   const { lancementKits, animationItems, emailTopicKits } = useKitsStore();
   const planItemSeq = useRef(1_000_000_000);
@@ -822,6 +835,9 @@ export default function ClientDetailView({ id }: { id: string }) {
 
   const openPlanEdit = (item: PlanItem) => {
     const eff = getEffective(item);
+    // Mark the chat thread as read — clears the unread pastille both on
+    // the card here and on the CSM home alerts.
+    markThreadRead("csm", String(eff.id));
     setEditingPlanItem(eff);
     setEditPlanTitle(eff.title);
     setEditPlanMeta(eff.meta ?? "");
@@ -2489,6 +2505,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                                   onEdit={() => openPlanEdit(item)}
                                   labels={clientLabels}
                                   assignedTargets={itemTargets[item.id] ?? []}
+                                  hasUnread={unreadComments.has(String(item.id))}
                                 />
                               ))}
                             </ul>

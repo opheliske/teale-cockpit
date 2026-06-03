@@ -11,6 +11,7 @@ import { supabase, ensureSession } from "@/lib/supabase";
 import { watchChanges } from "@/lib/sync";
 import { countAtelierConsumed, dayFromMeta, monthFromMeta, yearFromMeta } from "@/lib/plan-dates";
 import type { StoredPlanItem } from "@/lib/plan-store";
+import { useUnreadComments } from "@/lib/use-unread-comments";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -350,6 +351,49 @@ export default function CsmHomePage() {
   const alertClients = allClients.filter((c) => c.statut === "À RISQUE" || c.statut === "VIGILANCE");
   const overdueActionsList = actions.filter((a) => !!a.overdue && !doneIds.has(a.id));
 
+  // Threads with unread messages from clients — drives both the badge on
+  // the "Alertes" tab and the dedicated list inside it. We resolve the item
+  // title and the client metadata at render time using the data already
+  // loaded for the portfolio (planItemsByClient + allClients).
+  const { unread: unreadCommentsCsm } = useUnreadComments("csm");
+  const unreadInbox = useMemo(() => {
+    const list: Array<{
+      threadId: string;
+      clientId: string;
+      clientName: string;
+      clientInitials: string;
+      clientColor: string;
+      itemTitle: string;
+      latestText: string;
+      latestDate: string;
+      count: number;
+    }> = [];
+    for (const u of unreadCommentsCsm.values()) {
+      const client = allClients.find((c) => c.id === u.clientId);
+      if (!client) continue; // not in this CSM's portfolio (RLS shouldn't return any, but be safe)
+      const items = planItemsByClient[u.clientId] ?? [];
+      // threadId is either "<itemId>" (plan items the CSM persisted) or
+      // "<type>:<title>" (legacy static events). Try the numeric path first.
+      const numericId = Number(u.threadId);
+      const item = Number.isFinite(numericId)
+        ? items.find((i) => i.id === numericId)
+        : undefined;
+      list.push({
+        threadId: u.threadId,
+        clientId: u.clientId,
+        clientName: client.name,
+        clientInitials: client.initials,
+        clientColor: client.color,
+        itemTitle: item?.title ?? "Action du plan",
+        latestText: u.latestText,
+        latestDate: u.latestDate,
+        count: u.count,
+      });
+    }
+    list.sort((a, b) => b.latestDate.localeCompare(a.latestDate));
+    return list;
+  }, [unreadCommentsCsm, allClients, planItemsByClient]);
+
   return (
     <div className="min-h-screen px-9 pb-16 pt-7 text-[#F2F5F8]">
       {/* ── Topbar ── */}
@@ -386,7 +430,7 @@ export default function CsmHomePage() {
           { label: "Alertes & risques",key: "Alertes" as const },
         ]).map(({ label, key }) => {
           const isActive = activeTab === key;
-          const alertBadge = vigilanceCount + risqueCount + overdueActionsCount + qbrReminders.length;
+          const alertBadge = vigilanceCount + risqueCount + overdueActionsCount + qbrReminders.length + unreadInbox.length;
           return (
             <button key={key} onClick={() => setActiveTab(key)}
               className={`-mb-px border-b-2 px-3.5 py-2.5 text-[13.5px] font-medium transition-colors ${
@@ -712,6 +756,37 @@ export default function CsmHomePage() {
       {/* ── Alertes & risques tab ── */}
       {activeTab === "Alertes" && (
         <div className="space-y-6">
+          {unreadInbox.length > 0 && (
+            <div>
+              <h2 className="mb-3 text-[14px] font-semibold text-brand-cream">
+                💬 Nouveaux messages clients
+                <span className="ml-2 rounded-full bg-[rgba(230,170,153,0.18)] px-2 py-0.5 text-[11px] text-[#E6AA99]">{unreadInbox.length}</span>
+              </h2>
+              <div className="overflow-hidden rounded-[12px] border border-[rgba(230,170,153,0.22)]">
+                <ul className="divide-y divide-[rgba(255,255,255,0.04)]">
+                  {unreadInbox.map((u) => (
+                    <li
+                      key={`${u.clientId}:${u.threadId}`}
+                      onClick={() => router.push(`/csm/clients/${u.clientId}`)}
+                      className="flex cursor-pointer items-start gap-3 bg-[rgba(230,170,153,0.04)] px-4 py-3 transition-colors hover:bg-[rgba(230,170,153,0.08)]"
+                    >
+                      <ClientAvatar initials={u.clientInitials} color={u.clientColor} size={32} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[13px] font-semibold text-brand-cream">{u.itemTitle}</span>
+                          <span className="truncate text-[11px] text-[rgba(232,245,239,0.45)]">— {u.clientName}</span>
+                        </div>
+                        <p className="mt-0.5 line-clamp-1 text-[12px] text-[rgba(232,245,239,0.7)]">{u.latestText}</p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-[#E6AA99] px-2 py-[3px] text-[10px] font-bold text-[#3a1410]">
+                        {u.count} nouveau{u.count > 1 ? "x" : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
           {qbrReminders.length > 0 && (
             <div>
               <h2 className="mb-3 text-[14px] font-semibold text-brand-cream">
