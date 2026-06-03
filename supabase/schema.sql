@@ -28,6 +28,8 @@ create table if not exists public.clients (
   churn_notice   text not null default '',
   produits       jsonb not null default '[]',
   arr            integer not null default 0,
+  listing_url    text not null default '',
+  listing_enabled boolean not null default false,
   created_at     timestamptz not null default now()
 );
 

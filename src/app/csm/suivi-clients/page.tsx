@@ -230,6 +230,8 @@ export default function SuiviClientsPage() {
       churnNotice: form.churnNotice,
       produits: form.produits,
       arr: 0,
+      listingUrl: "",
+      listingEnabled: false,
       createdAt: new Date().toISOString().split("T")[0],
     });
     setCreating(false);

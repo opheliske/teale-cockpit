@@ -301,6 +301,8 @@ type LocalDetail = {
   atelierTotal: number;
   atelierRemaining: number;
   produits: ProduitTeale[];
+  listingUrl: string;
+  listingEnabled: boolean;
 };
 
 // Converts a persisted plan item back to the editable PlanItem shape.
@@ -502,6 +504,8 @@ export default function ClientDetailView({ id }: { id: string }) {
     atelierTotal: detail?.atelierTotal ?? 0,
     atelierRemaining: detail?.atelierRemaining ?? 0,
     produits: detail?.produits ?? [],
+    listingUrl: storedClient?.listingUrl ?? "",
+    listingEnabled: storedClient?.listingEnabled ?? false,
   }));
   const [editDraft, setEditDraft] = useState<LocalDetail | null>(null);
   const [showEditDetails, setShowEditDetails] = useState(false);
@@ -559,6 +563,8 @@ export default function ClientDetailView({ id }: { id: string }) {
       atelierTotal: d.atelierTotal,
       atelierRemaining: d.atelierRemaining,
       produits: d.produits,
+      listingUrl: storedClient.listingUrl ?? "",
+      listingEnabled: storedClient.listingEnabled ?? false,
     });
   }
 
@@ -3363,6 +3369,43 @@ export default function ClientDetailView({ id }: { id: string }) {
               </div>
             </div>
 
+            {/* Bouton "Mettre à jour mon listing" — affichage piloté par le
+                CSM. URL custom par client (Google Sheets, Notion, etc.) ; le
+                toggle masque entièrement le bouton côté client. */}
+            <div>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[1px] text-[#94a8a0]">
+                Bouton « Mettre à jour mon listing »
+              </p>
+              <label className="mb-2 flex cursor-pointer items-center gap-2.5 rounded-[10px] border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.02)] px-3 py-2.5 transition-colors hover:bg-[rgba(255,255,255,0.04)]">
+                <input
+                  type="checkbox"
+                  checked={editDraft.listingEnabled}
+                  onChange={(e) =>
+                    setEditDraft((d) => (d ? { ...d, listingEnabled: e.target.checked } : d))
+                  }
+                  className="h-[14px] w-[14px] shrink-0 accent-[#5eead4]"
+                />
+                <span className="flex flex-col gap-0.5">
+                  <span className="text-[12.5px] font-medium text-[#e8f5ef]">
+                    Afficher le bouton sur l&apos;espace client
+                  </span>
+                  <span className="text-[11px] text-[#6b7c75]">
+                    Visible en haut du suivi projet, ouvre l&apos;URL ci-dessous dans un nouvel onglet.
+                  </span>
+                </span>
+              </label>
+              <input
+                type="url"
+                value={editDraft.listingUrl}
+                onChange={(e) =>
+                  setEditDraft((d) => (d ? { ...d, listingUrl: e.target.value } : d))
+                }
+                placeholder="https://docs.google.com/spreadsheets/d/…"
+                disabled={!editDraft.listingEnabled}
+                className="w-full rounded-[9px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef] placeholder-[rgba(232,245,239,0.3)] outline-none focus:border-[rgba(94,234,212,0.5)] disabled:opacity-40"
+              />
+            </div>
+
           </div>
 
           {/* Error */}
@@ -3405,6 +3448,8 @@ export default function ClientDetailView({ id }: { id: string }) {
                       churnNotice: editDraft.churnNotice,
                       produits: editDraft.produits,
                       ownerCsmId: editDraft.ownerCsmId,
+                      listingUrl: editDraft.listingUrl.trim(),
+                      listingEnabled: editDraft.listingEnabled,
                     });
                     if (error) {
                       setEditError(`Échec de l'enregistrement : ${error}`);

@@ -456,10 +456,19 @@ export default function MonPlanningPage() {
   const [contractStart, setContractStart] = useState<string>(
     () => csmClientsStore.get(CLIENT_ID)?.contractStart ?? ""
   );
+  // Bouton "Mettre à jour mon listing" : URL + activation pilotés par le CSM.
+  // Refraîchis via la même subscription au store (réagit aussi aux updates
+  // realtime déclenchés par un autre CSM).
+  const [listing, setListing] = useState<{ url: string; enabled: boolean }>(() => {
+    const c = csmClientsStore.get(CLIENT_ID);
+    return { url: c?.listingUrl ?? "", enabled: c?.listingEnabled ?? false };
+  });
 
   useEffect(() => {
     return csmClientsStore.subscribe(() => {
-      setContractStart(csmClientsStore.get(CLIENT_ID)?.contractStart ?? "");
+      const c = csmClientsStore.get(CLIENT_ID);
+      setContractStart(c?.contractStart ?? "");
+      setListing({ url: c?.listingUrl ?? "", enabled: c?.listingEnabled ?? false });
     });
   }, [CLIENT_ID]);
 
@@ -670,14 +679,16 @@ export default function MonPlanningPage() {
                 Plan annuel co-construit avec votre chargé de partenariat.
               </p>
             </div>
-            <a
-              href="https://docs.google.com/spreadsheets/d/teale-listing-employes-template/edit"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-1 inline-flex shrink-0 items-center gap-2 rounded-[10px] border border-[rgba(94,234,212,0.25)] bg-[rgba(94,234,212,0.08)] px-4 py-2.5 text-[12px] font-medium text-[#5eead4] transition-all hover:-translate-y-px hover:bg-[rgba(94,234,212,0.15)]"
-            >
-              📋 Mettre à jour mon listing
-            </a>
+            {listing.enabled && listing.url && (
+              <a
+                href={listing.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 inline-flex shrink-0 items-center gap-2 rounded-[10px] border border-[rgba(94,234,212,0.25)] bg-[rgba(94,234,212,0.08)] px-4 py-2.5 text-[12px] font-medium text-[#5eead4] transition-all hover:-translate-y-px hover:bg-[rgba(94,234,212,0.15)]"
+              >
+                📋 Mettre à jour mon listing
+              </a>
+            )}
           </header>
 
           {/* Documents — rubrique compacte placée en haut pour que le client

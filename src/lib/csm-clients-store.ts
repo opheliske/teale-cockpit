@@ -18,6 +18,10 @@ export type StoredCsmClient = {
   churnNotice: string;
   produits: ProduitTeale[];
   arr: number;
+  // URL du bouton "Mettre à jour mon listing" affiché sur le suivi projet
+  // client. Vide ⇒ bouton masqué même si listingEnabled est vrai.
+  listingUrl: string;
+  listingEnabled: boolean;
   createdAt: string;
 };
 
@@ -37,6 +41,8 @@ type DbRow = {
   churn_notice: string;
   produits: ProduitTeale[];
   arr: number;
+  listing_url: string;
+  listing_enabled: boolean;
   created_at: string;
 };
 
@@ -57,6 +63,8 @@ function fromRow(row: DbRow): StoredCsmClient {
     churnNotice: row.churn_notice,
     produits: row.produits ?? [],
     arr: row.arr,
+    listingUrl: row.listing_url ?? "",
+    listingEnabled: row.listing_enabled ?? false,
     createdAt: row.created_at,
   };
 }
@@ -78,6 +86,8 @@ function toRow(c: StoredCsmClient): Omit<DbRow, "created_at"> {
     churn_notice: c.churnNotice,
     produits: c.produits,
     arr: c.arr,
+    listing_url: c.listingUrl,
+    listing_enabled: c.listingEnabled,
   };
 }
 
