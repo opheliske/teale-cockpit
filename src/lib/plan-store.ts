@@ -1,6 +1,6 @@
 import { supabase, ensureSession } from "@/lib/supabase";
 import { notifyChange, watchChanges } from "@/lib/sync";
-import type { PlanItemFile } from "@/lib/clients-data";
+import type { PlanItemFile, ChecklistItem } from "@/lib/clients-data";
 
 export type StoredPlanItemType = "atelier" | "kit" | "csm" | "qbr" | "custom";
 
@@ -32,6 +32,8 @@ export type StoredPlanItem = {
   // Absent on legacy rows and on non-atelier items.
   objectives?: string[];
   themeId?: string;
+  // CSM-authored sub-tasks; both sides can toggle `done`.
+  checklist?: ChecklistItem[];
 };
 
 export type StoredPlanState = {
@@ -90,6 +92,29 @@ export const planStore = {
     if (error) return { error: error.message };
     notifyChange("plan_state");
     return { error: null };
+  },
+
+  // Flips a single checklist item. The plan_state RLS allows the client to
+  // upsert their own row, so this path works from both sides — no separate
+  // client endpoint is needed. Optimistic: in-memory state changes first,
+  // a debounced concurrent edit would race us only if the same checklist
+  // item is being flipped by two parties simultaneously.
+  toggleChecklistItem: async (
+    planItemId: number,
+    checklistItemId: string,
+  ): Promise<{ error: string | null }> => {
+    const current = _state;
+    if (!current) return { error: "Plan absent" };
+    const nextItems = current.items.map((item) => {
+      if (item.id !== planItemId || !item.checklist) return item;
+      return {
+        ...item,
+        checklist: item.checklist.map((c) =>
+          c.id === checklistItemId ? { ...c, done: !c.done } : c,
+        ),
+      };
+    });
+    return planStore.setState({ ...current, items: nextItems });
   },
 
   subscribe: (listener: () => void): (() => void) => {

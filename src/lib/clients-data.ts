@@ -66,6 +66,15 @@ export type PlanItemFile = {
   mimeType: string;
 };
 
+// Sub-task inside a plan item — CSM authors the text, both sides toggle
+// `done`. Persisted as JSONB on the plan_state.items[] row, so we don't
+// need a separate Supabase table.
+export type ChecklistItem = {
+  id: string;
+  text: string;
+  done: boolean;
+};
+
 export type PlanItem = {
   id: number;
   type: PlanItemType;
@@ -86,6 +95,8 @@ export type PlanItem = {
   // Atelier — pre-filled from the catalogue at creation, then editable.
   objectives?: string[];
   themeId?: string;
+  // CSM-authored sub-tasks; the client toggles them from the action modal.
+  checklist?: ChecklistItem[];
 };
 
 export type NoteType = "csm" | "decision" | "qbr" | "alert" | "atelier";

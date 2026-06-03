@@ -6,7 +6,7 @@ import { commentsStore, type PlanComment } from "@/lib/comments-store";
 import { targetsStore, type TargetLabel } from "@/lib/targets-store";
 import { docsStore, type StoredDocument } from "@/lib/docs-store";
 import { openClientFile } from "@/lib/storage";
-import type { PlanItemFile } from "@/lib/clients-data";
+import type { PlanItemFile, ChecklistItem } from "@/lib/clients-data";
 import {
   getUrgencies,
   watchUrgencies,
@@ -224,6 +224,10 @@ type PlanEvent = {
   // Ateliers page; surfaced to the client as a small "Deck préparé"
   // indicator so they know the CSM is ready.
   deckCreated?: boolean;
+  // CSM-authored sub-tasks. The client toggles them from the action modal;
+  // toggles persist via planStore.toggleChecklistItem and are visible to
+  // the CSM the next time they open the card.
+  checklist?: ChecklistItem[];
 };
 
 function defaultDescription(type: EventType): string {
@@ -596,6 +600,7 @@ export default function MonPlanningPage() {
           themeId: item.themeId,
           cancelled: item.cancelled,
           deckCreated: item.deckCreated,
+          checklist: item.checklist,
           itemId: item.id,
           threadId: String(item.id),
         });
@@ -796,7 +801,15 @@ export default function MonPlanningPage() {
 
       {activeEvent && (
         <EventModal
-          event={activeEvent.event}
+          // Re-resolve from the live yearEvents so checklist toggles (and
+          // any other CSM-side edit happening while the modal is open)
+          // reflect immediately. Falls back to the captured snapshot if
+          // the item disappeared (deleted in the meantime).
+          event={
+            (yearEvents[activeEvent.month] ?? []).find(
+              (e) => e.itemId !== undefined && e.itemId === activeEvent.event.itemId,
+            ) ?? activeEvent.event
+          }
           month={activeEvent.month}
           year={activeYear}
           clientLabels={clientLabels}
@@ -1650,6 +1663,10 @@ function EventModal({
             </section>
           )}
 
+          {event.itemId !== undefined && event.checklist && event.checklist.length > 0 && (
+            <EventChecklist planItemId={event.itemId} items={event.checklist} />
+          )}
+
           {assignedLabels.length > 0 && (
             <section>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-teal-bright">
@@ -1788,6 +1805,53 @@ function EventModal({
         </p>
       </div>
     </div>
+  );
+}
+
+// ── Checklist d'une action du plan ──
+// Stateless : on délègue la persistance à planStore.toggleChecklistItem qui
+// met à jour _state de façon synchrone et notifie ses listeners. La page
+// re-rend yearEvents avec le nouveau checklist, et l'event live est récupéré
+// dans MonPlanningPage (cf. liveActiveEvent), donc le composant reçoit
+// toujours les `items` à jour.
+function EventChecklist({
+  planItemId,
+  items,
+}: {
+  planItemId: number;
+  items: ChecklistItem[];
+}) {
+  const doneCount = items.filter((c) => c.done).length;
+  return (
+    <section>
+      <div className="mb-2 flex items-baseline justify-between gap-3">
+        <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-teal-bright">
+          Checklist
+        </h3>
+        <span className="text-[11px] text-brand-muted-on-dark">
+          {doneCount} / {items.length}
+        </span>
+      </div>
+      <ul className="space-y-1.5">
+        {items.map((item) => (
+          <li key={item.id}>
+            <label className="flex cursor-pointer items-start gap-2.5 rounded-[10px] border border-brand-border-dark bg-white/[0.02] px-3 py-2 transition-colors hover:border-brand-teal-bright/40">
+              <input
+                type="checkbox"
+                checked={item.done}
+                onChange={() => void planStore.toggleChecklistItem(planItemId, item.id)}
+                className="mt-[3px] h-[14px] w-[14px] shrink-0 accent-brand-teal-bright"
+              />
+              <span
+                className={`text-[13px] leading-snug ${item.done ? "text-brand-muted-on-dark line-through" : "text-brand-cream"}`}
+              >
+                {item.text}
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

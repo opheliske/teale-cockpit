@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter, notFound } from "next/navigation";
 import Link from "next/link";
 import { impersonationStore } from "@/lib/impersonation-store";
-import { type PlanItem, type PlanItemFile, type PlanItemType, type Note, type PrioAction, type HistoryEvent, type ContractFormule, type ProduitTeale, type Statut } from "@/lib/clients-data";
+import { type PlanItem, type PlanItemFile, type PlanItemType, type Note, type PrioAction, type HistoryEvent, type ContractFormule, type ProduitTeale, type Statut, type ChecklistItem } from "@/lib/clients-data";
 import { csmClientsStore, toClient, toClientDetail } from "@/lib/csm-clients-store";
 import { useCsmProfiles } from "@/lib/use-csm-profiles";
 import ClientDetailSkeleton from "./ClientDetailSkeleton";
@@ -387,6 +387,8 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [editPlanMonth, setEditPlanMonth] = useState<number | undefined>(undefined);
   const [editPlanTargets, setEditPlanTargets] = useState<string[]>([]);
   const [editPlanCancelled, setEditPlanCancelled] = useState(false);
+  const [editPlanChecklist, setEditPlanChecklist] = useState<ChecklistItem[]>([]);
+  const [newChecklistText, setNewChecklistText] = useState("");
   const [planFilter, setPlanFilter] = useState<string>("Tous");
   const [activeSection, setActiveSection] = useState<Section>("big-picture");
   const [planYear, setPlanYear] = useState<"prev" | "current" | "next">("current");
@@ -748,6 +750,7 @@ export default function ClientDetailView({ id }: { id: string }) {
         targets: e.targets?.length ? e.targets : (itemTargets[e.id]?.length ? itemTargets[e.id] : undefined),
         objectives: e.objectives?.length ? e.objectives : undefined,
         themeId: e.themeId || undefined,
+        checklist: e.checklist?.length ? e.checklist : undefined,
       };
     };
     const qMap: Record<string, StoredPlanItem["quarter"]> = {
@@ -815,6 +818,8 @@ export default function ClientDetailView({ id }: { id: string }) {
     setEditPlanMonth(eff.month);
     setEditPlanTargets(itemTargets[eff.id] ?? []);
     setEditPlanCancelled(eff.cancelled ?? false);
+    setEditPlanChecklist(eff.checklist ?? []);
+    setNewChecklistText("");
     setPlanItemComments(commentsStore.getByThread(String(eff.id)));
     setCommentDraft("");
   };
@@ -849,6 +854,7 @@ export default function ClientDetailView({ id }: { id: string }) {
         // Only ateliers carry a cancelled flag; clearing it on other types
         // keeps the persisted shape clean.
         cancelled: editPlanType === "atelier" ? editPlanCancelled : undefined,
+        checklist: editPlanChecklist.length ? editPlanChecklist : undefined,
       },
     }));
     setEditingPlanItem(null);
@@ -2904,6 +2910,103 @@ export default function ClientDetailView({ id }: { id: string }) {
                 rows={3}
                 className="w-full resize-none rounded-[9px] border border-[rgba(167,139,250,0.25)] bg-[rgba(167,139,250,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef] placeholder-[rgba(232,245,239,0.3)] outline-none focus:border-[rgba(167,139,250,0.5)]"
               />
+            </div>
+
+            {/* Checklist — sous-tâches que le client coche / décoche depuis
+                son espace. L'état est partagé : le CSM voit la progression
+                quand il rouvre la carte. */}
+            <div>
+              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">
+                Checklist
+                <span className="ml-1.5 normal-case font-normal text-[rgba(232,245,239,0.35)]">· visible et cochable par le client</span>
+              </label>
+              {editPlanChecklist.length > 0 && (
+                <ul className="mb-2 space-y-1.5">
+                  {editPlanChecklist.map((item) => (
+                    <li
+                      key={item.id}
+                      className="flex items-center gap-2 rounded-[8px] border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.02)] px-2.5 py-1.5"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={item.done}
+                        onChange={(e) =>
+                          setEditPlanChecklist((prev) =>
+                            prev.map((c) =>
+                              c.id === item.id ? { ...c, done: e.target.checked } : c,
+                            ),
+                          )
+                        }
+                        className="h-[14px] w-[14px] shrink-0 accent-[#5eead4]"
+                      />
+                      <input
+                        type="text"
+                        value={item.text}
+                        onChange={(e) =>
+                          setEditPlanChecklist((prev) =>
+                            prev.map((c) =>
+                              c.id === item.id ? { ...c, text: e.target.value } : c,
+                            ),
+                          )
+                        }
+                        className={`flex-1 bg-transparent text-[12.5px] outline-none ${item.done ? "text-[#94a8a0] line-through" : "text-[#e8f5ef]"}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setEditPlanChecklist((prev) => prev.filter((c) => c.id !== item.id))
+                        }
+                        aria-label="Retirer cette sous-tâche"
+                        className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] text-[#6b7c75] hover:bg-[rgba(230,170,153,0.12)] hover:text-[#E6AA99]"
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newChecklistText}
+                  onChange={(e) => setNewChecklistText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && newChecklistText.trim()) {
+                      e.preventDefault();
+                      setEditPlanChecklist((prev) => [
+                        ...prev,
+                        {
+                          id: `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+                          text: newChecklistText.trim(),
+                          done: false,
+                        },
+                      ]);
+                      setNewChecklistText("");
+                    }
+                  }}
+                  placeholder="Ajouter une sous-tâche…"
+                  className="flex-1 rounded-[8px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2 text-[12.5px] text-[#e8f5ef] placeholder-[rgba(232,245,239,0.3)] outline-none focus:border-[rgba(94,234,212,0.5)]"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!newChecklistText.trim()) return;
+                    setEditPlanChecklist((prev) => [
+                      ...prev,
+                      {
+                        id: `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+                        text: newChecklistText.trim(),
+                        done: false,
+                      },
+                    ]);
+                    setNewChecklistText("");
+                  }}
+                  disabled={!newChecklistText.trim()}
+                  className="rounded-[8px] bg-[rgba(94,234,212,0.12)] px-3 py-2 text-[12px] font-semibold text-[#5eead4] transition-colors hover:bg-[rgba(94,234,212,0.2)] disabled:opacity-30"
+                >
+                  Ajouter
+                </button>
+              </div>
             </div>
 
             {/* Étiquettes */}
