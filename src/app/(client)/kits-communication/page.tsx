@@ -1,18 +1,90 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  Fragment,
+  type ReactNode,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import {
   type AnimationItem,
   type EmailTopicKit,
   type LancementKit,
   type VisuelKit,
-  type VisuelCategory,
   VISUEL_CATEGORIES,
 } from "./data";
 import { useKitsStore } from "@/lib/kits-store";
 import { openKitFile, kitFileLabel, getKitFileUrl } from "@/lib/storage";
 import { useWorkshops, themes as workshopThemes, type Workshop } from "@/lib/workshops-store";
 import { setSeenIds } from "@/lib/catalogue-read-state";
+import { useNewCatalogueItems } from "@/lib/use-new-catalogue-items";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Normalisation
+//
+// La page expose une grille homogène de cartes. Les 5 sources hétérogènes du
+// store (temps forts, ateliers, emails, lancement, visuels) sont projetées vers
+// un type `KitCard` unique : un badge "type", un titre, une thématique, un
+// public, une langue, un mois optionnel et un drapeau "nouveau". Le payload
+// conserve la donnée d'origine pour rouvrir la modale adéquate.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type KitTypeId = "tempsfort" | "atelier" | "email" | "lancement" | "visuel";
+type AudId = "tous" | "managers" | "codir" | "elus" | "rh";
+type LangId = "fr" | "en" | "both";
+
+const TYPE_META: Record<
+  KitTypeId,
+  { label: string; icon: string; badge: string }
+> = {
+  atelier: { label: "Kit atelier", icon: "🎓", badge: "bg-brand-accent/15 text-brand-accent" },
+  email: { label: "Email", icon: "💌", badge: "bg-brand-salmon/15 text-brand-salmon" },
+  tempsfort: { label: "Temps fort", icon: "📅", badge: "bg-brand-blue-soft/15 text-brand-blue-soft" },
+  lancement: { label: "Lancement", icon: "🚀", badge: "bg-[#e0b657]/15 text-[#e0b657]" },
+  visuel: { label: "Visuel", icon: "🎨", badge: "bg-[#bca6e8]/15 text-[#bca6e8]" },
+};
+// Ordre d'affichage du badge "type" dans la facette.
+const TYPE_ORDER: KitTypeId[] = ["tempsfort", "atelier", "email", "lancement", "visuel"];
+
+const AUD_META: Record<AudId, string> = {
+  tous: "Tous les collaborateurs",
+  managers: "Managers",
+  codir: "CODIR",
+  elus: "Élus",
+  rh: "Équipe RH",
+};
+const AUD_ORDER: AudId[] = ["managers", "codir", "elus", "rh", "tous"];
+
+const LANG_META: Record<LangId, string> = {
+  fr: "Français",
+  both: "FR / EN",
+  en: "English",
+};
+const LANG_ORDER: LangId[] = ["fr", "both", "en"];
+
+type ActiveCard =
+  | { kind: "lancement"; data: LancementKit }
+  | { kind: "animation"; data: AnimationItem }
+  | { kind: "email"; data: EmailTopicKit }
+  | { kind: "visuel"; data: VisuelKit }
+  | { kind: "workshop"; workshop: Workshop };
+
+type KitCard = {
+  id: string;
+  type: KitTypeId;
+  title: string;
+  theme: string;
+  audiences: AudId[];
+  lang: LangId;
+  month: number | null; // 1-12, uniquement pour les temps forts
+  isNew: boolean;
+  payload: ActiveCard;
+  searchHay: string;
+};
 
 const workshopThemeNameById = Object.fromEntries(
   workshopThemes.map((t) => [t.id, t.name])
@@ -32,25 +104,11 @@ const workshopKitIcons: Record<WorkshopKitType, string> = {
   post: "💬",
 };
 
-type ThemeId = "lancement" | "animation" | "emails" | "kits-ateliers" | "visuels";
-
-type Theme = {
-  id: ThemeId;
-  name: string;
-  icon: string;
-  description: string;
-  count: number;
-};
-
 const stepLabels: Record<string, string> = {
   before: "Avant le lancement",
   dday: "Jour J",
   after: "Après le lancement",
 };
-
-const stepOrder = ["before", "dday", "after"];
-
-const TODAY_MONTH = "May";
 
 const allMonths = [
   "January",
@@ -67,21 +125,6 @@ const allMonths = [
   "December",
 ];
 
-const _currentIdx = allMonths.indexOf(TODAY_MONTH);
-
-type MonthStatus = "past" | "current" | "upcoming";
-
-function monthStatus(month: string): MonthStatus {
-  const idx = allMonths.indexOf(month);
-  if (idx < _currentIdx) return "past";
-  if (idx === _currentIdx) return "current";
-  return "upcoming";
-}
-
-function cleanTitle(title: string): string {
-  return title.replace(/^[^\p{L}\p{N}]+/u, "").trim();
-}
-
 const monthLabel: Record<string, string> = {
   January: "Janvier",
   February: "Février",
@@ -97,46 +140,38 @@ const monthLabel: Record<string, string> = {
   December: "Décembre",
 };
 
-type CommQuarterId = "Q1" | "Q2" | "Q3" | "Q4";
-
-type CommQuarter = {
-  id: CommQuarterId;
-  months: string[];
-};
-
-const commQuarters: CommQuarter[] = [
-  { id: "Q1", months: ["January", "February", "March"] },
-  { id: "Q2", months: ["April", "May", "June"] },
-  { id: "Q3", months: ["July", "August", "September"] },
-  { id: "Q4", months: ["October", "November", "December"] },
-];
-
-const DEFAULT_QUARTER_ID: CommQuarterId = (() => {
-  const idx = allMonths.indexOf(TODAY_MONTH);
-  if (idx <= 2) return "Q1";
-  if (idx <= 5) return "Q2";
-  if (idx <= 8) return "Q3";
-  return "Q4";
-})();
-
-function quarterStatus(q: CommQuarter): "past" | "current" | "upcoming" {
-  if (monthStatus(q.months[q.months.length - 1]) === "past") return "past";
-  if (monthStatus(q.months[0]) === "upcoming") return "upcoming";
-  return "current";
+function monthName(n: number): string {
+  return monthLabel[allMonths[n - 1]] ?? "";
 }
 
-function commQuarterProgress(q: CommQuarter): number {
-  const qs = quarterStatus(q);
-  if (qs === "past") return 100;
-  if (qs === "upcoming") return 0;
-  const todayIdx = allMonths.indexOf(TODAY_MONTH);
-  const startIdx = allMonths.indexOf(q.months[0]);
-  return Math.round((todayIdx - startIdx) * 33 + 15);
+// Aucun champ "public" structuré n'existe dans le repo (le targetAudience des
+// ateliers décrit des situations, pas des rôles). On dérive donc le public du
+// titre par mots-clés ; défaut "tous" (Collaborateurs). Un vrai champ `public`
+// pourrait être ajouté au modèle plus tard pour plus de précision.
+function deriveAudiences(title: string): AudId[] {
+  const t = title.toLowerCase();
+  const out: AudId[] = [];
+  if (/manager/.test(t)) out.push("managers");
+  if (/codir|comit[ée] de direction/.test(t)) out.push("codir");
+  if (/(^|[^a-z])élus?([^a-z]|$)|(^|[^a-z])elus?([^a-z]|$)/.test(t)) out.push("elus");
+  if (/(^|[^a-z])rh([^a-z]|$)|ressources humaines/.test(t)) out.push("rh");
+  return out.length > 0 ? out : ["tous"];
 }
 
-function typeStyle(t: string): string {
-  if (t.toLowerCase().includes("let's talk")) return "bg-[#E6AA99]/15 text-[#E6AA99]";
-  return "bg-brand-accent/15 text-brand-accent";
+function makeCard(c: Omit<KitCard, "searchHay">): KitCard {
+  const hay = [
+    c.title,
+    c.theme,
+    TYPE_META[c.type].label,
+    ...c.audiences.map((a) => AUD_META[a]),
+  ]
+    .join(" ")
+    .toLowerCase();
+  return { ...c, searchHay: hay };
+}
+
+function langFlag(l: LangId): string {
+  return l === "both" ? "🇫🇷 🇬🇧" : l === "en" ? "🇬🇧" : "🇫🇷";
 }
 
 function topicLabel(topic: string): string {
@@ -162,1132 +197,734 @@ function topicLabel(topic: string): string {
   }
 }
 
-type ActiveCard =
-  | { kind: "lancement"; data: LancementKit }
-  | { kind: "animation"; data: AnimationItem }
-  | { kind: "email"; data: EmailTopicKit }
-  | { kind: "visuel"; data: VisuelKit }
-  | {
-      kind: "workshop-kit";
-      workshop: Workshop;
-      kitType: WorkshopKitType;
-      language: "FR" | "EN";
-    };
+function typeStyle(t: string): string {
+  if (t.toLowerCase().includes("let's talk")) return "bg-[#E6AA99]/15 text-[#E6AA99]";
+  return "bg-brand-accent/15 text-brand-accent";
+}
+
+type CollectionId = "all" | "new" | "month" | "managers" | "lancement";
+type SortId = "relevance" | "new" | "az" | "period";
+
+function toggle<T>(setter: Dispatch<SetStateAction<Set<T>>>, val: T) {
+  setter((prev) => {
+    const next = new Set(prev);
+    if (next.has(val)) next.delete(val);
+    else next.add(val);
+    return next;
+  });
+}
 
 export default function KitsCommunicationPage() {
   const { lancementKits, animationItems, emailTopicKits, visuelKits } = useKitsStore();
   const { workshops } = useWorkshops();
-  // Visiting kits-communication clears the "new kits" badge on the home —
-  // every currently visible kit (toutes catégories) is marked as seen.
+  const { kits: newKitIds, ateliers: newAtelierIds } = useNewCatalogueItems();
+
+  // Ensemble des "nouveautés" (kits + ateliers) tel que vu à l'instant. Comme on
+  // ne marque "vu" qu'au démontage (cf. effet plus bas), cet ensemble reste
+  // stable pendant la visite → les tags "Nouveau" s'affichent normalement.
+  const newSet = useMemo(
+    () => new Set([...newKitIds, ...newAtelierIds]),
+    [newKitIds, newAtelierIds]
+  );
+
+  // Visiter kits-communication éteint la pastille "nouveaux kits" de la home :
+  // on marque tous les kits actuellement chargés comme vus — mais seulement au
+  // départ de la page, pour ne pas faire disparaître les tags pendant la visite.
+  // (setSeenIds n'est pas un setState React : sûr à appeler dans un effet.)
+  const allKitIdsRef = useRef<string[]>([]);
   useEffect(() => {
-    const ids = [
+    allKitIdsRef.current = [
       ...lancementKits.map((k) => `lan:${k.id}`),
       ...animationItems.map((a) => `ani:${a.id}`),
       ...emailTopicKits.map((e) => `email:${e.id}`),
       ...visuelKits.map((v) => `vis:${v.id}`),
     ];
-    if (ids.length > 0) setSeenIds("kits", ids);
   }, [lancementKits, animationItems, emailTopicKits, visuelKits]);
+  useEffect(() => {
+    return () => {
+      if (allKitIdsRef.current.length > 0) setSeenIds("kits", allKitIdsRef.current);
+    };
+  }, []);
 
-  const [search, setSearch] = useState("");
-  const [activeTheme, setActiveTheme] = useState<ThemeId>("animation");
-  const [activeLanguage, setActiveLanguage] = useState<"FR" | "EN">("FR");
+  const [q, setQ] = useState("");
+  const [collection, setCollection] = useState<CollectionId>("all");
+  const [types, setTypes] = useState<Set<KitTypeId>>(new Set());
+  const [themesSel, setThemesSel] = useState<Set<string>>(new Set());
+  const [auds, setAuds] = useState<Set<AudId>>(new Set());
+  const [langs, setLangs] = useState<Set<LangId>>(new Set());
+  const [sort, setSort] = useState<SortId>("relevance");
+  const [railOpen, setRailOpen] = useState(false);
   const [activeCard, setActiveCard] = useState<ActiveCard | null>(null);
 
-  const lower = search.trim().toLowerCase();
+  const currentMonth = useMemo(() => new Date().getMonth() + 1, []);
+  const currentMonthName = monthName(currentMonth);
 
-  const themes = useMemo<Theme[]>(
-    () => [
-      {
-        id: "animation",
-        name: "Temps forts mensuels",
-        icon: "📅",
-        description:
-          "Le calendrier des Let's Talks, playlists et nouveautés à relayer auprès de vos collaborateurs.",
-        count: animationItems.length,
-      },
-      {
-        id: "kits-ateliers",
-        name: "Kits par atelier",
-        icon: "🎓",
-        description:
-          "Pour chaque atelier collectif : email d'invitation, relance et message post-atelier.",
-        count: workshops.length,
-      },
-      {
-        id: "emails",
-        name: "Emails par thématique",
-        icon: "💌",
-        description:
-          "Modèles d'emails de réengagement, classés par thématique de santé mentale.",
-        count: emailTopicKits.length,
-      },
-      {
-        id: "lancement",
-        name: "Kit de lancement",
-        icon: "🚀",
-        description:
-          "Tous les contenus prêts à l'emploi pour l'annonce et l'activation de teale auprès de vos équipes.",
-        count: lancementKits.length,
-      },
-      {
-        id: "visuels",
-        name: "Visuels & icônes",
-        icon: "🎨",
-        description:
-          "Logos teale, icônes, pictos et bannières — téléchargez-les pour vos communications internes.",
-        count: visuelKits.length,
-      },
-    ],
-    [
-      animationItems.length,
-      workshops.length,
-      emailTopicKits.length,
-      lancementKits.length,
-      visuelKits.length,
-    ]
-  );
+  const cards = useMemo<KitCard[]>(() => {
+    const isNew = (key: string) => newSet.has(key);
+    const out: KitCard[] = [];
 
-  const filteredLancement = useMemo(
+    for (const a of animationItems) {
+      const monthIdx = allMonths.indexOf(a.month);
+      const lang: LangId =
+        a.languages.includes("FR") && a.languages.includes("EN")
+          ? "both"
+          : a.languages.includes("EN")
+            ? "en"
+            : "fr";
+      out.push(
+        makeCard({
+          id: `ani:${a.id}`,
+          type: "tempsfort",
+          title: a.title,
+          theme: a.type || "Temps fort",
+          audiences: deriveAudiences(a.title),
+          lang,
+          month: monthIdx >= 0 ? monthIdx + 1 : null,
+          isNew: isNew(`ani:${a.id}`),
+          payload: { kind: "animation", data: a },
+        })
+      );
+    }
+
+    for (const w of workshops) {
+      out.push(
+        makeCard({
+          id: `ws:${w.id}`,
+          type: "atelier",
+          title: w.title,
+          theme: workshopThemeNameById[w.themeId] ?? "Atelier",
+          audiences: deriveAudiences(w.title),
+          lang: "both",
+          month: null,
+          isNew: isNew(w.id),
+          payload: { kind: "workshop", workshop: w },
+        })
+      );
+    }
+
+    for (const e of emailTopicKits) {
+      out.push(
+        makeCard({
+          id: `email:${e.id}`,
+          type: "email",
+          title: e.title,
+          theme: topicLabel(e.topic),
+          audiences: deriveAudiences(e.title),
+          lang: e.language === "EN" ? "en" : "fr",
+          month: null,
+          isNew: isNew(`email:${e.id}`),
+          payload: { kind: "email", data: e },
+        })
+      );
+    }
+
+    for (const k of lancementKits) {
+      out.push(
+        makeCard({
+          id: `lan:${k.id}`,
+          type: "lancement",
+          title: k.title,
+          theme: stepLabels[k.step] ?? "Lancement",
+          audiences: deriveAudiences(k.title),
+          lang: k.language === "EN" ? "en" : "fr",
+          month: null,
+          isNew: isNew(`lan:${k.id}`),
+          payload: { kind: "lancement", data: k },
+        })
+      );
+    }
+
+    for (const v of visuelKits) {
+      out.push(
+        makeCard({
+          id: `vis:${v.id}`,
+          type: "visuel",
+          title: v.title,
+          theme: VISUEL_CATEGORIES.find((c) => c.id === v.category)?.label ?? v.category,
+          audiences: ["tous"],
+          lang: "both",
+          month: null,
+          isNew: isNew(`vis:${v.id}`),
+          payload: { kind: "visuel", data: v },
+        })
+      );
+    }
+
+    return out;
+  }, [animationItems, workshops, emailTopicKits, lancementKits, visuelKits, newSet]);
+
+  // ── Facettes (compteurs statiques sur l'ensemble du catalogue) ──────────────
+  const typeFacet = useMemo(
     () =>
-      lancementKits.filter(
-        (k) =>
-          (!lower ||
-            k.title.toLowerCase().includes(lower) ||
-            stepLabels[k.step].toLowerCase().includes(lower)) &&
-          activeTheme === "lancement" &&
-          k.language === activeLanguage
-      ),
-    [lower, activeTheme, activeLanguage, lancementKits]
+      TYPE_ORDER.map((id) => ({
+        id,
+        label: `${TYPE_META[id].icon} ${TYPE_META[id].label}`,
+        count: cards.filter((c) => c.type === id).length,
+      })).filter((f) => f.count > 0),
+    [cards]
   );
-
-  const filteredAnimation = useMemo(
+  const themeFacet = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of cards) m.set(c.theme, (m.get(c.theme) ?? 0) + 1);
+    return [...m.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0], "fr"))
+      .map(([label, count]) => ({ label, count }));
+  }, [cards]);
+  const audFacet = useMemo(
     () =>
-      animationItems.filter(
-        (a) =>
-          (!lower ||
-            a.title.toLowerCase().includes(lower) ||
-            a.month.toLowerCase().includes(lower) ||
-            a.type.toLowerCase().includes(lower)) &&
-          activeTheme === "animation" &&
-          a.languages.includes(activeLanguage)
-      ),
-    [lower, activeTheme, activeLanguage, animationItems]
+      AUD_ORDER.map((id) => ({
+        id,
+        label: AUD_META[id],
+        count: cards.filter((c) => c.audiences.includes(id)).length,
+      })).filter((f) => f.count > 0),
+    [cards]
   );
-
-  const filteredEmails = useMemo(
+  const langFacet = useMemo(
     () =>
-      emailTopicKits.filter(
-        (e) =>
-          (!lower ||
-            e.title.toLowerCase().includes(lower) ||
-            topicLabel(e.topic).toLowerCase().includes(lower)) &&
-          activeTheme === "emails" &&
-          e.language === activeLanguage
-      ),
-    [lower, activeTheme, activeLanguage, emailTopicKits]
+      LANG_ORDER.map((id) => ({
+        id,
+        label: LANG_META[id],
+        count: cards.filter((c) => c.lang === id).length,
+      })).filter((f) => f.count > 0),
+    [cards]
   );
 
-  const filteredWorkshops = useMemo(
-    () =>
-      activeTheme !== "kits-ateliers"
-        ? []
-        : workshops.filter(
-            (w) =>
-              !lower ||
-              w.title.toLowerCase().includes(lower) ||
-              (workshopThemeNameById[w.themeId]?.toLowerCase().includes(lower) ??
-                false)
-          ),
-    [lower, activeTheme, workshops]
-  );
-
-  // Visuels are language-agnostic (logos, icônes), so the language filter
-  // doesn't apply — only the search query and the active tab matter here.
-  const filteredVisuels = useMemo(
-    () =>
-      activeTheme !== "visuels"
-        ? []
-        : visuelKits.filter(
-            (v) =>
-              !lower ||
-              v.title.toLowerCase().includes(lower) ||
-              v.category.toLowerCase().includes(lower)
-          ),
-    [lower, activeTheme, visuelKits]
-  );
-
-  const totalVisible =
-    filteredLancement.length +
-    filteredAnimation.length +
-    filteredEmails.length +
-    filteredWorkshops.length +
-    filteredVisuels.length;
-  const hasActiveFilters =
-    !!lower || activeTheme !== "animation" || activeLanguage !== "FR";
-  const resetFilters = () => {
-    setSearch("");
-    setActiveTheme("animation");
-    setActiveLanguage("FR");
+  const collectionCount = (id: CollectionId): number => {
+    switch (id) {
+      case "new":
+        return cards.filter((c) => c.isNew).length;
+      case "month":
+        return cards.filter((c) => c.month === currentMonth).length;
+      case "managers":
+        return cards.filter((c) => c.audiences.includes("managers")).length;
+      case "lancement":
+        return cards.filter((c) => c.type === "lancement").length;
+      default:
+        return cards.length;
+    }
   };
 
-  const showLancement = activeTheme === "lancement";
-  const showAnimation = activeTheme === "animation";
-  const showEmails = activeTheme === "emails";
-  const showWorkshopKits = activeTheme === "kits-ateliers";
-  const showVisuels = activeTheme === "visuels";
+  const collections: { id: CollectionId; icon: string; label: string }[] = [
+    { id: "all", icon: "🗂️", label: "Tous les kits" },
+    { id: "new", icon: "✨", label: "Nouveautés" },
+    { id: "month", icon: "📍", label: `Ce mois-ci · ${currentMonthName}` },
+    { id: "managers", icon: "🧭", label: "Pour managers" },
+    { id: "lancement", icon: "🚀", label: "Lancement teale" },
+  ];
 
-  const totalKits =
-    animationItems.length +
-    emailTopicKits.length +
-    lancementKits.length +
-    workshops.length +
-    visuelKits.length;
-  const newInMay = animationItems.filter(
-    (a) => a.month === TODAY_MONTH
-  ).length;
+  // ── Filtrage + tri ──────────────────────────────────────────────────────────
+  const visible = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    const matchesCollection = (c: KitCard) => {
+      switch (collection) {
+        case "new":
+          return c.isNew;
+        case "month":
+          return c.month === currentMonth;
+        case "managers":
+          return c.audiences.includes("managers");
+        case "lancement":
+          return c.type === "lancement";
+        default:
+          return true;
+      }
+    };
+    const list = cards.filter((c) => {
+      if (!matchesCollection(c)) return false;
+      if (types.size && !types.has(c.type)) return false;
+      if (themesSel.size && !themesSel.has(c.theme)) return false;
+      if (auds.size && !c.audiences.some((a) => auds.has(a))) return false;
+      if (langs.size && !langs.has(c.lang)) return false;
+      if (query && !c.searchHay.includes(query)) return false;
+      return true;
+    });
+    const sorted = [...list];
+    if (sort === "az") sorted.sort((x, y) => x.title.localeCompare(y.title, "fr"));
+    else if (sort === "new") sorted.sort((x, y) => Number(y.isNew) - Number(x.isNew));
+    else if (sort === "period")
+      sorted.sort(
+        (x, y) => (x.month ?? 99) - (y.month ?? 99) || x.title.localeCompare(y.title, "fr")
+      );
+    return sorted;
+  }, [cards, q, collection, types, themesSel, auds, langs, sort, currentMonth]);
+
+  const activeFacetCount = types.size + themesSel.size + auds.size + langs.size;
+  const hasActiveFilters = activeFacetCount > 0 || !!q.trim() || collection !== "all";
+
+  const resetFilters = () => {
+    setQ("");
+    setCollection("all");
+    setTypes(new Set());
+    setThemesSel(new Set());
+    setAuds(new Set());
+    setLangs(new Set());
+  };
+
+  // ── Pastilles de filtres actifs ─────────────────────────────────────────────
+  const collectionLabel = (id: CollectionId) =>
+    collections.find((c) => c.id === id)?.label ?? "";
+  const pills: { key: string; label: string; onRemove: () => void }[] = [];
+  if (q.trim()) pills.push({ key: "q", label: `« ${q.trim()} »`, onRemove: () => setQ("") });
+  if (collection !== "all")
+    pills.push({
+      key: "col",
+      label: collectionLabel(collection),
+      onRemove: () => setCollection("all"),
+    });
+  types.forEach((t) =>
+    pills.push({ key: `t-${t}`, label: TYPE_META[t].label, onRemove: () => toggle(setTypes, t) })
+  );
+  themesSel.forEach((t) =>
+    pills.push({ key: `th-${t}`, label: t, onRemove: () => toggle(setThemesSel, t) })
+  );
+  auds.forEach((a) =>
+    pills.push({ key: `a-${a}`, label: AUD_META[a], onRemove: () => toggle(setAuds, a) })
+  );
+  langs.forEach((l) =>
+    pills.push({ key: `l-${l}`, label: LANG_META[l], onRemove: () => toggle(setLangs, l) })
+  );
+
+  const renderRail = () => (
+    <div>
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-muted-on-dark">
+          Filtres
+        </span>
+        {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={resetFilters}
+            className="text-[12px] font-semibold text-brand-accent transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60"
+          >
+            Réinitialiser
+          </button>
+        )}
+      </div>
+      <FacetGroup title="Type">
+        {typeFacet.map((f) => (
+          <FacetOption
+            key={f.id}
+            checked={types.has(f.id)}
+            onChange={() => toggle(setTypes, f.id)}
+            label={f.label}
+            count={f.count}
+          />
+        ))}
+      </FacetGroup>
+      <FacetGroup title="Thématique">
+        {themeFacet.map((f) => (
+          <FacetOption
+            key={f.label}
+            checked={themesSel.has(f.label)}
+            onChange={() => toggle(setThemesSel, f.label)}
+            label={f.label}
+            count={f.count}
+          />
+        ))}
+      </FacetGroup>
+      <FacetGroup title="Public">
+        {audFacet.map((f) => (
+          <FacetOption
+            key={f.id}
+            checked={auds.has(f.id)}
+            onChange={() => toggle(setAuds, f.id)}
+            label={f.label}
+            count={f.count}
+          />
+        ))}
+      </FacetGroup>
+      <FacetGroup title="Langue">
+        {langFacet.map((f) => (
+          <FacetOption
+            key={f.id}
+            checked={langs.has(f.id)}
+            onChange={() => toggle(setLangs, f.id)}
+            label={f.label}
+            count={f.count}
+          />
+        ))}
+      </FacetGroup>
+    </div>
+  );
 
   return (
     <div className="px-9 py-8">
       <div className="mx-auto max-w-[1280px]">
-        <header className="mb-9 grid items-end gap-10 lg:grid-cols-[1fr_auto]">
-          <div>
-            <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-[2.5px] text-[#5eead4]">
-              Espace client
-            </p>
-            <h1 className="mt-3 text-[28px] font-semibold tracking-[-0.5px] text-brand-cream">
-              Kits de communication
-            </h1>
-            <p className="text-[13px] leading-relaxed text-[#94a8a0]">
-              Bibliothèque partagée par votre CSM Teale. Téléchargez ou copiez les ressources en un clic.
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <StatPill value={totalKits} label="Kits disponibles" accent />
-            <StatPill value={newInMay} label="Nouveaux en mai" />
-          </div>
+        <header className="mb-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[2.5px] text-brand-accent">
+            Espace client
+          </p>
+          <h1 className="mt-3 text-[28px] font-semibold tracking-[-0.5px] text-brand-cream">
+            Kits de communication
+          </h1>
+          <p className="mt-2 max-w-[560px] text-[14px] leading-relaxed text-brand-muted-on-dark">
+            Tout ce que vous pouvez diffuser à vos équipes, au même endroit.
+            Cherchez par besoin, par moment de l&apos;année ou par format.
+          </p>
         </header>
 
-        <div className="rounded-3xl border border-brand-border-dark bg-brand-surface p-5 sm:p-6">
-          <div className="flex items-center gap-3 rounded-full bg-brand-dark px-5 py-3">
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="text-brand-muted-on-dark"
-              aria-hidden
-            >
-              <circle cx="11" cy="11" r="7" />
-              <path d="m20 20-3.5-3.5" />
-            </svg>
+        {/* Recherche */}
+        <div className="mt-6">
+          <div className="flex items-center gap-3 rounded-2xl border border-brand-border-dark bg-brand-surface px-5 py-4 transition focus-within:border-brand-accent/50 focus-within:ring-[3px] focus-within:ring-brand-accent/15">
+            <SearchIcon />
             <input
+              id="kit-search"
               type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Rechercher un kit, une thématique, un mois…"
-              className="flex-1 bg-transparent text-sm text-brand-cream placeholder:text-brand-muted-on-dark focus:outline-none"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setQ("");
+              }}
+              placeholder="Rechercher : « burnout », « feedback », « onboarding manager »…"
+              autoComplete="off"
+              aria-label="Rechercher un kit"
+              className="min-w-0 flex-1 bg-transparent text-[15px] text-brand-cream placeholder:text-brand-muted-on-dark/70 focus:outline-none"
             />
-            {search && (
+            {q ? (
               <button
                 type="button"
-                onClick={() => setSearch("")}
+                onClick={() => setQ("")}
                 aria-label="Effacer la recherche"
                 className="grid h-6 w-6 place-items-center rounded-full text-brand-muted-on-dark hover:text-brand-cream"
               >
                 ×
               </button>
-            )}
-          </div>
-          <div className="mt-4 space-y-3">
-            <FilterLine label="Vue">
-              {themes.map((t) => (
-                <PillFilter
-                  key={t.id}
-                  selected={activeTheme === t.id}
-                  onClick={() => setActiveTheme(t.id)}
-                  count={t.count}
-                >
-                  <span className="mr-1.5">{t.icon}</span>
-                  {t.name}
-                </PillFilter>
-              ))}
-            </FilterLine>
-            {/* Visuels n'ont pas de variante FR/EN — masquer le filtre */}
-            {activeTheme !== "visuels" && (
-              <FilterLine label="Langue">
-                <PillFilter
-                  selected={activeLanguage === "FR"}
-                  onClick={() => setActiveLanguage("FR")}
-                >
-                  🇫🇷 Français
-                </PillFilter>
-                <PillFilter
-                  selected={activeLanguage === "EN"}
-                  onClick={() => setActiveLanguage("EN")}
-                >
-                  🇬🇧 English
-                </PillFilter>
-              </FilterLine>
+            ) : (
+              <kbd className="hidden rounded-md border border-brand-border-dark px-1.5 py-0.5 text-[11px] text-brand-muted-on-dark/70 sm:block">
+                esc pour effacer
+              </kbd>
             )}
           </div>
         </div>
 
-        <div className="mt-5 mb-6 flex items-center justify-between gap-3 text-[13px] text-brand-muted-on-dark">
-          <span>
-            {totalVisible === 0
-              ? "Aucun résultat"
-              : `${totalVisible} kit${totalVisible > 1 ? "s" : ""} affiché${totalVisible > 1 ? "s" : ""}`}
-          </span>
-          {hasActiveFilters && (
-            <button
-              type="button"
-              onClick={resetFilters}
-              className="text-brand-teal-bright transition-colors hover:underline"
-            >
-              Réinitialiser les filtres
-            </button>
-          )}
+        {/* Collections */}
+        <div className="mt-4 flex flex-wrap gap-2.5">
+          {collections.map((col) => {
+            const on = collection === col.id;
+            return (
+              <button
+                key={col.id}
+                type="button"
+                onClick={() => setCollection(col.id)}
+                aria-pressed={on}
+                className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60 ${
+                  on
+                    ? "border-brand-accent bg-brand-accent/15 text-brand-accent"
+                    : "border-brand-border-dark bg-brand-surface text-brand-cream hover:border-brand-accent/40 hover:bg-brand-surface/70"
+                }`}
+              >
+                <span aria-hidden>{col.icon}</span>
+                {col.label}
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                    on
+                      ? "bg-brand-accent/20 text-brand-accent"
+                      : "bg-brand-dark/60 text-brand-muted-on-dark"
+                  }`}
+                >
+                  {collectionCount(col.id)}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
-        {totalVisible === 0 ? (
-          <EmptyState onReset={resetFilters} query={search} />
-        ) : (
-          <div className="space-y-12">
-            {showAnimation && filteredAnimation.length > 0 && (
-              <AnimationSection
-                items={filteredAnimation}
-                onOpen={(a) => setActiveCard({ kind: "animation", data: a })}
-              />
-            )}
-            {showWorkshopKits && filteredWorkshops.length > 0 && (
-              <WorkshopKitsSection
-                workshops={filteredWorkshops}
-                onOpenKit={(w, kitType) =>
-                  setActiveCard({
-                    kind: "workshop-kit",
-                    workshop: w,
-                    kitType,
-                    language: activeLanguage,
-                  })
-                }
-              />
-            )}
-            {showEmails && filteredEmails.length > 0 && (
-              <EmailsSection
-                items={filteredEmails}
-                onOpen={(e) => setActiveCard({ kind: "email", data: e })}
-              />
-            )}
-            {showLancement && filteredLancement.length > 0 && (
-              <LancementSection
-                items={filteredLancement}
-                onOpen={(k) => setActiveCard({ kind: "lancement", data: k })}
-              />
-            )}
-            {showVisuels && filteredVisuels.length > 0 && (
-              <VisuelsSection
-                items={filteredVisuels}
-                onOpen={(v) => setActiveCard({ kind: "visuel", data: v })}
-              />
-            )}
-          </div>
-        )}
-      </div>
+        {/* Corps : rail + résultats */}
+        <div className="mt-7 lg:flex lg:items-start lg:gap-8">
+          <aside
+            className="hidden w-[236px] shrink-0 lg:sticky lg:top-6 lg:block"
+            aria-label="Filtres"
+          >
+            {renderRail()}
+          </aside>
 
-      {activeCard && (
-        <KitModal active={activeCard} onClose={() => setActiveCard(null)} />
-      )}
-    </div>
-  );
-}
+          <section className="min-w-0 flex-1">
+            {/* Bascule filtres mobile */}
+            <div className="mb-4 lg:hidden">
+              <button
+                type="button"
+                onClick={() => setRailOpen((o) => !o)}
+                aria-expanded={railOpen}
+                aria-controls="kit-facets-mobile"
+                className="inline-flex items-center gap-2 rounded-xl border border-brand-border-dark bg-brand-surface px-4 py-2 text-[13px] font-medium text-brand-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60"
+              >
+                <FilterIcon />
+                Filtres
+                {activeFacetCount > 0 && (
+                  <span className="rounded-full bg-brand-accent/20 px-2 py-0.5 text-[11px] text-brand-accent">
+                    {activeFacetCount}
+                  </span>
+                )}
+              </button>
+              {railOpen && (
+                <div
+                  id="kit-facets-mobile"
+                  className="mt-3 rounded-2xl border border-brand-border-dark bg-brand-surface/50 p-4"
+                >
+                  {renderRail()}
+                </div>
+              )}
+            </div>
 
-function StatPill({
-  value,
-  label,
-  accent,
-}: {
-  value: number | string;
-  label: string;
-  accent?: boolean;
-}) {
-  return (
-    <div className="min-w-[120px] rounded-2xl border border-brand-border-dark bg-brand-surface px-4 py-3.5">
-      <div
-        className={`text-3xl font-medium leading-none ${accent ? "text-brand-green-bright" : "text-brand-cream"}`}
-      >
-        {value}
-      </div>
-      <div className="mt-2 text-[11px] font-medium uppercase tracking-[0.14em] text-brand-muted-on-dark">
-        {label}
-      </div>
-    </div>
-  );
-}
+            {/* Barre résultats */}
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-[14px] text-brand-muted-on-dark">
+                <b className="text-brand-cream">{visible.length}</b> kit
+                {visible.length > 1 ? "s" : ""}
+              </p>
+              <label className="flex items-center gap-2 text-[13px] text-brand-muted-on-dark">
+                Trier
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value as SortId)}
+                  className="rounded-lg border border-brand-border-dark bg-brand-surface px-3 py-1.5 text-[13px] text-brand-cream focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60"
+                >
+                  <option value="relevance">Pertinence</option>
+                  <option value="new">Nouveautés d&apos;abord</option>
+                  <option value="az">A → Z</option>
+                  <option value="period">Par période</option>
+                </select>
+              </label>
+            </div>
 
-function FilterLine({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="flex flex-wrap items-center gap-3">
-      <span className="w-14 shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-brand-muted-on-dark">
-        {label}
-      </span>
-      <div className="flex flex-wrap gap-2">{children}</div>
-    </div>
-  );
-}
-
-function PillFilter({
-  selected,
-  onClick,
-  count,
-  children,
-}: {
-  selected: boolean;
-  onClick: () => void;
-  count?: number;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={selected}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[13px] transition-colors ${
-        selected
-          ? "border-brand-green-bright/50 bg-brand-green-bright/15 text-brand-green-bright"
-          : "border-brand-border-dark text-brand-cream hover:bg-brand-surface"
-      }`}
-    >
-      {children}
-      {count !== undefined && (
-        <span
-          className={`rounded-full px-1.5 py-0.5 text-[11px] ${
-            selected
-              ? "bg-brand-green-bright/25 text-brand-green-bright"
-              : "bg-white/5 text-brand-muted-on-dark"
-          }`}
-        >
-          {count}
-        </span>
-      )}
-    </button>
-  );
-}
-
-
-function LancementSection({
-  items,
-  onOpen,
-}: {
-  items: LancementKit[];
-  onOpen: (k: LancementKit) => void;
-}) {
-  const grouped: Record<string, LancementKit[]> = {};
-  for (const k of items) {
-    (grouped[k.step] ||= []).push(k);
-  }
-
-  return (
-    <section>
-      <SectionTitle
-        icon="🚀"
-        title="Lancement"
-        description="Tous les contenus pour réussir l'annonce et l'activation de teale."
-      />
-      <div className="space-y-6">
-        {stepOrder.map((step) => {
-          const stepItems = grouped[step];
-          if (!stepItems || stepItems.length === 0) return null;
-          return (
-            <div key={step}>
-              <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-brand-muted-on-dark">
-                {stepLabels[step]}
-              </h3>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {stepItems.map((k) => (
-                  <TextKitCard
-                    key={k.id}
-                    title={k.title}
-                    chip={k.language}
-                    chipStyle="bg-brand-cream/10 text-brand-cream"
-                    onOpen={() => onOpen(k)}
-                  />
+            {/* Pastilles actives */}
+            {pills.length > 0 && (
+              <div className="mb-4 flex flex-wrap gap-2">
+                {pills.map((p) => (
+                  <span
+                    key={p.key}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-brand-accent/40 bg-brand-accent/15 py-1 pl-3 pr-1.5 text-[12.5px] font-medium text-brand-accent"
+                  >
+                    {p.label}
+                    <button
+                      type="button"
+                      onClick={p.onRemove}
+                      aria-label={`Retirer le filtre ${p.label}`}
+                      className="grid h-[18px] w-[18px] place-items-center rounded-full text-brand-accent hover:bg-brand-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60"
+                    >
+                      ×
+                    </button>
+                  </span>
                 ))}
               </div>
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
+            )}
 
-function AnimationSection({
-  items,
-  onOpen,
-}: {
-  items: AnimationItem[];
-  onOpen: (it: AnimationItem) => void;
-}) {
-  const [activeQId, setActiveQId] = useState<CommQuarterId>(DEFAULT_QUARTER_ID);
-
-  const quarter = commQuarters.find((q) => q.id === activeQId)!;
-
-  const quarterItems = items.filter((i) => quarter.months.includes(i.month));
-  const upcomingCount = quarterItems.filter((i) => monthStatus(i.month) !== "past").length;
-
-  const nextItem = useMemo<AnimationItem | null>(() => {
-    for (const month of quarter.months) {
-      if (monthStatus(month) !== "past") {
-        const found = items.find((i) => i.month === month);
-        if (found) return found;
-      }
-    }
-    return null;
-  }, [items, quarter]);
-
-  return (
-    <section>
-      <header className="mb-5">
-        <h2 className="flex items-center gap-3 text-2xl font-medium tracking-tight text-brand-cream">
-          <span aria-hidden>📅</span>
-          Calendrier annuel
-        </h2>
-        <p className="mt-1.5 ml-1 text-sm text-brand-muted-on-dark">
-          Cliquez sur un trimestre pour voir les communications associées.
-        </p>
-      </header>
-
-      <div className="mb-7 grid grid-cols-4 gap-[10px]">
-        {commQuarters.map((q) => (
-          <QuarterTabComm
-            key={q.id}
-            quarter={q}
-            isActive={q.id === activeQId}
-            onClick={() => setActiveQId(q.id)}
-          />
-        ))}
-      </div>
-
-      <div className="mb-[18px] flex items-baseline justify-between">
-        <div className="text-[14px] font-semibold tracking-[0.3px] text-[#e8f5ef]">
-          Communications du trimestre{" "}
-          <span className="text-[#5eead4]">·</span>{" "}
-          <span className="font-medium text-[#94a8a0]">
-            {quarter.months.map((m) => monthLabel[m] ?? m).join(" · ")} 2026
-          </span>
-        </div>
-        <div className="text-[11px] uppercase tracking-[0.5px] text-[#6b7c75]">
-          {quarterItems.length} kit{quarterItems.length > 1 ? "s" : ""} · {upcomingCount} à venir
+            {/* Grille / état vide */}
+            {visible.length === 0 ? (
+              <EmptyState onReset={resetFilters} query={q} />
+            ) : sort === "period" ? (
+              <GroupedGrid cards={visible} onOpen={setActiveCard} />
+            ) : (
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(248px,1fr))] gap-4">
+                {visible.map((c) => (
+                  <Card key={c.id} card={c} onOpen={() => setActiveCard(c.payload)} />
+                ))}
+              </div>
+            )}
+          </section>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-[14px]">
-        {quarter.months.map((month) => (
-          <MonthColumnComm
-            key={month}
-            month={month}
-            items={items.filter((i) => i.month === month)}
-            nextItem={nextItem}
-            onOpen={onOpen}
-          />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function QuarterTabComm({
-  quarter,
-  isActive,
-  onClick,
-}: {
-  quarter: CommQuarter;
-  isActive: boolean;
-  onClick: () => void;
-}) {
-  const status = quarterStatus(quarter);
-  const progress = commQuarterProgress(quarter);
-  const monthAbbrs = quarter.months
-    .map((m) => (monthLabel[m] ?? m).slice(0, 3))
-    .join(" · ");
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-[11px] border p-[14px_16px] text-left transition-all ${
-        status === "past"
-          ? "border-transparent opacity-50 hover:opacity-80"
-          : isActive
-            ? "border-[rgba(94,234,212,0.3)] bg-[rgba(94,234,212,0.07)] shadow-[0_0_0_1px_rgba(94,234,212,0.15),0_8px_28px_-10px_rgba(94,234,212,0.5)]"
-            : "border-transparent hover:bg-white/[0.03]"
-      }`}
-    >
-      <div className="mb-[10px] flex items-center justify-between gap-2">
-        <span
-          className={`text-[11px] font-bold tracking-[0.6px] ${
-            isActive ? "text-[#5eead4]" : "text-[#94a8a0]"
-          }`}
-        >
-          {monthAbbrs}
-        </span>
-        <span
-          className={`text-[9px] uppercase tracking-[0.5px] ${
-            isActive
-              ? "rounded-[4px] bg-[#5eead4] px-[7px] py-[3px] font-bold text-[#042f2a]"
-              : "text-[#6b7c75]"
-          }`}
-        >
-          {status === "past" ? "Passé" : status === "current" ? "Maintenant" : "À venir"}
-        </span>
-      </div>
-      <div className="h-[3px] overflow-hidden rounded-[2px] bg-white/[0.05]">
-        <div
-          className={`h-full rounded-[2px] ${
-            status === "past"
-              ? "bg-[rgba(148,168,160,0.4)]"
-              : "bg-gradient-to-r from-[#5eead4] to-[#2dd4bf]"
-          }`}
-          style={{ width: `${progress}%` }}
-        />
-      </div>
-    </button>
-  );
-}
-
-function MonthColumnComm({
-  month,
-  items,
-  nextItem,
-  onOpen,
-}: {
-  month: string;
-  items: AnimationItem[];
-  nextItem: AnimationItem | null;
-  onOpen: (it: AnimationItem) => void;
-}) {
-  const status = monthStatus(month);
-  const doneCount = items.filter((i) => monthStatus(i.month) === "past").length;
-  const upcomingCount = items.length - doneCount;
-
-  return (
-    <div
-      className={`rounded-[13px] border p-[18px] transition-colors ${
-        status === "current"
-          ? "border-[rgba(94,234,212,0.15)] bg-[rgba(94,234,212,0.035)]"
-          : "border-white/[0.04] bg-white/[0.012]"
-      }`}
-    >
-      <div className="mb-4 flex items-center justify-between border-b border-white/5 pb-3">
-        <div className="flex items-center gap-[9px]">
-          <h4
-            className={`text-[12px] font-bold uppercase tracking-[1.8px] ${
-              status === "past" ? "text-[#6b7c75]" : "text-[#e8f5ef]"
-            }`}
-          >
-            {monthLabel[month]}
-          </h4>
-          {status === "current" && (
-            <span className="rounded-[4px] bg-[#5eead4] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] text-[#042f2a]">
-              En cours
-            </span>
-          )}
-        </div>
-        <span className="text-[10px] tracking-[0.5px] text-[#6b7c75]">
-          {items.length === 0
-            ? "—"
-            : doneCount > 0 && upcomingCount === 0
-              ? `${doneCount} fait${doneCount > 1 ? "s" : ""}`
-              : upcomingCount > 0
-                ? `${upcomingCount} à venir`
-                : "—"}
-        </span>
-      </div>
-
-      {items.length === 0 ? (
-        <p className="py-5 text-center text-[11px] italic text-[#6b7c75]">
-          Pas de communication programmée.
-        </p>
-      ) : (
-        <ul className="space-y-0">
-          {items.map((item) => (
-            <CommEventRow
-              key={item.id}
-              item={item}
-              isNext={item === nextItem}
-              onOpen={() => onOpen(item)}
-            />
-          ))}
-        </ul>
-      )}
+      {activeCard && <KitModal active={activeCard} onClose={() => setActiveCard(null)} />}
     </div>
   );
 }
 
-function CommEventRow({
-  item,
-  isNext,
-  onOpen,
-}: {
-  item: AnimationItem;
-  isNext: boolean;
-  onOpen: () => void;
-}) {
-  const isDone = monthStatus(item.month) === "past";
-  const isLetsTalk = item.type === "Let's talk";
+// ─────────────────────────────────────────────────────────────────────────────
+// Composants de présentation
+// ─────────────────────────────────────────────────────────────────────────────
 
+function FacetGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <li className="relative">
-      {isNext && (
-        <span className="absolute -top-2 right-2.5 z-10 rounded-[4px] bg-[#5eead4] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] text-[#042f2a]">
-          Prochain
-        </span>
-      )}
-      <button
-        type="button"
-        onClick={onOpen}
-        className={`group mb-2.5 flex w-full gap-2.5 rounded-[10px] border p-3 text-left transition-all ${
-          isDone
-            ? "border-transparent opacity-[0.38] hover:opacity-70"
-            : isNext
-              ? "border-[rgba(94,234,212,0.18)] bg-[rgba(94,234,212,0.05)]"
-              : "border-transparent hover:border-white/5 hover:bg-white/[0.025]"
+    <div className="border-b border-brand-border-dark/60 py-4 last:border-0">
+      <h4 className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-muted-on-dark/80">
+        {title}
+      </h4>
+      <div>{children}</div>
+    </div>
+  );
+}
+
+function FacetOption({
+  checked,
+  onChange,
+  label,
+  count,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  label: string;
+  count: number;
+}) {
+  return (
+    <label className="flex cursor-pointer items-center gap-2.5 py-1.5 text-[13.5px] text-brand-muted-on-dark transition-colors hover:text-brand-cream">
+      <input type="checkbox" className="peer sr-only" checked={checked} onChange={onChange} />
+      <span
+        aria-hidden
+        className={`grid h-4 w-4 shrink-0 place-items-center rounded-[5px] border-[1.5px] transition peer-focus-visible:ring-2 peer-focus-visible:ring-brand-accent/70 peer-focus-visible:ring-offset-1 peer-focus-visible:ring-offset-brand-dark ${
+          checked
+            ? "border-brand-accent bg-brand-accent text-brand-dark"
+            : "border-brand-border-dark text-transparent"
         }`}
       >
-        <div className="w-9 shrink-0 pt-0.5 text-center text-xl leading-none">
-          {isLetsTalk ? "📺" : "🎵"}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="mb-1.5 flex items-center gap-1.5">
-            <span
-              className={`rounded-[4px] px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] ${
-                isLetsTalk
-                  ? "bg-[rgba(244,168,154,0.2)] text-[#f4a89a]"
-                  : "bg-[rgba(94,234,212,0.15)] text-[#5eead4]"
-              }`}
-            >
-              {isLetsTalk ? "LET'S TALK" : "PLAYLIST"}
-            </span>
-            <span
-              className={`ml-auto flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-full text-[9px] ${
-                isDone
-                  ? "bg-[rgba(94,234,212,0.2)] text-[#5eead4]"
-                  : "border-[1.5px] border-white/15"
-              }`}
-              aria-hidden
-            >
-              {isDone ? "✓" : ""}
-            </span>
-          </div>
-          <div
-            className={`mb-1 text-[13px] font-medium leading-snug ${
-              isDone ? "text-[#6b7c75] line-through" : "text-[#e8f5ef]"
-            }`}
-          >
-            {cleanTitle(item.title)}
-          </div>
-          <div className="text-[10px] text-[#6b7c75]">
-            {item.languages.map((l) => (l === "FR" ? "🇫🇷" : "🇬🇧")).join(" ")}
-            {item.languages.length === 2 && " · FR / EN"}
-          </div>
-        </div>
-      </button>
-    </li>
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="3.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M5 12 10 17 19 7" />
+        </svg>
+      </span>
+      <span className={`flex-1 ${checked ? "font-medium text-brand-cream" : ""}`}>{label}</span>
+      <span className="text-[11.5px] text-brand-muted-on-dark/70">{count}</span>
+    </label>
   );
 }
 
-function EmailsSection({
-  items,
-  onOpen,
-}: {
-  items: EmailTopicKit[];
-  onOpen: (e: EmailTopicKit) => void;
-}) {
-  const grouped: Record<string, EmailTopicKit[]> = {};
-  for (const k of items) {
-    (grouped[k.topic] ||= []).push(k);
-  }
-
-  return (
-    <section>
-      <SectionTitle
-        icon="💌"
-        title="Emails par thématique"
-        description="Modèles d'emails classés par thématique de santé mentale, à envoyer pour réengager vos équipes."
-      />
-      <div className="space-y-6">
-        {Object.entries(grouped).map(([topic, topicItems]) => (
-          <div key={topic}>
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-brand-muted-on-dark">
-              {topicLabel(topic)}
-            </h3>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {topicItems.map((k) => (
-                <TextKitCard
-                  key={k.id}
-                  title={k.title}
-                  chip={k.language}
-                  chipStyle="bg-brand-cream/10 text-brand-cream"
-                  onOpen={() => onOpen(k)}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-// ── Visuels & icônes — galerie groupée par catégorie ────────────────────────
-// Client view: vignettes (signed preview URL), titre, bouton télécharger.
-// Le client n'a aucun bouton d'édition — c'est géré uniquement côté CSM.
-function VisuelsSection({
-  items,
-  onOpen,
-}: {
-  items: VisuelKit[];
-  onOpen: (v: VisuelKit) => void;
-}) {
-  const grouped: Record<VisuelCategory, VisuelKit[]> = {
-    logo: [], icone: [], picto: [], banniere: [],
-  };
-  for (const v of items) grouped[v.category].push(v);
-
-  return (
-    <section>
-      <SectionTitle
-        icon="🎨"
-        title="Visuels & icônes teale"
-        description="Logos, icônes, pictos et bannières — cliquez sur une vignette pour télécharger le fichier source."
-      />
-      <div className="space-y-8">
-        {VISUEL_CATEGORIES.map((cat) => {
-          const list = grouped[cat.id];
-          if (list.length === 0) return null;
-          return (
-            <div key={cat.id}>
-              <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-muted-on-dark">
-                <span aria-hidden>{cat.icon}</span>
-                {cat.label}
-                <span className="text-brand-muted-on-dark/60">({list.length})</span>
-              </h3>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                {list.map((v) => (
-                  <VisuelCard key={v.id} item={v} onOpen={() => onOpen(v)} />
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function VisuelCard({ item, onOpen }: { item: VisuelKit; onOpen: () => void }) {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  // The preview is fetched once per mount via a 1 h signed URL. Stale URLs
-  // are harmless: clicking the card always re-issues a fresh signed URL
-  // through openKitFile (so old tabs in a downloaded preview keep working).
-  useEffect(() => {
-    let alive = true;
-    void getKitFileUrl(item.path).then((u) => {
-      if (alive) setPreviewUrl(u);
-    });
-    return () => { alive = false; };
-  }, [item.path]);
-  const isImage = item.mimeType.startsWith("image/");
+function Card({ card, onOpen }: { card: KitCard; onOpen: () => void }) {
+  const meta = TYPE_META[card.type];
+  const shownAuds = card.audiences.filter((a) => a !== "tous");
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="group flex flex-col overflow-hidden rounded-xl border border-brand-border-dark bg-brand-surface text-left transition-colors hover:border-brand-accent/40"
+      className="group relative flex h-full flex-col gap-3 overflow-hidden rounded-2xl border border-brand-border-dark bg-brand-surface p-[18px] text-left transition-all hover:-translate-y-0.5 hover:border-brand-accent/50 hover:shadow-[0_6px_24px_rgba(0,0,0,0.35)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60"
     >
-      <div className="relative grid aspect-square w-full place-items-center bg-brand-dark/40">
-        {isImage && previewUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={previewUrl}
-            alt={item.title}
-            className="h-full w-full object-contain p-3"
-            loading="lazy"
-          />
-        ) : (
-          <span className="text-3xl opacity-60" aria-hidden>📄</span>
+      <div className="flex items-center justify-between gap-2">
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[10.5px] font-bold uppercase tracking-wide ${meta.badge}`}
+        >
+          <span aria-hidden>{meta.icon}</span>
+          {meta.label}
+        </span>
+        {card.isNew && (
+          <span className="rounded-md bg-brand-accent px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide text-brand-dark">
+            Nouveau
+          </span>
         )}
       </div>
-      <div className="flex items-center justify-between gap-2 px-3 py-2.5">
-        <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-brand-cream">
-          {item.title}
+      <h3 className="text-[15px] font-semibold leading-snug tracking-[-0.2px] text-brand-cream">
+        {card.title}
+      </h3>
+      <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
+        <span className="rounded-full border border-brand-border-dark/70 bg-brand-dark/50 px-2.5 py-1 text-[11px] text-brand-muted-on-dark">
+          {card.theme}
         </span>
-        <span className="shrink-0 text-brand-accent transition-transform group-hover:translate-x-0.5" aria-hidden>↓</span>
+        {shownAuds.map((a) => (
+          <span
+            key={a}
+            className="rounded-full border border-brand-border-dark/70 bg-brand-dark/50 px-2.5 py-1 text-[11px] text-brand-muted-on-dark/80"
+          >
+            {AUD_META[a]}
+          </span>
+        ))}
+        <span className="text-[11px] text-brand-muted-on-dark/70">{langFlag(card.lang)}</span>
+        {card.month && (
+          <span className="rounded-full border border-brand-border-dark/70 bg-brand-dark/50 px-2.5 py-1 text-[11px] text-brand-muted-on-dark/80">
+            {monthName(card.month)}
+          </span>
+        )}
       </div>
-    </button>
-  );
-}
-
-function TextKitCard({
-  title,
-  chip,
-  chipStyle,
-  onOpen,
-}: {
-  title: string;
-  chip: string;
-  chipStyle: string;
-  onOpen: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="group flex h-full flex-col justify-between rounded-xl border border-transparent bg-brand-surface p-4 text-left transition-colors hover:border-brand-accent/40"
-    >
-      <div>
-        <span
-          className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${chipStyle}`}
+      <span className="flex items-center gap-1.5 text-[13px] font-semibold text-brand-accent">
+        Voir le contenu
+        <svg
+          className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
         >
-          {chip}
-        </span>
-        <h4 className="mt-2 text-sm font-medium leading-snug text-brand-cream">
-          {title}
-        </h4>
-      </div>
-      <span className="mt-3 inline-flex items-center gap-1 text-xs text-brand-accent transition-transform group-hover:translate-x-0.5">
-        Aperçu & téléchargement
-        <span aria-hidden>→</span>
+          <path d="M5 12h14M13 6l6 6-6 6" />
+        </svg>
       </span>
     </button>
   );
 }
 
-function SectionTitle({
-  icon,
-  title,
-  description,
+function GroupedGrid({
+  cards,
+  onOpen,
 }: {
-  icon: string;
-  title: string;
-  description: string;
+  cards: KitCard[];
+  onOpen: (c: ActiveCard) => void;
 }) {
+  const groups: { month: number | null; items: KitCard[] }[] = [];
+  for (const c of cards) {
+    const last = groups[groups.length - 1];
+    if (last && last.month === c.month) last.items.push(c);
+    else groups.push({ month: c.month, items: [c] });
+  }
   return (
-    <header className="mb-5">
-      <h2 className="flex items-center gap-2 text-xl font-medium text-brand-cream">
-        <span aria-hidden>{icon}</span>
-        {title}
-      </h2>
-      <p className="mt-1 max-w-2xl text-sm text-brand-muted-on-dark">
-        {description}
-      </p>
-    </header>
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(248px,1fr))] gap-4">
+      {groups.map((g) => (
+        <Fragment key={g.month ?? "none"}>
+          <div className="col-span-full mt-2 flex items-center gap-3 text-[13px] font-bold uppercase tracking-[0.12em] text-brand-accent first:mt-0">
+            {g.month ? monthName(g.month) : "Sans période"}
+            <span className="rounded-full bg-brand-accent/15 px-2 py-0.5 text-[10px]">
+              {g.items.length}
+            </span>
+            <span className="h-px flex-1 bg-brand-border-dark/60" />
+          </div>
+          {g.items.map((c) => (
+            <Card key={c.id} card={c} onOpen={() => onOpen(c.payload)} />
+          ))}
+        </Fragment>
+      ))}
+    </div>
   );
 }
 
-function EmptyState({
-  onReset,
-  query,
-}: {
-  onReset: () => void;
-  query: string;
-}) {
+function EmptyState({ onReset, query }: { onReset: () => void; query: string }) {
   return (
     <div className="rounded-2xl border border-dashed border-brand-border-dark bg-brand-surface/30 px-6 py-16 text-center">
+      <div className="mx-auto mb-4 grid h-12 w-12 place-items-center text-brand-muted-on-dark/60">
+        <svg
+          width="46"
+          height="46"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          <circle cx="11" cy="11" r="7" />
+          <path d="M21 21l-4.3-4.3" />
+        </svg>
+      </div>
       <p className="text-base font-medium text-brand-cream">
         {query.trim()
           ? `Aucun kit ne correspond à « ${query.trim()} »`
-          : "Aucun kit pour ces filtres"}
+          : "Aucun kit ne correspond"}
       </p>
       <p className="mt-2 text-sm text-brand-muted-on-dark">
-        Essayez d&apos;élargir votre recherche ou de changer de thématique.
+        Essayez d&apos;élargir vos filtres ou de modifier votre recherche.
       </p>
       <button
         type="button"
         onClick={onReset}
-        className="mt-5 rounded-full border border-brand-accent/50 px-4 py-1.5 text-xs font-medium text-brand-accent transition-colors hover:bg-brand-accent hover:text-brand-dark"
+        className="mt-5 rounded-full border border-brand-accent/50 px-4 py-1.5 text-xs font-medium text-brand-accent transition-colors hover:bg-brand-accent hover:text-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60"
       >
-        Réinitialiser
+        Réinitialiser les filtres
       </button>
     </div>
   );
 }
 
-function CopyIcon() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
-  );
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// Modale (réutilise les corps existants, + corps "atelier" avec sélecteurs)
+// ─────────────────────────────────────────────────────────────────────────────
 
-function CheckIcon() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M5 12 10 17 19 7" />
-    </svg>
-  );
-}
-
-function ImageIcon() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-      <circle cx="8.5" cy="8.5" r="1.5" />
-      <path d="m21 15-5-5L5 21" />
-    </svg>
-  );
-}
-
-function PdfIcon() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <path d="M14 2v6h6" />
-    </svg>
-  );
-}
-
-function WorkshopKitsSection({
-  workshops: items,
-  onOpenKit,
-}: {
-  workshops: Workshop[];
-  onOpenKit: (w: Workshop, kit: WorkshopKitType) => void;
-}) {
-  const grouped: Record<string, Workshop[]> = {};
-  for (const w of items) {
-    (grouped[w.themeId] ||= []).push(w);
-  }
-
-  return (
-    <section>
-      <SectionTitle
-        icon="🎓"
-        title="Kits par atelier collectif"
-        description="Pour chaque atelier proposé : email d'invitation, relance et message post-atelier prêts à diffuser."
-      />
-      <div className="space-y-6">
-        {workshopThemes.map((theme) => {
-          const themeWorkshops = grouped[theme.id];
-          if (!themeWorkshops || themeWorkshops.length === 0) return null;
-          return (
-            <div key={theme.id}>
-              <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-brand-muted-on-dark">
-                {theme.name}
-              </h3>
-              <div className="space-y-2">
-                {themeWorkshops.map((w) => (
-                  <WorkshopKitRow
-                    key={w.id}
-                    workshop={w}
-                    onOpenKit={(kit) => onOpenKit(w, kit)}
-                  />
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function WorkshopKitRow({
-  workshop,
-  onOpenKit,
-}: {
-  workshop: Workshop;
-  onOpenKit: (kit: WorkshopKitType) => void;
-}) {
-  const kitTypes: WorkshopKitType[] = ["invitation", "relance", "post"];
-  return (
-    <div className="flex flex-col gap-3 rounded-xl border border-brand-border-dark bg-brand-surface p-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0">
-        <h4 className="text-sm font-medium leading-snug text-brand-cream">
-          {workshop.title}
-        </h4>
-        {workshop.subtitle && (
-          <p className="mt-0.5 text-[11px] uppercase tracking-wider text-brand-muted-on-dark">
-            {workshop.subtitle}
-          </p>
-        )}
-      </div>
-      <div className="flex shrink-0 flex-wrap gap-2">
-        {kitTypes.map((kit) => (
-          <button
-            key={kit}
-            type="button"
-            onClick={() => onOpenKit(kit)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-brand-accent/40 px-3 py-1 text-[11px] font-medium text-brand-accent transition-colors hover:bg-brand-accent hover:text-brand-dark"
-          >
-            <span aria-hidden>{workshopKitIcons[kit]}</span>
-            {workshopKitLabels[kit]}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function KitModal({
-  active,
-  onClose,
-}: {
-  active: ActiveCard;
-  onClose: () => void;
-}) {
+function KitModal({ active, onClose }: { active: ActiveCard; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -1318,7 +955,7 @@ function KitModal({
           type="button"
           onClick={onClose}
           aria-label="Fermer"
-          className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full text-brand-muted-on-dark transition-colors hover:bg-brand-border-dark hover:text-brand-cream"
+          className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full text-brand-muted-on-dark transition-colors hover:bg-brand-border-dark hover:text-brand-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60"
         >
           <svg
             width="16"
@@ -1361,43 +998,149 @@ function KitModal({
           />
         )}
 
-        {active.kind === "workshop-kit" && (
-          <TextKitModalBody
-            chips={[
-              {
-                label: workshopKitLabels[active.kitType],
-                style: "bg-brand-accent/15 text-brand-accent",
-              },
-              {
-                label:
-                  workshopThemeNameById[active.workshop.themeId] ?? "Atelier",
-                style: "bg-brand-cream/10 text-brand-cream",
-              },
-              {
-                label: active.language,
-                style: "bg-brand-cream/10 text-brand-cream",
-              },
-            ]}
-            title={active.workshop.title}
-            body={defaultWorkshopKitTemplate(
-              active.workshop,
-              active.kitType,
-              active.language
-            )}
-            copied={false}
-            setCopied={() => {}}
-          />
-        )}
+        {active.kind === "workshop" && <WorkshopModalBody workshop={active.workshop} />}
 
-        {active.kind === "animation" && (
-          <AnimationModalBody item={active.data} />
-        )}
+        {active.kind === "animation" && <AnimationModalBody item={active.data} />}
 
-        {active.kind === "visuel" && (
-          <VisuelModalBody item={active.data} />
-        )}
+        {active.kind === "visuel" && <VisuelModalBody item={active.data} />}
       </div>
     </div>
+  );
+}
+
+function WorkshopModalBody({ workshop }: { workshop: Workshop }) {
+  const [kitType, setKitType] = useState<WorkshopKitType>("invitation");
+  const [language, setLanguage] = useState<"FR" | "EN">("FR");
+  const [copied, setCopied] = useState(false);
+
+  const body = defaultWorkshopKitTemplate(workshop, kitType, language);
+  const themeName = workshopThemeNameById[workshop.themeId] ?? "Atelier";
+  const files = workshop.communicationKit ?? [];
+
+  const copy = () => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(body).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      });
+    }
+  };
+
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-2 pr-12">
+        <span className="rounded-full bg-brand-accent/15 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-brand-accent">
+          Kit atelier
+        </span>
+        <span className="rounded-full bg-brand-cream/10 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-brand-cream">
+          {themeName}
+        </span>
+      </div>
+      <h2 className="mt-3 text-2xl font-medium tracking-tight text-brand-cream">
+        {workshop.title}
+      </h2>
+      {workshop.subtitle && (
+        <p className="mt-1 text-sm text-brand-muted-on-dark">{workshop.subtitle}</p>
+      )}
+
+      <div className="mt-5 flex flex-wrap gap-2">
+        {(["invitation", "relance", "post"] as WorkshopKitType[]).map((kt) => (
+          <button
+            key={kt}
+            type="button"
+            onClick={() => {
+              setKitType(kt);
+              setCopied(false);
+            }}
+            aria-pressed={kitType === kt}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60 ${
+              kitType === kt
+                ? "border-brand-accent bg-brand-accent/15 text-brand-accent"
+                : "border-brand-border-dark text-brand-cream hover:bg-brand-dark/40"
+            }`}
+          >
+            <span aria-hidden>{workshopKitIcons[kt]}</span>
+            {workshopKitLabels[kt]}
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 flex gap-2">
+        {(["FR", "EN"] as const).map((l) => (
+          <button
+            key={l}
+            type="button"
+            onClick={() => {
+              setLanguage(l);
+              setCopied(false);
+            }}
+            aria-pressed={language === l}
+            className={`rounded-full border px-3 py-1 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60 ${
+              language === l
+                ? "border-brand-accent bg-brand-accent/15 text-brand-accent"
+                : "border-brand-border-dark text-brand-cream hover:bg-brand-dark/40"
+            }`}
+          >
+            {l === "FR" ? "🇫🇷 Français" : "🇬🇧 English"}
+          </button>
+        ))}
+      </div>
+
+      <h3 className="mt-6 mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-accent">
+        Aperçu du contenu
+      </h3>
+      <div className="max-h-72 overflow-y-auto whitespace-pre-wrap rounded-lg border border-brand-border-dark bg-brand-dark/40 p-4 text-sm leading-relaxed text-brand-cream">
+        {body}
+      </div>
+      <p className="mt-2 text-[11px] text-brand-muted-on-dark">
+        Aperçu indicatif — adaptez les variables (prénoms, dates, liens) avant envoi.
+      </p>
+
+      {files.length > 0 && (
+        <div className="mt-6">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-accent">
+            Fichiers joints <span className="text-brand-muted-on-dark">({files.length})</span>
+          </h3>
+          <ul className="space-y-1.5">
+            {files.map((f) => (
+              <li
+                key={f.id}
+                className="flex items-center gap-3 rounded-lg border border-brand-border-dark bg-brand-dark/30 px-3 py-2"
+              >
+                <span className="text-brand-muted-on-dark">
+                  {f.mimeType.startsWith("image/") ? <ImageIcon /> : <PdfIcon />}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-sm text-brand-cream">{f.name}</span>
+                <button
+                  type="button"
+                  onClick={() => void openKitFile(f.path, f.name)}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-brand-accent/40 px-3 py-1 text-[11px] font-medium text-brand-accent transition-colors hover:bg-brand-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60"
+                >
+                  <DownloadIcon /> Télécharger
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="mt-6 flex flex-wrap items-center justify-end gap-2 border-t border-brand-border-dark pt-5">
+        <button
+          type="button"
+          onClick={copy}
+          className="inline-flex items-center gap-1.5 rounded-full bg-brand-accent px-4 py-2 text-xs font-medium text-brand-dark transition-colors hover:bg-brand-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60"
+        >
+          {copied ? (
+            <>
+              <CheckIcon /> Copié dans le presse-papier
+            </>
+          ) : (
+            <>
+              <CopyIcon /> Copier le texte
+            </>
+          )}
+        </button>
+      </div>
+    </>
   );
 }
 
@@ -1405,8 +1148,12 @@ function VisuelModalBody({ item }: { item: VisuelKit }) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
-    void getKitFileUrl(item.path).then((u) => { if (alive) setPreviewUrl(u); });
-    return () => { alive = false; };
+    void getKitFileUrl(item.path).then((u) => {
+      if (alive) setPreviewUrl(u);
+    });
+    return () => {
+      alive = false;
+    };
   }, [item.path]);
   const isImage = item.mimeType.startsWith("image/");
   const categoryLabel =
@@ -1421,16 +1168,20 @@ function VisuelModalBody({ item }: { item: VisuelKit }) {
           {kitFileLabel(item.path) || item.path}
         </span>
       </div>
-      <h2 className="mt-3 text-2xl font-medium tracking-tight text-brand-cream">
-        {item.title}
-      </h2>
+      <h2 className="mt-3 text-2xl font-medium tracking-tight text-brand-cream">{item.title}</h2>
 
       <div className="mt-5 grid aspect-video w-full place-items-center overflow-hidden rounded-xl border border-brand-border-dark bg-brand-dark/40">
         {isImage && previewUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={previewUrl} alt={item.title} className="max-h-full max-w-full object-contain p-4" />
+          <img
+            src={previewUrl}
+            alt={item.title}
+            className="max-h-full max-w-full object-contain p-4"
+          />
         ) : (
-          <span className="text-4xl opacity-60" aria-hidden>📄</span>
+          <span className="text-4xl opacity-60" aria-hidden>
+            📄
+          </span>
         )}
       </div>
 
@@ -1438,7 +1189,7 @@ function VisuelModalBody({ item }: { item: VisuelKit }) {
         <button
           type="button"
           onClick={() => void openKitFile(item.path, kitFileLabel(item.path) || item.title)}
-          className="inline-flex items-center gap-1.5 rounded-full bg-brand-accent px-4 py-2 text-xs font-medium text-brand-dark transition-colors hover:bg-brand-accent/90"
+          className="inline-flex items-center gap-1.5 rounded-full bg-brand-accent px-4 py-2 text-xs font-medium text-brand-dark transition-colors hover:bg-brand-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60"
         >
           <DownloadIcon /> Télécharger
         </button>
@@ -1481,9 +1232,7 @@ function TextKitModalBody({
           </span>
         ))}
       </div>
-      <h2 className="mt-3 text-2xl font-medium tracking-tight text-brand-cream">
-        {title}
-      </h2>
+      <h2 className="mt-3 text-2xl font-medium tracking-tight text-brand-cream">{title}</h2>
 
       <h3 className="mt-6 mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-accent">
         Aperçu du contenu
@@ -1492,15 +1241,14 @@ function TextKitModalBody({
         {body}
       </div>
       <p className="mt-2 text-[11px] text-brand-muted-on-dark">
-        Aperçu indicatif — adaptez les variables (prénoms, dates, liens) avant
-        envoi.
+        Aperçu indicatif — adaptez les variables (prénoms, dates, liens) avant envoi.
       </p>
 
       <div className="mt-6 flex flex-wrap items-center justify-end gap-2 border-t border-brand-border-dark pt-5">
         <button
           type="button"
           onClick={copy}
-          className="inline-flex items-center gap-1.5 rounded-full bg-brand-accent px-4 py-2 text-xs font-medium text-brand-dark transition-colors hover:bg-brand-accent/90"
+          className="inline-flex items-center gap-1.5 rounded-full bg-brand-accent px-4 py-2 text-xs font-medium text-brand-dark transition-colors hover:bg-brand-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60"
         >
           {copied ? (
             <>
@@ -1550,9 +1298,7 @@ function AnimationModalBody({ item }: { item: AnimationItem }) {
           </span>
         )}
       </div>
-      <h2 className="mt-3 text-2xl font-medium tracking-tight text-brand-cream">
-        {item.title}
-      </h2>
+      <h2 className="mt-3 text-2xl font-medium tracking-tight text-brand-cream">{item.title}</h2>
 
       {item.landing && (
         <a
@@ -1563,45 +1309,23 @@ function AnimationModalBody({ item }: { item: AnimationItem }) {
         >
           <LinkIcon />
           Voir la landing page
-          <span className="text-[11px] text-brand-muted-on-dark">
-            ({new URL(item.landing).host})
-          </span>
+          <span className="text-[11px] text-brand-muted-on-dark">({new URL(item.landing).host})</span>
         </a>
       )}
 
       {item.body?.trim() && <CopyableTextBlock body={item.body.trim()} />}
 
       <div className="mt-6 space-y-5">
-        <ResourceGroup
-          title="Visuels FR"
-          flag="🇫🇷"
-          files={item.imagesFr}
-          kind="image"
-        />
-        <ResourceGroup
-          title="Visuels EN"
-          flag="🇬🇧"
-          files={item.imagesEn}
-          kind="image"
-        />
-        <ResourceGroup
-          title="PDF FR"
-          flag="🇫🇷"
-          files={item.pdfFr}
-          kind="pdf"
-        />
-        <ResourceGroup
-          title="PDF EN"
-          flag="🇬🇧"
-          files={item.pdfEn}
-          kind="pdf"
-        />
+        <ResourceGroup title="Visuels FR" flag="🇫🇷" files={item.imagesFr} kind="image" />
+        <ResourceGroup title="Visuels EN" flag="🇬🇧" files={item.imagesEn} kind="image" />
+        <ResourceGroup title="PDF FR" flag="🇫🇷" files={item.pdfFr} kind="pdf" />
+        <ResourceGroup title="PDF EN" flag="🇬🇧" files={item.pdfEn} kind="pdf" />
       </div>
 
       <p className="mt-6 border-t border-brand-border-dark pt-4 text-[11px] text-brand-muted-on-dark">
-        Les fichiers sources sont hébergés dans Notion. La connexion à
-        l&apos;export téléchargeable arrive prochainement — pour l&apos;instant
-        les boutons listent les ressources disponibles.
+        Les fichiers sources sont hébergés dans Notion. La connexion à l&apos;export
+        téléchargeable arrive prochainement — pour l&apos;instant les boutons listent les
+        ressources disponibles.
       </p>
     </>
   );
@@ -1641,7 +1365,11 @@ function ResourceGroup({
               type="button"
               onClick={() => void openKitFile(name, kitFileLabel(name) || name)}
               disabled={!name.includes("/")}
-              title={name.includes("/") ? "Télécharger" : "Fichier hérité (re-uploader depuis le catalogue)"}
+              title={
+                name.includes("/")
+                  ? "Télécharger"
+                  : "Fichier hérité (re-uploader depuis le catalogue)"
+              }
               className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-brand-accent/40 px-3 py-1 text-[11px] font-medium text-brand-accent transition-colors hover:bg-brand-accent/10 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <DownloadIcon /> Télécharger
@@ -1652,6 +1380,50 @@ function ResourceGroup({
     </section>
   );
 }
+
+// Reusable copy-to-clipboard block for the body field on animation kits.
+function CopyableTextBlock({ body }: { body: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(body).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      });
+    }
+  };
+  return (
+    <div className="mt-6">
+      <div className="mb-2 flex items-baseline justify-between gap-3">
+        <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-accent">
+          Contenu à copier
+        </h3>
+        <button
+          type="button"
+          onClick={copy}
+          className="inline-flex items-center gap-1.5 rounded-full bg-brand-accent px-3.5 py-1.5 text-[11px] font-medium text-brand-dark transition-colors hover:bg-brand-accent/90"
+        >
+          {copied ? (
+            <>
+              <CheckIcon /> Copié
+            </>
+          ) : (
+            <>
+              <CopyIcon /> Copier
+            </>
+          )}
+        </button>
+      </div>
+      <div className="max-h-60 overflow-y-auto whitespace-pre-wrap rounded-lg border border-brand-border-dark bg-brand-dark/40 p-4 text-sm leading-relaxed text-brand-cream">
+        {body}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Templates par défaut (repris à l'identique de l'ancienne page)
+// ─────────────────────────────────────────────────────────────────────────────
 
 function defaultWorkshopKitTemplate(
   w: Workshop,
@@ -1770,14 +1542,11 @@ function defaultLancementTemplate(k: LancementKit): string {
   const stepIntro: Record<string, string> = {
     before:
       "Dans quelques jours, nous lançons teale, notre nouveau partenaire pour prendre soin de la santé mentale au travail.",
-    dday:
-      "C'est aujourd'hui ! teale est ouvert à toutes et tous dès maintenant.",
+    dday: "C'est aujourd'hui ! teale est ouvert à toutes et tous dès maintenant.",
     after:
       "Cela fait quelques semaines que teale est disponible — voici quelques rappels pour profiter pleinement de la plateforme.",
   };
-  const intro =
-    stepIntro[k.step] ??
-    "Voici un nouveau message à diffuser à vos équipes.";
+  const intro = stepIntro[k.step] ?? "Voici un nouveau message à diffuser à vos équipes.";
 
   const isEnglish = k.language === "EN";
   if (isEnglish) {
@@ -1860,6 +1629,124 @@ function defaultEmailTemplate(k: EmailTopicKit): string {
   ].join("\n");
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Icônes
+// ─────────────────────────────────────────────────────────────────────────────
+
+function SearchIcon() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="shrink-0 text-brand-muted-on-dark"
+      aria-hidden
+    >
+      <circle cx="11" cy="11" r="7" />
+      <path d="M21 21l-4.3-4.3" />
+    </svg>
+  );
+}
+
+function FilterIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M4 5h16M7 12h10M10 19h4" />
+    </svg>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M5 12 10 17 19 7" />
+    </svg>
+  );
+}
+
+function ImageIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <path d="m21 15-5-5L5 21" />
+    </svg>
+  );
+}
+
+function PdfIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+    </svg>
+  );
+}
+
 function DownloadIcon() {
   return (
     <svg
@@ -1896,48 +1783,5 @@ function LinkIcon() {
       <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
       <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
     </svg>
-  );
-}
-
-// Reusable copy-to-clipboard block for the body field on animation kits.
-// The lancement/email modals already render the body via TextKitModalBody;
-// the animation modal didn't have a text section before, so it gets its
-// own scrollable container + copy button here.
-function CopyableTextBlock({ body }: { body: string }) {
-  const [copied, setCopied] = useState(false);
-  const copy = () => {
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(body).then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      });
-    }
-  };
-  return (
-    <div className="mt-6">
-      <div className="mb-2 flex items-baseline justify-between gap-3">
-        <h3 className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-accent">
-          Contenu à copier
-        </h3>
-        <button
-          type="button"
-          onClick={copy}
-          className="inline-flex items-center gap-1.5 rounded-full bg-brand-accent px-3.5 py-1.5 text-[11px] font-medium text-brand-dark transition-colors hover:bg-brand-accent/90"
-        >
-          {copied ? (
-            <>
-              <CheckIcon /> Copié
-            </>
-          ) : (
-            <>
-              <CopyIcon /> Copier
-            </>
-          )}
-        </button>
-      </div>
-      <div className="max-h-60 overflow-y-auto whitespace-pre-wrap rounded-lg border border-brand-border-dark bg-brand-dark/40 p-4 text-sm leading-relaxed text-brand-cream">
-        {body}
-      </div>
-    </div>
   );
 }
