@@ -20,7 +20,7 @@ import {
 import { workshops } from "@/app/(client)/catalogue-ateliers/data";
 import { lancementKits, animationItems, emailTopicKits } from "@/app/(client)/kits-communication/data";
 import { useActiveClient } from "@/lib/client-context";
-import { buildPlanQuarters } from "@/lib/plan-quarters";
+import { buildPlanQuarters, type PlanQuarter } from "@/lib/plan-quarters";
 import { csmClientsStore } from "@/lib/csm-clients-store";
 
 // Today, computed once at module load — derives the month status (past /
@@ -432,12 +432,18 @@ function quarterProgress(q: Quarter): number {
   return Math.round(((past + 0.5) / q.months.length) * 100);
 }
 
-function defaultQuarter(qs: Quarter[]): QuarterId {
-  const cur = qs.find((q) => quarterStatus(q) === "current");
+// Default quarter from the contract-anchored plan quarters. Each
+// PlanQuarter already carries its own status (computed against today + the
+// real month/year of the bucket), so we don't need to re-derive it from
+// today like the old defaultQuarter(qs: Quarter[]) used to — that one
+// assumed all quarter months were in the current calendar year, which was
+// wrong for contracts whose Q-months span across years.
+function defaultPlanQuarter(pqs: PlanQuarter[]): QuarterId {
+  const cur = pqs.find((q) => q.status === "current");
   if (cur) return cur.id;
-  const upcoming = qs.find((q) => quarterStatus(q) === "upcoming");
-  if (upcoming) return upcoming.id;
-  return "Q4";
+  const up = pqs.find((q) => q.status === "upcoming");
+  if (up) return up.id;
+  return pqs[0]?.id ?? "Q1";
 }
 
 export default function MonPlanningPage() {
@@ -474,11 +480,12 @@ export default function MonPlanningPage() {
   );
 
   const [activeYear, setActiveYear] = useState<Year>(TODAY_YEAR);
-  const [activeQuarterId, setActiveQuarterId] = useState<QuarterId>(
-    () => defaultQuarter(planQuarters.map((pq) => ({
-      id: pq.id, theme: "", subtitle: "", months: pq.months.map((m) => m.en), ...QUARTER_GRADIENTS[pq.id],
-    })))
-  );
+  // Active quarter is derived from `userPickedQuarter` (manual click) OR
+  // the contract's "current" quarter (auto). Storing only the override
+  // avoids stale state when contractStart resolves async: the derived
+  // default automatically re-evaluates against the fresh planQuarters.
+  const [userPickedQuarter, setUserPickedQuarter] = useState<QuarterId | null>(null);
+  const activeQuarterId = userPickedQuarter ?? defaultPlanQuarter(planQuarters);
   const [activeEvent, setActiveEvent] = useState<{
     event: PlanEvent;
     month: string;
@@ -586,7 +593,13 @@ export default function MonPlanningPage() {
 
   const switchYear = (y: Year) => {
     setActiveYear(y);
-    setActiveQuarterId(defaultQuarter(quarters));
+    // Drop the manual override so the user lands on the auto-derived
+    // default for the new year (current quarter on TODAY_YEAR, Q1 otherwise).
+    setUserPickedQuarter(null);
+  };
+
+  const handlePickQuarter = (id: QuarterId) => {
+    setUserPickedQuarter(id);
   };
 
   // First upcoming event across the active quarter — must be in the future
@@ -692,7 +705,7 @@ export default function MonPlanningPage() {
           {/* Year switcher + quarter tabs */}
           <div className="mb-7 grid items-center gap-6" style={{ gridTemplateColumns: "auto 1fr" }}>
             <YearSwitcher year={activeYear} onChange={switchYear} />
-            <QuarterTabs active={activeQuarterId} onSelect={setActiveQuarterId} quarterList={displayQuarters} />
+            <QuarterTabs active={activeQuarterId} onSelect={handlePickQuarter} quarterList={displayQuarters} />
           </div>
 
           {/* Section header */}
