@@ -30,7 +30,7 @@ import { healthStore, type HealthEntry, type HealthStatut } from "@/lib/health-s
 import { targetsStore, type TargetLabel, LABEL_COLORS } from "@/lib/targets-store";
 import { commentsStore, type PlanComment } from "@/lib/comments-store";
 import { buildPlanQuarters } from "@/lib/plan-quarters";
-import { countAtelierConsumed } from "@/lib/plan-dates";
+import { countAtelierConsumed, isPlanItemPast } from "@/lib/plan-dates";
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -88,9 +88,8 @@ function getFileIcon(mimeType: string): string {
   return "📎";
 }
 
-function PlanItemRow({ item, onToggle, onEdit, labels = [], assignedTargets = [] }: {
+function PlanItemRow({ item, onEdit, labels = [], assignedTargets = [] }: {
   item: PlanItem;
-  onToggle: () => void;
   onEdit?: () => void;
   labels?: TargetLabel[];
   assignedTargets?: string[];
@@ -143,16 +142,15 @@ function PlanItemRow({ item, onToggle, onEdit, labels = [], assignedTargets = []
         )}
       </div>
 
-      <button
-        onClick={(e) => { e.stopPropagation(); onToggle(); }}
-        className={`mt-[1px] flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all text-[11px] font-bold ${
-          item.done
-            ? "border-[#a8e895] bg-[#a8e895] text-[#06241d]"
-            : "border-[rgba(255,255,255,0.18)] bg-transparent text-transparent hover:border-[#84d4a6] hover:text-[#84d4a6]"
-        }`}
-      >
-        ✓
-      </button>
+      {item.done && (
+        <span
+          aria-hidden
+          className="mt-[1px] flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[#a8e895] bg-[#a8e895] text-[11px] font-bold text-[#06241d]"
+          title="Date passée"
+        >
+          ✓
+        </span>
+      )}
     </li>
   );
 }
@@ -376,10 +374,12 @@ export default function ClientDetailView({ id }: { id: string }) {
 
   const [showHeroExpanded, setShowHeroExpanded] = useState(false);
   const [doneActions, setDoneActions] = useState<Set<number>>(new Set());
-  const [planItems, setPlanItems] = useState<Record<number, boolean>>({});
-  // Effective done state. A session toggle (planItems) FULLY overrides the
-  // stored value — so an item can be checked AND un-checked again.
-  const isPlanDone = (item: PlanItem): boolean => planItems[item.id] ?? item.done;
+  // Done state is purely derived from the item's scheduled date — no
+  // manual toggle on the CSM side. An item whose date has passed (and
+  // wasn't cancelled) automatically appears struck-through; new items
+  // and future ones stay active. Persisted via toStored so the client
+  // sees the same flag at last save.
+  const isPlanDone = (item: PlanItem): boolean => isPlanItemPast(item);
   const [planOverrides, setPlanOverrides] = useState<Record<number, PlanItem>>({});
   const [deletedPlanIds, setDeletedPlanIds] = useState<Set<number>>(new Set());
   const [editingPlanItem, setEditingPlanItem] = useState<PlanItem | null>(null);
@@ -773,7 +773,7 @@ export default function ClientDetailView({ id }: { id: string }) {
       nextThemes: { Q1: nextThemes.q1, Q2: nextThemes.q2, Q3: nextThemes.q3, Q4: nextThemes.q4 },
       items: [
         ...planBase.planQ1.filter((i) => !deletedPlanIds.has(i.id)).map((i) => toStored(i, "Q1", "current")),
-        ...planBase.planQ2Done.filter((i) => !deletedPlanIds.has(i.id)).map((i) => ({ ...toStored(i, "Q2", "current"), done: true })),
+        ...planBase.planQ2Done.filter((i) => !deletedPlanIds.has(i.id)).map((i) => toStored(i, "Q2", "current")),
         ...planBase.planQ2Upcoming.filter((i) => !deletedPlanIds.has(i.id)).map((i) => toStored(i, "Q2", "current")),
         ...planBase.planQ3.filter((i) => !deletedPlanIds.has(i.id)).map((i) => toStored(i, "Q3", "current")),
         ...planBase.planQ4.filter((i) => !deletedPlanIds.has(i.id)).map((i) => toStored(i, "Q4", "current")),
@@ -801,7 +801,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     // `detail`, `planBase` and `planTargetFilter` are intentionally omitted:
     // `planBase` is set once on load, and re-running on `detail` (an unstable
     // derived object) would resync on every render.
-  }, [planOverrides, deletedPlanIds, extraPlanItems, currentThemes, nextThemes, planItems, itemTargets, planLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [planOverrides, deletedPlanIds, extraPlanItems, currentThemes, nextThemes, itemTargets, planLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const getEffective = (item: PlanItem): PlanItem => planOverrides[item.id] ?? item;
 
@@ -1176,11 +1176,6 @@ export default function ClientDetailView({ id }: { id: string }) {
     setActiveSection(s);
     mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
-
-  // Toggle relative to the EFFECTIVE done state (so a stored-done item can be
-  // un-checked). isPlanDone is defined once near the planItems state.
-  const togglePlanItem = (item: PlanItem) =>
-    setPlanItems((p) => ({ ...p, [item.id]: !(p[item.id] ?? item.done) }));
 
   const allPlanItems = [
     ...planBase.planQ2Done,
@@ -2193,11 +2188,9 @@ export default function ClientDetailView({ id }: { id: string }) {
 
           {/* ── Current year ── */}
           {planYear === "current" && (() => {
-            // `done: isPlanDone(i)` must be applied on every bucket — that's
-            // how a session toggle reaches PlanItemRow (which reads item.done
-            // directly). Forgetting it on a bucket means the checkbox state
-            // only updates after a page refresh (the value gets persisted by
-            // the debounced sync and re-arrives via plan_state).
+            // `done: isPlanDone(i)` must be applied on every bucket so the
+            // PlanItemRow (which reads item.done directly) reflects the
+            // derived done state — currently "date is past and not cancelled".
             const allItemsByQ: Record<"Q1" | "Q2" | "Q3" | "Q4", PlanItem[]> = {
               Q1: planBase.planQ1
                 .filter((i) => !deletedPlanIds.has(i.id))
@@ -2433,7 +2426,6 @@ export default function ClientDetailView({ id }: { id: string }) {
                                 <PlanItemRow
                                   key={item.id}
                                   item={item}
-                                  onToggle={() => togglePlanItem(item)}
                                   onEdit={() => openPlanEdit(item)}
                                   labels={clientLabels}
                                   assignedTargets={itemTargets[item.id] ?? []}

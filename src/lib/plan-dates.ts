@@ -105,6 +105,28 @@ export function currentContractYearWindow(
  * has `year: "current" | "next"` (relative). The caller resolves that to
  * an absolute year before calling.
  */
+/**
+ * Returns true when the item's scheduled date is strictly before `now`
+ * (defaults to today's start). Cancelled items are treated as not past —
+ * they keep their "cancelled" badge instead of getting the done style.
+ * Used to derive the displayed "done" state without requiring the CSM
+ * to manually check off each item.
+ */
+export function isPlanItemPast(
+  item: { month?: number; meta?: string; cancelled?: boolean; calendarYear?: number },
+  now: Date = new Date(),
+): boolean {
+  if (item.cancelled) return false;
+  const month = monthFromMeta(item.meta) ?? item.month;
+  if (month == null) return false;
+  const year = yearFromMeta(item.meta) ?? item.calendarYear ?? now.getFullYear();
+  const day = dayFromMeta(item.meta);
+  const itemEnd = new Date(year, month, day, 23, 59, 59, 999);
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  return itemEnd.getTime() < today.getTime();
+}
+
 export function countAtelierConsumed(
   items: Array<{
     type: string;
