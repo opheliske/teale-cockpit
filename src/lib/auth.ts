@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase, ensureSession } from "@/lib/supabase";
 import { impersonationStore } from "@/lib/impersonation-store";
 import { closeSync } from "@/lib/sync";
+import { sessionStatusStore } from "@/lib/session-status-store";
 
 export type UserRole = "csm" | "client";
 
@@ -39,10 +40,18 @@ export function useAuth() {
         if (active) setLoading(false);
         return;
       }
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user }, error: userErr } = await supabase.auth.getUser();
       if (!user) {
+        // ensureSession() only checks the token's *local* expiry. getUser()
+        // validates it against the Auth server, so a 401/403 here means the
+        // session is genuinely dead (revoked/expired refresh token, deleted
+        // user) even though the cached token hadn't "expired" yet — exactly
+        // the case a page reload can't fix. Escalate to "lost" so the
+        // watchdog signs out cleanly and routes to /login, instead of leaving
+        // the CSM area (which has no ClientGuard) stuck showing "—".
+        // A network error has no HTTP status — treat that as transient.
+        const status = (userErr as { status?: number } | null)?.status;
+        if (status === 401 || status === 403) sessionStatusStore.set("lost");
         if (active) setLoading(false);
         return;
       }

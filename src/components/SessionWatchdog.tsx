@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 import { supabase, ensureSession, REFRESH_MARGIN_MS } from "@/lib/supabase";
 import { forceReloadAll } from "@/lib/sync";
+import { signOut } from "@/lib/auth";
+import { sessionStatusStore } from "@/lib/session-status-store";
 
 /**
  * Keeps the Supabase auth session healthy while the app is open.
@@ -44,11 +46,18 @@ export default function SessionWatchdog() {
   useEffect(() => {
     let mounted = true;
     let proactiveTimer: ReturnType<typeof setTimeout> | null = null;
+    let reauthing = false;
 
-    const goToLogin = () => {
-      if (typeof window === "undefined") return;
-      if (window.location.pathname === "/login") return;
-      window.location.replace("/login");
+    // Session is unrecoverable → clean sign-out + hard redirect to /login.
+    // signOut() purges the sb-* cookies and tears down realtime, so the
+    // /login landing is clean and the user no longer has to sign out by hand.
+    // Guarded so the many callers (status listener, auth events, validation)
+    // can't fire it twice, and so it never loops on the login page itself.
+    const forceReauth = () => {
+      if (reauthing) return;
+      if (typeof window === "undefined" || window.location.pathname === "/login") return;
+      reauthing = true;
+      void signOut();
     };
 
     const validateSession = async () => {
@@ -56,10 +65,12 @@ export default function SessionWatchdog() {
         // ensureSession also forces a refresh when the token is near expiry,
         // so coming back to the tab after a long absence revives the
         // in-memory JWT. Its TOKEN_REFRESHED side-effect triggers
-        // forceReloadAll() via the onAuthStateChange handler below.
+        // forceReloadAll() via the onAuthStateChange handler below. When it
+        // can't produce a usable session it returns false (and sets the
+        // status to "lost") → bounce to /login.
         const ok = await ensureSession();
         if (!mounted) return;
-        if (!ok) goToLogin();
+        if (!ok) forceReauth();
       } catch {
         // network blip — leave it; the next event/visibility will retry
       }
@@ -88,10 +99,17 @@ export default function SessionWatchdog() {
       }, delay);
     };
 
+    // Any code path that gives up on the session flips the status to "lost"
+    // (ensureSession on a dead token, useAuth on a 401/403 getUser, …). That
+    // is the single signal that drives the automatic bounce to /login.
+    const unsubStatus = sessionStatusStore.subscribe(() => {
+      if (sessionStatusStore.get() === "lost") forceReauth();
+    });
+
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_OUT" || (event === "TOKEN_REFRESHED" && !session)) {
         if (proactiveTimer) { clearTimeout(proactiveTimer); proactiveTimer = null; }
-        goToLogin();
+        forceReauth();
         return;
       }
       if (event === "TOKEN_REFRESHED" && session) {
@@ -122,6 +140,14 @@ export default function SessionWatchdog() {
       document.addEventListener("visibilitychange", onVisibility);
     }
 
+    // Validate on mount too: a hard page load (the user's "even after a
+    // refresh" case) lands here, so a session that's dead in the cookie is
+    // caught immediately and bounced to /login rather than left showing "—".
+    // Skipped on /login, where there's deliberately no session yet.
+    if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+      void validateSession();
+    }
+
     // Initial arm — covers the case where the user lands on the page and
     // never switches tabs (no visibilitychange) and doesn't trigger a fetch.
     void scheduleNextRefresh();
@@ -129,6 +155,7 @@ export default function SessionWatchdog() {
     return () => {
       mounted = false;
       if (proactiveTimer) clearTimeout(proactiveTimer);
+      unsubStatus();
       data.subscription.unsubscribe();
       if (typeof document !== "undefined") {
         document.removeEventListener("visibilitychange", onVisibility);
