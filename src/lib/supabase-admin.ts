@@ -17,6 +17,17 @@ const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
  * updateUserById, …). Create it only inside an admin-gated route handler.
  */
 export function createSupabaseAdminClient(): SupabaseClient {
+  // Fail with an actionable message instead of supabase-js's cryptic
+  // "supabaseKey is required." A missing key almost always means the dev
+  // server was started before the var was in .env.local (restart it), or the
+  // deployment env doesn't define SUPABASE_SERVICE_ROLE_KEY.
+  if (!serviceKey) {
+    throw new Error(
+      "SUPABASE_SERVICE_ROLE_KEY absente de l'environnement serveur. " +
+        "En local : redémarrez `npm run dev` après l'avoir ajoutée à .env.local. " +
+        "En production : définissez-la dans les variables d'environnement du déploiement.",
+    );
+  }
   return createClient(url, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
