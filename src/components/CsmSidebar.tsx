@@ -93,6 +93,13 @@ export default function CsmSidebar() {
         {profile?.role === "admin" && (
           <Link
             href="/admin"
+            onClick={() => {
+              // Remember where we were so the admin space can offer a precise
+              // "back to where I was" link (falls back to /csm).
+              try {
+                sessionStorage.setItem("teale_admin_return", pathname);
+              } catch {}
+            }}
             className="mb-2 block rounded-md px-3 py-2 text-sm text-[#a8e895] transition-colors hover:bg-[rgba(94,234,212,0.12)]"
           >
             ⚙️ Administration

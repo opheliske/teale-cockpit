@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "@/lib/auth";
 
 const items = [
@@ -12,6 +12,16 @@ const items = [
 
 export default function AdminSidebar({ email }: { email: string }) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const backToCsm = () => {
+    let target = "/csm";
+    try {
+      const saved = sessionStorage.getItem("teale_admin_return");
+      if (saved && saved.startsWith("/csm")) target = saved;
+    } catch {}
+    router.push(target);
+  };
 
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-[rgba(94,234,212,0.15)] bg-brand-dark text-brand-cream">
@@ -35,6 +45,12 @@ export default function AdminSidebar({ email }: { email: string }) {
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 pb-4">
+        <button
+          onClick={backToCsm}
+          className="mb-4 flex w-full items-center gap-2 rounded-md border border-[rgba(94,234,212,0.25)] px-3 py-2 text-[13px] text-brand-cream transition-colors hover:bg-[rgba(94,234,212,0.12)] hover:text-[#a8e895]"
+        >
+          <span aria-hidden>←</span> Retour à l&apos;espace CSM
+        </button>
         <ul className="flex flex-col gap-0.5">
           {items.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
