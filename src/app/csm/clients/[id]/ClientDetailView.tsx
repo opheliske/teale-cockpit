@@ -573,8 +573,13 @@ export default function ClientDetailView({ id }: { id: string }) {
   // a save or a realtime update). This is React's documented "adjust state
   // when a value changes" pattern — a guarded setState during render, not an
   // effect — so it doesn't trip react-hooks/set-state-in-effect.
+  // Re-seed on the client *id*, not object identity: every store re-fetch
+  // (realtime tick, refresh storm, broadcast) rebuilds fresh row objects, so
+  // an identity check re-seeded — and wiped in-progress edits — on every
+  // benign refetch. Keying on id re-seeds only on initial load and when the
+  // CSM actually switches client.
   const [syncedClient, setSyncedClient] = useState(storedClient);
-  if (storedClient && storedClient !== syncedClient) {
+  if (storedClient && storedClient.id !== syncedClient?.id) {
     setSyncedClient(storedClient);
     const c = toClient(storedClient);
     const d = toClientDetail(storedClient);

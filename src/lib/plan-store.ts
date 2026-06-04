@@ -52,11 +52,19 @@ const _listeners = new Set<() => void>();
 
 async function fetchPlan(clientId: string) {
   if (!(await ensureSession())) return;
-  const { data } = await supabase
+  // maybeSingle (not single): a client with no plan row yet is "0 rows, no
+  // error", which we want to read as an empty plan. A transient failure comes
+  // back with `error` set — in that case keep the cached state rather than
+  // blanking the whole planning view (single() conflates the two).
+  const { data, error } = await supabase
     .from("plan_state")
     .select("*")
     .eq("client_id", clientId)
-    .single();
+    .maybeSingle();
+  if (error) {
+    console.error("[plan-store] load", error);
+    return;
+  }
   _state = data
     ? {
         themes: data.themes as QuarterThemes,

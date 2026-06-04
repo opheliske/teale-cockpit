@@ -27,6 +27,13 @@ const REFRESH_TIMEOUT_MS = 8_000;
 // would flash the red banner even though everything still works.
 const RECOVERY_GRACE_MS = 30_000;
 
+// Shared in-flight refresh. When forceReloadAll() fans a token refresh out to
+// every store at once, each would otherwise call refreshSession() concurrently
+// — and auth-js's Navigator LockManager serialises/deadlocks under that
+// contention, pushing the losers into the 8 s timeout. Collapsing the storm to
+// a single shared refreshSession() promise removes that self-inflicted failure.
+let _inFlightRefresh: Promise<unknown> | null = null;
+
 /**
  * Resolves to `true` once the browser has a usable session whose access
  * token is *not* about to expire. Proactively forces a refresh when needed,
@@ -62,10 +69,17 @@ export async function ensureSession(): Promise<boolean> {
   if (expiresAtMs - Date.now() < REFRESH_MARGIN_MS) {
     let refreshed = false;
     try {
-      const fresh = await Promise.race([
-        supabase.auth.refreshSession().then(({ data }) => data.session),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), REFRESH_TIMEOUT_MS)),
-      ]);
+      // Reuse a refresh already in flight (started by a concurrent caller)
+      // instead of launching another one — see _inFlightRefresh above.
+      if (!_inFlightRefresh) {
+        _inFlightRefresh = Promise.race([
+          supabase.auth.refreshSession().then(({ data }) => data.session),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), REFRESH_TIMEOUT_MS)),
+        ]).finally(() => {
+          _inFlightRefresh = null;
+        });
+      }
+      const fresh = await _inFlightRefresh;
       if (fresh) refreshed = true;
     } catch {
       /* fall through to the cookie-recovery path below */

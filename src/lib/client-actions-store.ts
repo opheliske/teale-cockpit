@@ -21,24 +21,35 @@ async function ensureLoaded() {
   if (_loaded) return;
   // Skip on unusable session — see supabase.ts.
   if (!(await ensureSession())) return;
-  _loaded = true;
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("client_actions")
     .select("*")
     .order("created_at");
+  // Keep _loaded false on error so a later ensureLoaded() retries, rather
+  // than caching an empty list from a transient failure.
+  if (error) {
+    console.error("[client-actions-store] load", error);
+    return;
+  }
   // No front-side seeding (consistent with workshops/kits stores) — an empty
   // table just yields an empty action list.
   _actions = (data ?? []).map(fromRow);
+  _loaded = true;
   _listeners.forEach((l) => l());
 }
 
 // Plain re-fetch (no seeding) when an action changed elsewhere.
 async function reloadActions() {
   if (!(await ensureSession())) return;
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("client_actions")
     .select("*")
     .order("created_at");
+  if (error) {
+    // Transient failure — keep the cache rather than blanking the list.
+    console.error("[client-actions-store] reload", error);
+    return;
+  }
   _actions = data ? data.map(fromRow) : [];
   _listeners.forEach((l) => l());
 }

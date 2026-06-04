@@ -25,10 +25,15 @@ function notify() {
 
 async function fetchFeedback(clientId: string) {
   if (!(await ensureSession())) return;
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("client_atelier_feedback")
     .select("*")
     .eq("client_id", clientId);
+  if (error) {
+    // Transient failure — keep the cache rather than blanking the feedback.
+    console.error("[atelier-feedback-store] load", error);
+    return;
+  }
   const map: Record<number, AtelierFeedback> = {};
   for (const row of data ?? []) {
     const fb = fromRow(row);

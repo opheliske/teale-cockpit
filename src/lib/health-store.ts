@@ -33,11 +33,16 @@ function notify() {
 watchChanges(["health_entries"], async () => {
   if (!(await ensureSession())) return;
   for (const clientId of Object.keys(state)) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("health_entries")
       .select("*")
       .eq("client_id", clientId)
       .order("iso_date");
+    // Transient failure — keep this client's cached entries, don't blank.
+    if (error) {
+      console.error("[health-store] reload", error);
+      continue;
+    }
     state = { ...state, [clientId]: data ? data.map(fromRow) : [] };
   }
   notify();
@@ -49,11 +54,16 @@ export const healthStore = {
 
   load: async (clientId: string) => {
     if (!(await ensureSession())) return;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("health_entries")
       .select("*")
       .eq("client_id", clientId)
       .order("iso_date");
+    if (error) {
+      // Transient failure — keep the cache rather than blanking the list.
+      console.error("[health-store] load", error);
+      return;
+    }
     state = { ...state, [clientId]: data ? data.map(fromRow) : [] };
     notify();
   },

@@ -95,6 +95,11 @@ export default function SessionWatchdog() {
         return;
       }
       if (event === "TOKEN_REFRESHED" && session) {
+        // Hand the rotated JWT to the Realtime socket — it keeps using the
+        // token it subscribed with otherwise, so after rotation the channels
+        // drift to the old (soon-expired) token, error out and reconnect at
+        // the worst moment. setAuth keeps them on the live token.
+        void supabase.realtime.setAuth(session.access_token);
         // Fresh token — re-fetch every store in case it had cached empty data
         // from the brief window where the previous token was expired, then
         // re-arm the proactive timer against the new expires_at.
@@ -102,6 +107,7 @@ export default function SessionWatchdog() {
         void scheduleNextRefresh();
       }
       if (event === "SIGNED_IN" && session) {
+        void supabase.realtime.setAuth(session.access_token);
         void scheduleNextRefresh();
       }
     });

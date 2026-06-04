@@ -58,20 +58,24 @@ export const commentsStore = {
   load: async (threadId: string) => {
     if (_loadedThreads.has(threadId)) return;
     if (!(await ensureSession())) return;
-    _loadedThreads.add(threadId);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("plan_comments")
       .select("*")
       .eq("thread_id", threadId)
       .order("created_at");
-    if (data) {
-      const fetched = data.map(fromRow);
-      _comments = [
-        ..._comments.filter((c) => c.threadId !== threadId),
-        ...fetched,
-      ];
-      notify();
+    // Only mark the thread loaded once we actually have its rows — a transient
+    // failure must not freeze it permanently empty (no retry, reload-only).
+    if (error || !data) {
+      if (error) console.error("[comments-store] load", error);
+      return;
     }
+    _loadedThreads.add(threadId);
+    const fetched = data.map(fromRow);
+    _comments = [
+      ..._comments.filter((c) => c.threadId !== threadId),
+      ...fetched,
+    ];
+    notify();
   },
 
   // clientId scopes the comment to a company so RLS can isolate it: a client

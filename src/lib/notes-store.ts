@@ -23,11 +23,16 @@ function notify() {
 
 async function fetchNotes(clientId: string) {
   if (!(await ensureSession())) return;
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("client_notes")
     .select("*")
     .eq("client_id", clientId)
     .order("created_at", { ascending: false });
+  if (error) {
+    // Transient failure — keep the cache rather than blanking the list.
+    console.error("[notes-store] load", error);
+    return;
+  }
   _notes = data ? data.map(fromRow) : [];
   notify();
 }

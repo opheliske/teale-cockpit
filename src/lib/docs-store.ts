@@ -38,11 +38,16 @@ const _listeners = new Set<() => void>();
 
 async function fetchDocs(clientId: string) {
   if (!(await ensureSession())) return;
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("documents")
     .select("*")
     .eq("client_id", clientId)
     .order("date", { ascending: false });
+  if (error) {
+    // Transient failure — keep the cache rather than blanking the list.
+    console.error("[docs-store] load", error);
+    return;
+  }
   _docs = data ? data.map(fromRow) : [];
   _listeners.forEach((l) => l());
 }

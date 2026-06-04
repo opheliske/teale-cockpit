@@ -173,7 +173,10 @@ export default function CsmHomePage() {
 
   useEffect(() => {
     const apply = () => {
-      if (!myId) { setStoreClients([]); return; }
+      // Keep the current list when the profile id is momentarily missing
+      // (a transient auth event nulls it): blanking here would flash the
+      // whole portfolio empty until the next event restores it.
+      if (!myId) return;
       setStoreClients(
         csmClientsStore.getAll()
           .filter((s) => s.ownerCsmId === myId)

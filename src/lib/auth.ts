@@ -27,25 +27,23 @@ export function useAuth() {
     let active = true;
 
     async function load() {
-      // Same guard as every other store fetch: a silently-expired JWT
-      // (auth-js LockManager deadlock) would otherwise send the SELECT out
-      // anonymous, RLS would return zero rows, and `profile` would be stuck
-      // at null — leaving the home page rendering "Bonjour" without name.
+      // A silently-expired JWT (auth-js LockManager deadlock) would send the
+      // SELECT out anonymous and RLS would return nothing. Crucially we must
+      // NOT blank `profile` on a transient failure: load() re-runs on every
+      // onAuthStateChange (TOKEN_REFRESHED fires often), and nulling the
+      // profile cascades into UI that zeroes itself (e.g. the CSM home clears
+      // its client list when profile.id is missing). So a failure just stops
+      // updating — we keep the last good profile and let a later event retry.
+      // A real sign-out is handled explicitly below.
       if (!(await ensureSession())) {
-        if (active) {
-          setProfile(null);
-          setLoading(false);
-        }
+        if (active) setLoading(false);
         return;
       }
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        if (active) {
-          setProfile(null);
-          setLoading(false);
-        }
+        if (active) setLoading(false);
         return;
       }
       const { data, error } = await supabase
@@ -54,7 +52,11 @@ export function useAuth() {
         .eq("id", user.id)
         .single();
       if (error) {
+        // Transient fetch failure — keep the last good profile rather than
+        // blanking it (same rationale as the guard above).
         console.error("[useAuth] profile fetch failed:", error);
+        if (active) setLoading(false);
+        return;
       }
       if (active) {
         setProfile((data as Profile) ?? null);
@@ -63,7 +65,18 @@ export function useAuth() {
     }
 
     load();
-    const { data: sub } = supabase.auth.onAuthStateChange(() => load());
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      // Only a genuine sign-out clears the profile; every other event just
+      // refreshes it (without blanking on transient failure — see load()).
+      if (event === "SIGNED_OUT") {
+        if (active) {
+          setProfile(null);
+          setLoading(false);
+        }
+        return;
+      }
+      load();
+    });
     return () => {
       active = false;
       sub.subscription.unsubscribe();

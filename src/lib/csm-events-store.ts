@@ -40,10 +40,15 @@ async function fetchEvents() {
     _loaded = false; // allow a later ensureLoaded() to retry
     return;
   }
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("csm_events")
     .select("*")
     .order("created_at");
+  if (error) {
+    // Transient failure — keep the cache rather than blanking the list.
+    console.error("[csm-events-store] load", error);
+    return;
+  }
   _events = data ? data.map(fromRow) : [];
   _loaded = true;
   _listeners.forEach((l) => l());

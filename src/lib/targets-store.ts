@@ -28,10 +28,17 @@ function notify() {
 // Re-fetch a client's labels + assignments (no seeding — used on reload).
 async function reloadClient(clientId: string) {
   if (!(await ensureSession())) return;
-  const [{ data: labelRows }, { data: assignRows }] = await Promise.all([
-    supabase.from("target_labels").select("*").eq("client_id", clientId),
-    supabase.from("target_item_assignments").select("*").eq("client_id", clientId),
-  ]);
+  const [{ data: labelRows, error: labelErr }, { data: assignRows, error: assignErr }] =
+    await Promise.all([
+      supabase.from("target_labels").select("*").eq("client_id", clientId),
+      supabase.from("target_item_assignments").select("*").eq("client_id", clientId),
+    ]);
+  // Transient failure — keep this client's cached labels/assignments rather
+  // than blanking them (unlike load(), reload must never re-seed either).
+  if (labelErr || assignErr) {
+    console.error("[targets-store] reload", labelErr ?? assignErr);
+    return;
+  }
   labels = { ...labels, [clientId]: (labelRows as TargetLabel[]) ?? [] };
   const clientAssigns: Record<number, string[]> = {};
   for (const row of assignRows ?? []) {
