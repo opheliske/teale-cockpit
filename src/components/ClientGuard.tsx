@@ -44,13 +44,14 @@ export default function ClientGuard({ children }: { children: React.ReactNode })
         return;
       }
 
-      if (profile.role === "csm") {
-        // A CSM only reaches the portal in preview mode.
+      if (profile.role === "csm" || profile.role === "admin") {
+        // A CSM/admin only reaches the portal in preview mode; otherwise back
+        // to their own home.
         const ctx = impersonationStore.get();
         if (ctx && ctx.mode === "csm-preview") {
           setActive({ clientId: ctx.clientId, clientName: ctx.clientName, color: ctx.color });
         } else {
-          router.replace("/csm");
+          router.replace(profile.role === "admin" ? "/admin" : "/csm");
         }
         return;
       }

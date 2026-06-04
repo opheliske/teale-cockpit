@@ -6,7 +6,7 @@ import { impersonationStore } from "@/lib/impersonation-store";
 import { closeSync } from "@/lib/sync";
 import { sessionStatusStore } from "@/lib/session-status-store";
 
-export type UserRole = "csm" | "client";
+export type UserRole = "csm" | "client" | "admin";
 
 export type Profile = {
   id: string;

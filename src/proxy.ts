@@ -6,7 +6,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-type Role = "csm" | "client";
+type Role = "csm" | "client" | "admin";
+
+function homeFor(role: Role | undefined): string {
+  if (role === "admin") return "/admin";
+  if (role === "csm") return "/csm";
+  return "/";
+}
 
 function redirectTo(
   request: NextRequest,
@@ -64,10 +70,16 @@ export async function proxy(request: NextRequest) {
 
   // Logged in but on /login → send to the right home.
   if (isLogin) {
-    return redirectTo(request, role === "csm" ? "/csm" : "/", response);
+    return redirectTo(request, homeFor(role), response);
   }
 
-  // A client only sees their own space — never the CSM area.
+  // /admin is reserved for the admin; anyone else is sent to their own home.
+  if (path.startsWith("/admin") && role !== "admin") {
+    return redirectTo(request, homeFor(role), response);
+  }
+
+  // A client only sees their own space — never the CSM area. (Admin is a
+  // superset of CSM and may use /csm.)
   if (role === "client" && path.startsWith("/csm")) {
     return redirectTo(request, "/", response);
   }

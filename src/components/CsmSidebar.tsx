@@ -89,6 +89,15 @@ export default function CsmSidebar() {
 
       {/* Footer */}
       <div className="border-t border-[rgba(94,234,212,0.12)] p-4">
+        {/* Admin link — only for the admin account */}
+        {profile?.role === "admin" && (
+          <Link
+            href="/admin"
+            className="mb-2 block rounded-md px-3 py-2 text-sm text-[#a8e895] transition-colors hover:bg-[rgba(94,234,212,0.12)]"
+          >
+            ⚙️ Administration
+          </Link>
+        )}
         {/* User + logout */}
         <div className="mb-2 flex items-center gap-2.5 rounded-md px-3 py-2">
           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[rgba(94,234,212,0.15)] text-[10px] font-bold text-[#5eead4]">
