@@ -3,7 +3,6 @@ import type {
   AdminCompany,
   CreateUserBody,
   UpdateUserBody,
-  CreateCompanyBody,
   UpdateCompanyBody,
 } from "@/lib/admin-types";
 
@@ -34,8 +33,6 @@ export const adminApi = {
 
   listCompanies: () =>
     call<{ companies: AdminCompany[] }>("/api/admin/companies").then((d) => d.companies),
-  createCompany: (body: CreateCompanyBody) =>
-    call<{ id: string }>("/api/admin/companies", { method: "POST", body: JSON.stringify(body) }),
   updateCompany: (id: string, body: UpdateCompanyBody) =>
     call<{ ok: true }>(`/api/admin/companies/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteCompany: (id: string) =>

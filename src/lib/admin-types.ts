@@ -41,13 +41,6 @@ export type UpdateUserBody = {
   disabled?: boolean;
 };
 
-export type CreateCompanyBody = {
-  name: string;
-  ownerCsmId: string;
-  initials?: string;
-  color?: string;
-};
-
 export type UpdateCompanyBody = {
   name?: string;
   initials?: string;

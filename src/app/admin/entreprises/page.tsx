@@ -21,7 +21,6 @@ export default function AdminCompaniesPage() {
   const [busy, setBusy] = useState(false);
 
   const [editing, setEditing] = useState<AdminCompany | null>(null);
-  const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
 
   const reload = useCallback(async () => {
@@ -64,22 +63,13 @@ export default function AdminCompaniesPage() {
     [csms],
   );
 
-  const openCreate = () => {
-    setDraft(EMPTY_DRAFT);
-    setCreating(true);
-    setEditing(null);
-    setError("");
-  };
-
   const openEdit = (c: AdminCompany) => {
     setDraft({ name: c.name, initials: c.initials, color: c.color, ownerCsmId: c.ownerCsmId ?? "" });
     setEditing(c);
-    setCreating(false);
     setError("");
   };
 
   const closeModal = () => {
-    setCreating(false);
     setEditing(null);
     setDraft(EMPTY_DRAFT);
   };
@@ -90,14 +80,7 @@ export default function AdminCompaniesPage() {
     try {
       if (!draft.name.trim()) throw new Error("Le nom est requis.");
       if (!draft.ownerCsmId) throw new Error("Sélectionnez un CSM propriétaire.");
-      if (creating) {
-        await adminApi.createCompany({
-          name: draft.name,
-          ownerCsmId: draft.ownerCsmId,
-          initials: draft.initials || undefined,
-          color: draft.color || undefined,
-        });
-      } else if (editing) {
+      if (editing) {
         await adminApi.updateCompany(editing.id, {
           name: draft.name,
           initials: draft.initials,
@@ -129,22 +112,14 @@ export default function AdminCompaniesPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-8 py-8 text-brand-cream">
-      <header className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-[22px] font-semibold text-[#e8f5ef]">Entreprises</h1>
-          <p className="mt-1 text-[13px] text-[#94a8a0]">
-            Gérez les entreprises clientes et leur CSM propriétaire.
-          </p>
-        </div>
-        <button
-          onClick={openCreate}
-          className="rounded-[9px] bg-[#5eead4] px-4 py-2.5 text-[13px] font-semibold text-[#042f2a] transition-opacity hover:opacity-90"
-        >
-          + Ajouter une entreprise
-        </button>
+      <header className="mb-6">
+        <h1 className="text-[22px] font-semibold text-[#e8f5ef]">Entreprises</h1>
+        <p className="mt-1 text-[13px] text-[#94a8a0]">
+          Gérez les entreprises clientes et leur CSM propriétaire.
+        </p>
       </header>
 
-      {error && !creating && !editing && (
+      {error && !editing && (
         <p className="mb-4 rounded-[8px] bg-[rgba(239,68,68,0.1)] px-3 py-2 text-[12px] text-[#fca5a5]">{error}</p>
       )}
 
@@ -195,11 +170,11 @@ export default function AdminCompaniesPage() {
         </div>
       )}
 
-      {(creating || editing) && (
+      {editing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
           <div className="w-full max-w-[460px] rounded-[14px] border border-[#1a3530] bg-[#0b1f1b] p-6">
             <h2 className="mb-4 text-[16px] font-semibold text-[#e8f5ef]">
-              {creating ? "Nouvelle entreprise" : "Modifier l'entreprise"}
+              Modifier l&apos;entreprise
             </h2>
 
             <label className="mb-1 block text-[12px] text-[#94a8a0]">Nom</label>
@@ -243,14 +218,14 @@ export default function AdminCompaniesPage() {
               ))}
             </select>
 
-            {error && (creating || editing) && (
+            {error && editing && (
               <p className="mb-3 rounded-[8px] bg-[rgba(239,68,68,0.1)] px-3 py-2 text-[12px] text-[#fca5a5]">{error}</p>
             )}
 
             <div className="mt-2 flex justify-end gap-2">
               <button onClick={closeModal} disabled={busy} className="rounded-[8px] border border-[#1a3530] px-3 py-2 text-[13px] text-[#94a8a0] hover:text-brand-cream disabled:opacity-50">Annuler</button>
               <button onClick={() => void submit()} disabled={busy} className="rounded-[8px] bg-[#5eead4] px-4 py-2 text-[13px] font-semibold text-[#042f2a] hover:opacity-90 disabled:opacity-50">
-                {busy ? "…" : creating ? "Créer" : "Enregistrer"}
+                {busy ? "…" : "Enregistrer"}
               </button>
             </div>
           </div>
