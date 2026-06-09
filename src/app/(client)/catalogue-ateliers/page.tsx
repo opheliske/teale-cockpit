@@ -5,6 +5,8 @@ import { themes, type Workshop } from "./data";
 import { useWorkshops } from "@/lib/workshops-store";
 import { openKitFile } from "@/lib/storage";
 import { setSeenIds } from "@/lib/catalogue-read-state";
+import { useActiveClient } from "@/lib/client-context";
+import { useFavoriteWorkshops } from "@/lib/favorite-workshops-store";
 
 // --- helpers ---
 function workshopHaystack(w: Workshop): string {
@@ -81,7 +83,7 @@ function pickWorkshopEmoji(w: Workshop): string {
   return themeEmoji[w.themeId] ?? "✨";
 }
 
-type StatusFilter = "all" | "done" | "todo";
+type StatusFilter = "all" | "done" | "todo" | "favoris";
 type ViewMode = "grid" | "list";
 
 const themeColorLight: Record<string, string> = {
@@ -186,6 +188,9 @@ ${workshopsHTML}
 
 export default function CatalogueAteliersPage() {
   const { workshops } = useWorkshops();
+  const { clientId } = useActiveClient();
+  const { favoriteIds, toggle: toggleFavorite, add: addFavorites } =
+    useFavoriteWorkshops(clientId);
   // Visiting the catalogue clears the "new ateliers" badge on the home —
   // every currently visible workshop is marked as seen.
   useEffect(() => {
@@ -207,9 +212,10 @@ export default function CatalogueAteliersPage() {
       if (activeThemeId && w.themeId !== activeThemeId) return false;
       if (activeStatus === "done" && !w.alreadyAnimated) return false;
       if (activeStatus === "todo" && w.alreadyAnimated) return false;
+      if (activeStatus === "favoris" && !favoriteIds.has(w.id)) return false;
       return matchesSearch(w, search);
     });
-  }, [workshops, search, activeThemeId, activeStatus]);
+  }, [workshops, search, activeThemeId, activeStatus, favoriteIds]);
 
   const selectedWorkshops = useMemo(
     () => workshops.filter((w) => selectedIds.has(w.id)),
@@ -253,7 +259,7 @@ export default function CatalogueAteliersPage() {
             </h1>
             <p className="mt-1.5 max-w-[580px] text-[13px] leading-relaxed text-[#94a8a0]">
               {totalWorkshops} ateliers et conférences animés par nos experts en santé mentale.
-              Filtrez, ajoutez à votre sélection, et planifiez en un clic avec votre CSM.
+              Filtrez, explorez, et ajoutez vos ateliers favoris en un clic.
             </p>
           </div>
           <div className="flex shrink-0 gap-2.5">
@@ -341,6 +347,13 @@ export default function CatalogueAteliersPage() {
           >
             ○ À planifier
           </Chip>
+          <Chip
+            active={activeStatus === "favoris"}
+            onClick={() => setActiveStatus(activeStatus === "favoris" ? "all" : "favoris")}
+            count={favoriteIds.size}
+          >
+            ★ Favoris
+          </Chip>
         </div>
 
         {/* MAIN LAYOUT */}
@@ -357,7 +370,7 @@ export default function CatalogueAteliersPage() {
                   ? " · Toutes thématiques · Tous statuts"
                   : <>
                       {activeThemeId && ` · ${themeDisplayLabel[activeThemeId] ?? activeThemeId}`}
-                      {activeStatus !== "all" && ` · ${activeStatus === "done" ? "Déjà animés" : "À planifier"}`}
+                      {activeStatus !== "all" && ` · ${activeStatus === "done" ? "Déjà animés" : activeStatus === "todo" ? "À planifier" : "Favoris"}`}
                       {search.trim() && ` · « ${search.trim()} »`}
                     </>
                 }
@@ -382,6 +395,8 @@ export default function CatalogueAteliersPage() {
                     workshop={w}
                     isSelected={selectedIds.has(w.id)}
                     onSelect={() => toggleSelect(w.id)}
+                    isFavorite={favoriteIds.has(w.id)}
+                    onToggleFavorite={() => toggleFavorite(w.id)}
                     onOpen={() => setActiveWorkshopId(w.id)}
                     listMode={viewMode === "list"}
                   />
@@ -395,6 +410,11 @@ export default function CatalogueAteliersPage() {
             selected={selectedWorkshops}
             onRemove={toggleSelect}
             onExport={() => exportToPDF(selectedWorkshops)}
+            onAddFavorites={() => addFavorites(selectedWorkshops.map((w) => w.id))}
+            allFavorited={
+              selectedWorkshops.length > 0 &&
+              selectedWorkshops.every((w) => favoriteIds.has(w.id))
+            }
           />
         </div>
       </div>
@@ -501,16 +521,38 @@ function Chip({
   );
 }
 
+function FavoriteButton({ isFavorite, onToggle }: { isFavorite: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={isFavorite}
+      title={isFavorite ? "Retirer de mes ateliers favoris" : "Ajouter à mes ateliers favoris"}
+      className={`grid h-7 w-7 place-items-center rounded-[7px] border text-[12px] transition-all ${
+        isFavorite
+          ? "border-[rgba(250,204,21,0.35)] bg-[rgba(250,204,21,0.15)] text-[#fde047]"
+          : "border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.03)] text-[#94a8a0] hover:border-[rgba(250,204,21,0.25)] hover:bg-[rgba(250,204,21,0.1)] hover:text-[#fde047]"
+      }`}
+    >
+      {isFavorite ? "★" : "☆"}
+    </button>
+  );
+}
+
 function WorkshopCard({
   workshop,
   isSelected,
   onSelect,
+  isFavorite,
+  onToggleFavorite,
   onOpen,
   listMode,
 }: {
   workshop: Workshop;
   isSelected: boolean;
   onSelect: () => void;
+  isFavorite: boolean;
+  onToggleFavorite: () => void;
   onOpen: () => void;
   listMode: boolean;
 }) {
@@ -555,6 +597,7 @@ function WorkshopCard({
           <button type="button" onClick={onOpen} className="font-semibold text-[#5eead4]">
             Aperçu →
           </button>
+          <FavoriteButton isFavorite={isFavorite} onToggle={onToggleFavorite} />
           <button
             type="button"
             onClick={onSelect}
@@ -586,6 +629,7 @@ function WorkshopCard({
           {emoji}
         </div>
         <div className="flex gap-1.5">
+          <FavoriteButton isFavorite={isFavorite} onToggle={onToggleFavorite} />
           <button
             type="button"
             onClick={onSelect}
@@ -646,10 +690,14 @@ function PlanningBasket({
   selected,
   onRemove,
   onExport,
+  onAddFavorites,
+  allFavorited,
 }: {
   selected: Workshop[];
   onRemove: (id: string) => void;
   onExport: () => void;
+  onAddFavorites: () => void;
+  allFavorited: boolean;
 }) {
   return (
     <div className="sticky top-8 flex max-h-[calc(100vh-64px)] flex-col self-start rounded-[14px] border border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.02)] p-[18px]">
@@ -666,7 +714,7 @@ function PlanningBasket({
         )}
       </div>
       <p className="mb-[14px] text-[11px] leading-relaxed text-[#94a8a0]">
-        Ateliers que vous envisagez de programmer. Partagez la liste à votre CSM pour planifier.
+        Ateliers que vous envisagez de programmer. Ajoutez-les à vos favoris ou exportez la liste.
       </p>
 
       {/* list */}
@@ -729,9 +777,15 @@ function PlanningBasket({
           </div>
           <button
             type="button"
-            className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-[9px] bg-[#5eead4] py-[11px] text-[12px] font-semibold text-[#042f2a] transition-colors hover:bg-[#2dd4bf]"
+            onClick={onAddFavorites}
+            disabled={allFavorited}
+            className={`mt-3 flex w-full items-center justify-center gap-1.5 rounded-[9px] py-[11px] text-[12px] font-semibold transition-colors ${
+              allFavorited
+                ? "cursor-default bg-[rgba(250,204,21,0.15)] text-[#fde047]"
+                : "bg-[#5eead4] text-[#042f2a] hover:bg-[#2dd4bf]"
+            }`}
           >
-            📅 Planifier avec mon CSM
+            {allFavorited ? "★ Dans mes ateliers favoris" : "☆ Ajouter à mes ateliers favoris"}
           </button>
           <button
             type="button"
