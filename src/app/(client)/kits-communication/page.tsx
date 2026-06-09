@@ -5,7 +5,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type ReactNode,
   type Dispatch,
   type SetStateAction,
 } from "react";
@@ -203,6 +202,22 @@ function typeStyle(t: string): string {
 
 type SortId = "relevance" | "new" | "az" | "period";
 
+// ── Sous-rubriques (segmented nav) ───────────────────────────────────────────
+// Chaque onglet mappe sur un ou plusieurs types EXISTANTS (KitTypeId). Aucune
+// nouvelle dimension : on réorganise uniquement l'affichage par rubrique.
+type TabId = "actualites" | "lancement" | "divers";
+const TAB_META: { id: TabId; icon: string; label: string; sub: string }[] = [
+  { id: "actualites", icon: "📅", label: "Actualités", sub: "Temps forts du calendrier" },
+  { id: "lancement", icon: "🚀", label: "Lancement", sub: "Déployer teale dans vos équipes" },
+  { id: "divers", icon: "🧰", label: "Divers", sub: "Ateliers, emails & visuels" },
+];
+const RUBRIC_TYPES: Record<TabId, KitTypeId[]> = {
+  actualites: ["tempsfort"],
+  lancement: ["lancement"],
+  divers: ["atelier", "email", "visuel"],
+};
+const STEP_ORDER = ["before", "dday", "after"] as const;
+
 function toggle<T>(setter: Dispatch<SetStateAction<Set<T>>>, val: T) {
   setter((prev) => {
     const next = new Set(prev);
@@ -250,8 +265,20 @@ export default function KitsCommunicationPage() {
   const [auds, setAuds] = useState<Set<AudId>>(new Set());
   const [langs, setLangs] = useState<Set<LangId>>(new Set());
   const [sort, setSort] = useState<SortId>("relevance");
-  const [railOpen, setRailOpen] = useState(false);
+  const [tab, setTab] = useState<TabId>("actualites");
   const [activeCard, setActiveCard] = useState<ActiveCard | null>(null);
+
+  // Changer de rubrique réinitialise les facettes : leurs valeurs (thème /
+  // étape / type / public) vivent dans des espaces différents d'un onglet à
+  // l'autre, donc une sélection d'un onglet n'a pas de sens dans un autre. La
+  // recherche (q) et le tri restent, eux, partagés.
+  const selectTab = (t: TabId) => {
+    setTab(t);
+    setTypes(new Set());
+    setThemesSel(new Set());
+    setAuds(new Set());
+    setLangs(new Set());
+  };
 
   const currentMonth = useMemo(() => new Date().getMonth() + 1, []);
 
@@ -349,46 +376,80 @@ export default function KitsCommunicationPage() {
     return out;
   }, [animationItems, workshops, emailTopicKits, lancementKits, visuelKits, newSet]);
 
-  // ── Facettes (compteurs statiques sur l'ensemble du catalogue) ──────────────
+  // ── Base de la rubrique active (après recherche) ────────────────────────────
+  // Drive les options/compteurs des filtres contextuels ET le compteur d'onglet.
+  const rubricBase = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    return cards.filter(
+      (c) => RUBRIC_TYPES[tab].includes(c.type) && (!query || c.searchHay.includes(query))
+    );
+  }, [cards, tab, q]);
+
+  // Compteur de chaque onglet = nombre de kits de la rubrique après recherche.
+  const tabCounts = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    const match = (c: KitCard) => !query || c.searchHay.includes(query);
+    const out = {} as Record<TabId, number>;
+    for (const t of TAB_META) {
+      out[t.id] = cards.filter((c) => RUBRIC_TYPES[t.id].includes(c.type) && match(c)).length;
+    }
+    return out;
+  }, [cards, q]);
+
+  // ── Facettes contextuelles (mêmes dimensions, scopées à la rubrique) ─────────
   const typeFacet = useMemo(
     () =>
-      TYPE_ORDER.map((id) => ({
-        id,
-        label: `${TYPE_META[id].icon} ${TYPE_META[id].label}`,
-        count: cards.filter((c) => c.type === id).length,
-      })).filter((f) => f.count > 0),
-    [cards]
+      TYPE_ORDER.filter((id) => RUBRIC_TYPES[tab].includes(id))
+        .map((id) => ({
+          id,
+          label: `${TYPE_META[id].icon} ${TYPE_META[id].label}`,
+          count: rubricBase.filter((c) => c.type === id).length,
+        }))
+        .filter((f) => f.count > 0),
+    [rubricBase, tab]
   );
   const themeFacet = useMemo(() => {
     const m = new Map<string, number>();
-    for (const c of cards) m.set(c.theme, (m.get(c.theme) ?? 0) + 1);
+    for (const c of rubricBase) m.set(c.theme, (m.get(c.theme) ?? 0) + 1);
     return [...m.entries()]
       .sort((a, b) => a[0].localeCompare(b[0], "fr"))
       .map(([label, count]) => ({ label, count }));
-  }, [cards]);
+  }, [rubricBase]);
   const audFacet = useMemo(
     () =>
       AUD_ORDER.map((id) => ({
         id,
         label: AUD_META[id],
-        count: cards.filter((c) => c.audiences.includes(id)).length,
+        count: rubricBase.filter((c) => c.audiences.includes(id)).length,
       })).filter((f) => f.count > 0),
-    [cards]
+    [rubricBase]
   );
   const langFacet = useMemo(
     () =>
       LANG_ORDER.map((id) => ({
         id,
         label: LANG_META[id],
-        count: cards.filter((c) => c.lang === id).length,
+        count: rubricBase.filter((c) => c.lang === id).length,
       })).filter((f) => f.count > 0),
-    [cards]
+    [rubricBase]
+  );
+  // Étape (Lancement) — ordre logique before → dday → after, dérivé de .step
+  // (le champ `theme` d'un kit de lancement EST déjà stepLabels[step]).
+  const stepFacet = useMemo(
+    () =>
+      STEP_ORDER.map((s) => ({
+        value: stepLabels[s],
+        label: stepLabels[s],
+        count: rubricBase.filter((c) => c.theme === stepLabels[s]).length,
+      })).filter((f) => f.count > 0),
+    [rubricBase]
   );
 
-  // ── Filtrage + tri ──────────────────────────────────────────────────────────
+  // ── Filtrage + tri (rubrique active uniquement) ─────────────────────────────
   const visible = useMemo(() => {
     const query = q.trim().toLowerCase();
     const list = cards.filter((c) => {
+      if (!RUBRIC_TYPES[tab].includes(c.type)) return false;
       if (types.size && !types.has(c.type)) return false;
       if (themesSel.size && !themesSel.has(c.theme)) return false;
       if (auds.size && !c.audiences.some((a) => auds.has(a))) return false;
@@ -404,12 +465,7 @@ export default function KitsCommunicationPage() {
         (x, y) => (x.month ?? 99) - (y.month ?? 99) || x.title.localeCompare(y.title, "fr")
       );
     return sorted;
-  }, [cards, q, types, themesSel, auds, langs, sort]);
-
-  // Les temps forts vont dans la section calendrier (en haut) ; les autres kits
-  // dans la grille en dessous.
-  const tempsfortCards = useMemo(() => visible.filter((c) => c.type === "tempsfort"), [visible]);
-  const otherCards = useMemo(() => visible.filter((c) => c.type !== "tempsfort"), [visible]);
+  }, [cards, tab, q, types, themesSel, auds, langs, sort]);
 
   const activeFacetCount = types.size + themesSel.size + auds.size + langs.size;
   const hasActiveFilters = activeFacetCount > 0 || !!q.trim();
@@ -438,66 +494,100 @@ export default function KitsCommunicationPage() {
     pills.push({ key: `l-${l}`, label: LANG_META[l], onRemove: () => toggle(setLangs, l) })
   );
 
-  const renderRail = () => (
-    <div>
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-muted-on-dark">
-          Filtres
-        </span>
-        {hasActiveFilters && (
-          <button
-            type="button"
-            onClick={resetFilters}
-            className="text-[12px] font-semibold text-brand-accent transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60"
-          >
-            Réinitialiser
-          </button>
-        )}
-      </div>
-      <FacetGroup title="Type">
-        {typeFacet.map((f) => (
-          <FacetOption
-            key={f.id}
-            checked={types.has(f.id)}
-            onChange={() => toggle(setTypes, f.id)}
-            label={f.label}
-            count={f.count}
+  // ── Filtres contextuels (dropdowns compacts) ────────────────────────────────
+  const renderFilterBar = () => (
+    <div className="mt-[22px] flex flex-wrap items-center gap-[10px]">
+      <span className="mr-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-muted-on-dark/80">
+        Filtrer
+      </span>
+
+      {tab === "actualites" && (
+        <>
+          <FilterDropdown
+            label="Thématique"
+            options={themeFacet.map((f) => ({ value: f.label, label: f.label, count: f.count }))}
+            isSelected={(v) => themesSel.has(v)}
+            onToggle={(v) => toggle(setThemesSel, v)}
+            selectedCount={themesSel.size}
           />
-        ))}
-      </FacetGroup>
-      <FacetGroup title="Thématique">
-        {themeFacet.map((f) => (
-          <FacetOption
-            key={f.label}
-            checked={themesSel.has(f.label)}
-            onChange={() => toggle(setThemesSel, f.label)}
-            label={f.label}
-            count={f.count}
+          <FilterDropdown
+            label="Public"
+            options={audFacet.map((f) => ({ value: f.id, label: f.label, count: f.count }))}
+            isSelected={(v) => auds.has(v as AudId)}
+            onToggle={(v) => toggle(setAuds, v as AudId)}
+            selectedCount={auds.size}
           />
-        ))}
-      </FacetGroup>
-      <FacetGroup title="Public">
-        {audFacet.map((f) => (
-          <FacetOption
-            key={f.id}
-            checked={auds.has(f.id)}
-            onChange={() => toggle(setAuds, f.id)}
-            label={f.label}
-            count={f.count}
+          <FilterDropdown
+            label="Langue"
+            options={langFacet.map((f) => ({ value: f.id, label: f.label, count: f.count }))}
+            isSelected={(v) => langs.has(v as LangId)}
+            onToggle={(v) => toggle(setLangs, v as LangId)}
+            selectedCount={langs.size}
           />
-        ))}
-      </FacetGroup>
-      <FacetGroup title="Langue">
-        {langFacet.map((f) => (
-          <FacetOption
-            key={f.id}
-            checked={langs.has(f.id)}
-            onChange={() => toggle(setLangs, f.id)}
-            label={f.label}
-            count={f.count}
+        </>
+      )}
+
+      {tab === "lancement" && (
+        <>
+          <FilterDropdown
+            label="Étape"
+            options={stepFacet}
+            isSelected={(v) => themesSel.has(v)}
+            onToggle={(v) => toggle(setThemesSel, v)}
+            selectedCount={themesSel.size}
           />
-        ))}
-      </FacetGroup>
+          <FilterDropdown
+            label="Langue"
+            options={langFacet.map((f) => ({ value: f.id, label: f.label, count: f.count }))}
+            isSelected={(v) => langs.has(v as LangId)}
+            onToggle={(v) => toggle(setLangs, v as LangId)}
+            selectedCount={langs.size}
+          />
+        </>
+      )}
+
+      {tab === "divers" && (
+        <>
+          <FilterDropdown
+            label="Type"
+            options={typeFacet.map((f) => ({ value: f.id, label: f.label, count: f.count }))}
+            isSelected={(v) => types.has(v as KitTypeId)}
+            onToggle={(v) => toggle(setTypes, v as KitTypeId)}
+            selectedCount={types.size}
+          />
+          <FilterDropdown
+            label="Thématique"
+            options={themeFacet.map((f) => ({ value: f.label, label: f.label, count: f.count }))}
+            isSelected={(v) => themesSel.has(v)}
+            onToggle={(v) => toggle(setThemesSel, v)}
+            selectedCount={themesSel.size}
+          />
+          <FilterDropdown
+            label="Public"
+            options={audFacet.map((f) => ({ value: f.id, label: f.label, count: f.count }))}
+            isSelected={(v) => auds.has(v as AudId)}
+            onToggle={(v) => toggle(setAuds, v as AudId)}
+            selectedCount={auds.size}
+          />
+          <FilterDropdown
+            label="Langue"
+            options={langFacet.map((f) => ({ value: f.id, label: f.label, count: f.count }))}
+            isSelected={(v) => langs.has(v as LangId)}
+            onToggle={(v) => toggle(setLangs, v as LangId)}
+            selectedCount={langs.size}
+          />
+        </>
+      )}
+
+      {hasActiveFilters && (
+        <button
+          type="button"
+          onClick={resetFilters}
+          className="ml-auto text-[12.5px] font-semibold text-brand-accent transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60"
+        >
+          Réinitialiser
+        </button>
+      )}
     </div>
   );
 
@@ -551,116 +641,135 @@ export default function KitsCommunicationPage() {
           </div>
         </div>
 
-        {/* Corps : rail + résultats */}
-        <div className="mt-7 lg:flex lg:items-start lg:gap-8">
-          <aside
-            className="hidden w-[236px] shrink-0 lg:sticky lg:top-6 lg:block"
-            aria-label="Filtres"
-          >
-            {renderRail()}
-          </aside>
-
-          <section className="min-w-0 flex-1">
-            {/* Bascule filtres mobile */}
-            <div className="mb-4 lg:hidden">
+        {/* Onglets — segmented nav (une seule rubrique affichée à la fois) */}
+        <nav className="mt-7 flex flex-wrap gap-1 border-b border-brand-border-dark" aria-label="Rubriques">
+          {TAB_META.map((t) => {
+            const active = tab === t.id;
+            return (
               <button
+                key={t.id}
                 type="button"
-                onClick={() => setRailOpen((o) => !o)}
-                aria-expanded={railOpen}
-                aria-controls="kit-facets-mobile"
-                className="inline-flex items-center gap-2 rounded-xl border border-brand-border-dark bg-brand-surface px-4 py-2 text-[13px] font-medium text-brand-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60"
+                onClick={() => selectTab(t.id)}
+                aria-pressed={active}
+                className={`relative flex items-center gap-2.5 px-1.5 pb-4 pt-3 text-[15px] font-semibold transition-colors focus-visible:outline-none ${
+                  active ? "text-brand-cream" : "text-brand-muted-on-dark hover:text-brand-cream"
+                }`}
               >
-                <FilterIcon />
-                Filtres
-                {activeFacetCount > 0 && (
-                  <span className="rounded-full bg-brand-accent/20 px-2 py-0.5 text-[11px] text-brand-accent">
-                    {activeFacetCount}
-                  </span>
-                )}
-              </button>
-              {railOpen && (
-                <div
-                  id="kit-facets-mobile"
-                  className="mt-3 rounded-2xl border border-brand-border-dark bg-brand-surface/50 p-4"
-                >
-                  {renderRail()}
-                </div>
-              )}
-            </div>
-
-            {/* Barre résultats */}
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <p className="text-[14px] text-brand-muted-on-dark">
-                <b className="text-brand-cream">{visible.length}</b> kit
-                {visible.length > 1 ? "s" : ""}
-              </p>
-              <label className="flex items-center gap-2 text-[13px] text-brand-muted-on-dark">
-                Trier
-                <select
-                  value={sort}
-                  onChange={(e) => setSort(e.target.value as SortId)}
-                  className="rounded-lg border border-brand-border-dark bg-brand-surface px-3 py-1.5 text-[13px] text-brand-cream focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60"
-                >
-                  <option value="relevance">Pertinence</option>
-                  <option value="new">Nouveautés d&apos;abord</option>
-                  <option value="az">A → Z</option>
-                  <option value="period">Par période</option>
-                </select>
-              </label>
-            </div>
-
-            {/* Pastilles actives */}
-            {pills.length > 0 && (
-              <div className="mb-4 flex flex-wrap gap-2">
-                {pills.map((p) => (
+                <span aria-hidden className="text-[16px]">
+                  {t.icon}
+                </span>
+                <span className="flex flex-col text-left leading-[1.15]">
+                  <span>{t.label}</span>
                   <span
-                    key={p.key}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-brand-accent/40 bg-brand-accent/15 py-1 pl-3 pr-1.5 text-[12.5px] font-medium text-brand-accent"
+                    className={`hidden text-[11px] font-medium sm:block ${
+                      active ? "text-brand-accent/70" : "text-brand-muted-on-dark"
+                    }`}
                   >
-                    {p.label}
-                    <button
-                      type="button"
-                      onClick={p.onRemove}
-                      aria-label={`Retirer le filtre ${p.label}`}
-                      className="grid h-[18px] w-[18px] place-items-center rounded-full text-brand-accent hover:bg-brand-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60"
-                    >
-                      ×
-                    </button>
+                    {t.sub}
                   </span>
-                ))}
-              </div>
-            )}
-
-            {/* Calendrier des temps forts + grille des autres kits / état vide */}
-            {visible.length === 0 ? (
-              <EmptyState onReset={resetFilters} query={q} />
-            ) : (
-              <div className="space-y-10">
-                {tempsfortCards.length > 0 && (
-                  <TempsFortCalendar
-                    cards={tempsfortCards}
-                    currentMonth={currentMonth}
-                    onOpen={setActiveCard}
+                </span>
+                <span
+                  className={`min-w-[22px] rounded-full px-2 py-0.5 text-center text-[11px] font-bold ${
+                    active
+                      ? "bg-brand-accent/[0.18] text-brand-accent"
+                      : "bg-brand-muted-on-dark/[0.14] text-brand-muted-on-dark"
+                  }`}
+                >
+                  {tabCounts[t.id]}
+                </span>
+                {active && (
+                  <span
+                    aria-hidden
+                    className="absolute inset-x-1.5 -bottom-px h-[2.5px] rounded bg-brand-accent"
                   />
                 )}
-                {otherCards.length > 0 && (
-                  <section>
-                    {tempsfortCards.length > 0 && (
-                      <h2 className="mb-4 text-[13px] font-bold uppercase tracking-[0.12em] text-brand-muted-on-dark">
-                        Autres kits
-                      </h2>
-                    )}
-                    <div className="grid grid-cols-[repeat(auto-fill,minmax(248px,1fr))] gap-4">
-                      {otherCards.map((c) => (
-                        <Card key={c.id} card={c} onOpen={() => setActiveCard(c.payload)} />
-                      ))}
-                    </div>
-                  </section>
-                )}
-              </div>
-            )}
-          </section>
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Filtres contextuels compacts */}
+        {renderFilterBar()}
+
+        {/* Pastilles de filtres actifs */}
+        {pills.length > 0 && (
+          <div className="mt-3.5 flex flex-wrap gap-2">
+            {pills.map((p) => (
+              <span
+                key={p.key}
+                className="inline-flex items-center gap-1.5 rounded-full border border-brand-accent/40 bg-brand-accent/15 py-1 pl-3 pr-1.5 text-[12.5px] font-medium text-brand-accent"
+              >
+                {p.label}
+                <button
+                  type="button"
+                  onClick={p.onRemove}
+                  aria-label={`Retirer le filtre ${p.label}`}
+                  className="grid h-[18px] w-[18px] place-items-center rounded-full text-brand-accent hover:bg-brand-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Compteur de la rubrique + tri */}
+        <div className="mb-4 mt-[18px] flex flex-wrap items-center justify-between gap-3">
+          <p className="text-[13.5px] text-brand-muted-on-dark">
+            <b className="text-brand-cream">{visible.length}</b> kit
+            {visible.length > 1 ? "s" : ""} dans cette rubrique
+          </p>
+          <label className="flex items-center gap-2 text-[13px] text-brand-muted-on-dark">
+            Trier
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortId)}
+              className="rounded-lg border border-brand-border-dark bg-brand-surface px-3 py-1.5 text-[13px] text-brand-cream focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60"
+            >
+              <option value="relevance">Pertinence</option>
+              <option value="new">Nouveautés d&apos;abord</option>
+              <option value="az">A → Z</option>
+              <option value="period">Par période</option>
+            </select>
+          </label>
         </div>
+
+        {/* Panneau de la rubrique active */}
+        {visible.length === 0 ? (
+          <EmptyState onReset={resetFilters} query={q} />
+        ) : tab === "actualites" ? (
+          <TempsFortCalendar cards={visible} currentMonth={currentMonth} onOpen={setActiveCard} />
+        ) : tab === "lancement" ? (
+          <div className="space-y-8">
+            {STEP_ORDER.map((step, i) => {
+              const list = visible.filter(
+                (c) => c.payload.kind === "lancement" && c.payload.data.step === step
+              );
+              if (list.length === 0) return null;
+              return (
+                <div key={step}>
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="grid h-[26px] w-[26px] place-items-center rounded-lg bg-[#e0b657]/15 text-[12px] font-bold text-[#e0b657]">
+                      {i + 1}
+                    </span>
+                    <h3 className="text-[15px] font-semibold text-brand-cream">{stepLabels[step]}</h3>
+                  </div>
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(248px,1fr))] gap-4">
+                    {list.map((c) => (
+                      <Card key={c.id} card={c} onOpen={() => setActiveCard(c.payload)} />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(248px,1fr))] gap-4">
+            {visible.map((c) => (
+              <Card key={c.id} card={c} onOpen={() => setActiveCard(c.payload)} />
+            ))}
+          </div>
+        )}
       </div>
 
       {activeCard && <KitModal active={activeCard} onClose={() => setActiveCard(null)} />}
@@ -672,13 +781,76 @@ export default function KitsCommunicationPage() {
 // Composants de présentation
 // ─────────────────────────────────────────────────────────────────────────────
 
-function FacetGroup({ title, children }: { title: string; children: ReactNode }) {
+// Dropdown compact : bouton + popover de cases à cocher (remplace l'ancien rail
+// FacetGroup/FacetOption). Réutilise FacetOption pour chaque option et la même
+// dimension de filtre — aucune nouvelle donnée.
+function FilterDropdown({
+  label,
+  options,
+  isSelected,
+  onToggle,
+  selectedCount,
+}: {
+  label: string;
+  options: { value: string; label: string; count: number }[];
+  isSelected: (value: string) => boolean;
+  onToggle: (value: string) => void;
+  selectedCount: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+  if (options.length === 0) return null;
   return (
-    <div className="border-b border-brand-border-dark/60 py-4 last:border-0">
-      <h4 className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-muted-on-dark/80">
-        {title}
-      </h4>
-      <div>{children}</div>
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className={`inline-flex items-center gap-2 rounded-[10px] border px-[13px] py-2 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60 ${
+          selectedCount > 0
+            ? "border-brand-accent/55 bg-brand-accent/[0.08] text-brand-cream"
+            : "border-brand-border-dark bg-brand-surface text-brand-cream hover:border-brand-accent/40"
+        }`}
+      >
+        <span>{label}</span>
+        {selectedCount > 0 && (
+          <span className="min-w-[18px] rounded-full bg-brand-accent px-1.5 text-center text-[10px] font-bold text-brand-dark">
+            {selectedCount}
+          </span>
+        )}
+        <svg
+          className={`h-2 w-3 text-brand-muted-on-dark transition-transform ${open ? "rotate-180" : ""}`}
+          viewBox="0 0 12 8"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          aria-hidden
+        >
+          <path d="M1.5 1.5 6 6 10.5 1.5" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute left-0 top-[calc(100%+6px)] z-30 min-w-[210px] rounded-xl border border-brand-border-dark bg-[#0d211c] p-1.5 shadow-[0_14px_40px_rgba(0,0,0,0.5)]">
+          {options.map((o) => (
+            <FacetOption
+              key={o.value}
+              checked={isSelected(o.value)}
+              onChange={() => onToggle(o.value)}
+              label={o.label}
+              count={o.count}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -695,7 +867,7 @@ function FacetOption({
   count: number;
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2.5 py-1.5 text-[13.5px] text-brand-muted-on-dark transition-colors hover:text-brand-cream">
+    <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] text-brand-muted-on-dark transition-colors hover:bg-white/[0.04] hover:text-brand-cream">
       <input type="checkbox" className="peer sr-only" checked={checked} onChange={onChange} />
       <span
         aria-hidden
@@ -859,15 +1031,21 @@ function TempsFortCalendar({
 
   return (
     <section>
-      <header className="mb-5">
-        <h2 className="flex items-center gap-3 text-[22px] font-medium tracking-tight text-brand-cream">
-          <span aria-hidden>📅</span>
-          Temps forts du calendrier
-        </h2>
-        <p className="ml-1 mt-1.5 text-sm text-brand-muted-on-dark">
-          Les communications mensuelles à relayer, trimestre par trimestre.
-        </p>
-      </header>
+      {/* Légende des statuts de mois (mois en cours / à venir / passé) */}
+      <div className="mb-[18px] flex flex-wrap gap-4 text-[11.5px] text-brand-muted-on-dark">
+        <span className="inline-flex items-center gap-1.5">
+          <i className="h-[11px] w-[11px] rounded-[3px] bg-brand-accent shadow-[0_0_8px_rgba(132,212,166,0.5)]" />
+          Mois en cours
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <i className="h-[11px] w-[11px] rounded-[3px] border-[1.5px] border-brand-blue-soft" />
+          À venir
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <i className="h-[11px] w-[11px] rounded-[3px] bg-brand-muted-on-dark/35" />
+          Passé
+        </span>
+      </div>
 
       <div className="mb-7 grid grid-cols-2 gap-[10px] sm:grid-cols-4">
         {commQuarters.map((q) => (
@@ -968,22 +1146,44 @@ function MonthColumn({
   onOpen: (p: ActiveCard) => void;
 }) {
   const status = monthStatusOf(month, curIdx);
+  const isCurrent = status === "current";
   return (
     <div
-      className={`rounded-[13px] border p-[18px] transition-colors ${
-        status === "current"
-          ? "border-brand-accent/15 bg-brand-accent/[0.04]"
-          : "border-white/[0.04] bg-white/[0.012]"
+      className={`relative rounded-[14px] p-4 transition-colors ${
+        isCurrent
+          ? "border-[1.5px] border-brand-accent bg-[linear-gradient(180deg,rgba(132,212,166,0.10),rgba(132,212,166,0.03))] shadow-[0_0_0_4px_rgba(132,212,166,0.10),0_10px_30px_rgba(0,0,0,0.3)]"
+          : status === "past"
+            ? "border border-white/[0.04] bg-white/[0.012] opacity-60"
+            : "border border-white/[0.04] bg-white/[0.012]"
       }`}
     >
-      <div className="mb-4 flex items-center justify-between border-b border-white/5 pb-3">
+      {/* Liseré vertical gauche — accentue le mois en cours */}
+      {isCurrent && (
+        <span
+          aria-hidden
+          className="absolute bottom-3.5 left-0 top-3.5 w-[3px] rounded-[2px] bg-brand-accent"
+        />
+      )}
+      <div
+        className={`mb-3 flex items-center justify-between border-b pb-3 ${
+          isCurrent ? "border-brand-accent/20" : "border-white/5"
+        }`}
+      >
         <div className="flex items-center gap-[9px]">
           <h4 className={`text-[12px] font-bold uppercase tracking-[1.8px] ${status === "past" ? "text-brand-muted-on-dark/70" : "text-brand-cream"}`}>
             {monthLabel[month]}
           </h4>
-          {status === "current" && (
-            <span className="rounded-[4px] bg-brand-accent px-[7px] py-[3px] text-[9px] font-bold tracking-[0.5px] text-brand-dark">
-              En cours
+          {isCurrent ? (
+            <span className="rounded-[5px] bg-brand-accent px-[7px] py-[3px] text-[9px] font-bold uppercase tracking-[0.5px] text-brand-dark shadow-[0_0_12px_rgba(132,212,166,0.45)]">
+              Ce mois-ci
+            </span>
+          ) : status === "upcoming" ? (
+            <span className="rounded-[5px] border border-brand-blue-soft/40 px-1.5 py-[2px] text-[9px] font-bold uppercase tracking-[0.5px] text-brand-blue-soft">
+              À venir
+            </span>
+          ) : (
+            <span className="text-[9px] font-bold uppercase tracking-[0.5px] text-brand-muted-on-dark/60">
+              Passé
             </span>
           )}
         </div>
@@ -1773,24 +1973,6 @@ function SearchIcon() {
     >
       <circle cx="11" cy="11" r="7" />
       <path d="M21 21l-4.3-4.3" />
-    </svg>
-  );
-}
-
-function FilterIcon() {
-  return (
-    <svg
-      width="15"
-      height="15"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M4 5h16M7 12h10M10 19h4" />
     </svg>
   );
 }
