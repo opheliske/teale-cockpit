@@ -57,7 +57,7 @@ export type PrioAction = {
 
 export type PlanItemType = "atelier" | "kit" | "qbr" | "custom";
 export type ContractFormule = "holistique" | "digital + tokens" | "digital only";
-export type ProduitTeale = "Joy" | "Dashboard RH" | "Pulse" | "Call d'orientation" | "Ligne d'écoute" | "Assistante sociale";
+export type ProduitTeale = "Joy" | "Dashboard RH" | "Pulse" | "Call d'orientation" | "Ligne d'écoute" | "Assistante sociale" | "Teale Plus One";
 export type PlanItemFile = {
   id: string;
   name: string;

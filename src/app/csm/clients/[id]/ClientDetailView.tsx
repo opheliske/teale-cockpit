@@ -216,6 +216,7 @@ const PRODUIT_STYLE: Record<ProduitTeale, { bg: string; color: string }> = {
   "Call d'orientation": { bg: "rgba(96,165,250,0.12)",  color: "#93c5fd" },
   "Ligne d'écoute":     { bg: "rgba(253,224,71,0.10)",  color: "#fde047" },
   "Assistante sociale": { bg: "rgba(230,170,153,0.12)", color: "#E6AA99" },
+  "Teale Plus One":     { bg: "rgba(251,146,60,0.12)",  color: "#fdba74" },
 };
 
 function formatFileSize(bytes: number): string {
@@ -3585,7 +3586,7 @@ export default function ClientDetailView({ id }: { id: string }) {
             <div>
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-[1px] text-[#94a8a0]">Produits déployés</p>
               <div className="flex flex-wrap gap-2">
-                {(["Joy", "Dashboard RH", "Pulse", "Call d'orientation", "Ligne d'écoute", "Assistante sociale"] as ProduitTeale[]).map((p) => {
+                {(["Joy", "Dashboard RH", "Pulse", "Call d'orientation", "Ligne d'écoute", "Assistante sociale", "Teale Plus One"] as ProduitTeale[]).map((p) => {
                   const active = editDraft.produits.includes(p);
                   return (
                     <button
