@@ -6,7 +6,7 @@ import { commentsStore, type PlanComment } from "@/lib/comments-store";
 import { targetsStore, type TargetLabel } from "@/lib/targets-store";
 import { docsStore, type StoredDocument } from "@/lib/docs-store";
 import { openClientFile, openKitFile } from "@/lib/storage";
-import type { PlanItemFile, ChecklistItem } from "@/lib/clients-data";
+import type { PlanItemFile, ChecklistItem, PlanItemMode } from "@/lib/clients-data";
 import {
   getUrgencies,
   watchUrgencies,
@@ -226,6 +226,8 @@ type PlanEvent = {
   // toggles persist via planStore.toggleChecklistItem and are visible to
   // the CSM the next time they open the card.
   checklist?: ChecklistItem[];
+  // Onboarding — présentiel / distanciel.
+  mode?: PlanItemMode;
   // Atelier — kit de communication issu du workshop choisi. Téléchargeable
   // via openKitFile (bucket kit-files).
   workshopKitFiles?: { id: string; path: string; name: string; mimeType: string }[];
@@ -354,7 +356,12 @@ const frMonthAbbr: Record<string, string> = {
 
 
 const PLAN_EVENT_TYPE_MAP: Record<StoredPlanItemType, EventType> = {
-  atelier: "atelier", kit: "kit", qbr: "qbr", custom: "atelier",
+  atelier: "atelier", kit: "kit", qbr: "qbr", custom: "atelier", onboarding: "onboarding",
+};
+
+const PLAN_MODE_LABELS: Record<PlanItemMode, string> = {
+  presentiel: "Présentiel",
+  distanciel: "Distanciel",
 };
 
 const FR_MONTH_EN: Record<string, string> = {
@@ -610,6 +617,7 @@ export default function MonPlanningPage() {
           cancelled: item.cancelled,
           deckCreated: item.deckCreated,
           checklist: item.checklist,
+          mode: item.mode,
           workshopKitFiles: item.workshopKitFiles,
           itemId: item.id,
           threadId: String(item.id),
@@ -1650,6 +1658,12 @@ function EventModal({
             {event.responsable && event.type !== "qbr" && (
               <p className="mt-1.5 text-[12px] text-brand-muted-on-dark">
                 Animé par <span className="text-brand-cream">{event.responsable}</span>
+              </p>
+            )}
+            {event.mode && (
+              <p className="mt-1.5 text-[12px] text-brand-muted-on-dark">
+                Format · <span className="text-brand-cream">{PLAN_MODE_LABELS[event.mode]}</span>
+                {event.time && <> · {event.time}</>}
               </p>
             )}
           </div>

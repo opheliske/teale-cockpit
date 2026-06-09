@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter, useSearchParams, notFound } from "next/navigation";
 import Link from "next/link";
 import { impersonationStore } from "@/lib/impersonation-store";
-import { type PlanItem, type PlanItemFile, type PlanItemType, type Note, type PrioAction, type HistoryEvent, type ContractFormule, type ProduitTeale, type Statut, type ChecklistItem } from "@/lib/clients-data";
+import { type PlanItem, type PlanItemFile, type PlanItemType, type PlanItemMode, type Note, type PrioAction, type HistoryEvent, type ContractFormule, type ProduitTeale, type Statut, type ChecklistItem } from "@/lib/clients-data";
 import { csmClientsStore, toClient, toClientDetail } from "@/lib/csm-clients-store";
 import { useCsmProfiles } from "@/lib/use-csm-profiles";
 import { useClientContacts } from "@/lib/use-client-contacts";
@@ -64,18 +64,24 @@ const TAG_STYLE: Record<string, { bg: string; color: string; dot: string }> = {
 };
 
 const PLAN_ITEM_DEFAULT_ICONS: Record<string, string> = {
-  atelier: "🎓", kit: "📢", qbr: "📊", custom: "⚡",
+  atelier: "🎓", kit: "📢", qbr: "📊", custom: "⚡", onboarding: "🚀",
 };
 
-const CHIP_TYPE_MAP: Record<string, "atelier" | "kit" | "qbr" | "custom"> = {
-  "🎓 Atelier": "atelier", "📢 Kit": "kit", "📊 QBR": "qbr", "⚡ Custom": "custom",
+const CHIP_TYPE_MAP: Record<string, "atelier" | "kit" | "qbr" | "custom" | "onboarding"> = {
+  "🎓 Atelier": "atelier", "📢 Kit": "kit", "📊 QBR": "qbr", "⚡ Custom": "custom", "🚀 Onboarding": "onboarding",
 };
 
 const PLAN_STYLE: Record<string, { border: string; bg: string; hoverBg: string }> = {
-  atelier: { border: "#c4b5fd", bg: "rgba(196,181,253,0.05)", hoverBg: "rgba(196,181,253,0.10)" },
-  kit:     { border: "#5eead4", bg: "rgba(94,234,212,0.04)",  hoverBg: "rgba(94,234,212,0.09)" },
-  qbr:     { border: "#93c5fd", bg: "rgba(96,165,250,0.05)",  hoverBg: "rgba(96,165,250,0.10)" },
-  custom:  { border: "#dced63", bg: "rgba(220,236,99,0.05)",  hoverBg: "rgba(220,236,99,0.10)" },
+  atelier:    { border: "#c4b5fd", bg: "rgba(196,181,253,0.05)", hoverBg: "rgba(196,181,253,0.10)" },
+  kit:        { border: "#5eead4", bg: "rgba(94,234,212,0.04)",  hoverBg: "rgba(94,234,212,0.09)" },
+  qbr:        { border: "#93c5fd", bg: "rgba(96,165,250,0.05)",  hoverBg: "rgba(96,165,250,0.10)" },
+  custom:     { border: "#dced63", bg: "rgba(220,236,99,0.05)",  hoverBg: "rgba(220,236,99,0.10)" },
+  onboarding: { border: "#fdba74", bg: "rgba(251,146,60,0.05)",  hoverBg: "rgba(251,146,60,0.10)" },
+};
+
+const PLAN_MODE_LABELS: Record<"presentiel" | "distanciel", string> = {
+  presentiel: "Présentiel",
+  distanciel: "Distanciel",
 };
 
 
@@ -340,6 +346,7 @@ function storedToPlanItem(s: StoredPlanItem): PlanItem {
     objectives: s.objectives,
     themeId: s.themeId,
     checklist: s.checklist,
+    mode: s.mode,
     workshopKitFiles: s.workshopKitFiles,
   };
 }
@@ -431,6 +438,7 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [editPlanObjectives, setEditPlanObjectives] = useState<string[]>([]);
   const [editPlanThemeId, setEditPlanThemeId] = useState("");
   const [editPlanFiles, setEditPlanFiles] = useState<PlanItemFile[]>([]);
+  const [editPlanMode, setEditPlanMode] = useState<PlanItemMode>("presentiel");
   const editPlanFileInputRef = useRef<HTMLInputElement>(null);
   const [planFilter, setPlanFilter] = useState<string>("Tous");
   const [activeSection, setActiveSection] = useState<Section>("big-picture");
@@ -515,7 +523,7 @@ export default function ClientDetailView({ id }: { id: string }) {
   // Id de l'action en cours d'édition (null = création). Seules les actions
   // créées par le CSM (présentes dans clientActionsStore) sont modifiables.
   const [editingActionId, setEditingActionId] = useState<number | null>(null);
-  const [addPlanCtx, setAddPlanCtx] = useState<{ quarter: string; type: "atelier" | "kit" | "qbr" | "custom"; month?: number } | null>(null);
+  const [addPlanCtx, setAddPlanCtx] = useState<{ quarter: string; type: "atelier" | "kit" | "qbr" | "custom" | "onboarding"; month?: number } | null>(null);
   const [selectedCatalogId, setSelectedCatalogId] = useState<string | null>(null);
   const [addPlanDate, setAddPlanDate] = useState("");
   const [addPlanCustomTitle, setAddPlanCustomTitle] = useState("");
@@ -571,6 +579,11 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [addPlanDetail, setAddPlanDetail] = useState("");
   const [addPlanCustomFiles, setAddPlanCustomFiles] = useState<PlanItemFile[]>([]);
   const [addPlanTargets, setAddPlanTargets] = useState<string[]>([]);
+  // Onboarding — modalité (présentiel/distanciel) + check-list que le client
+  // pourra cocher depuis son espace.
+  const [addPlanMode, setAddPlanMode] = useState<PlanItemMode>("presentiel");
+  const [addPlanChecklist, setAddPlanChecklist] = useState<ChecklistItem[]>([]);
+  const [addPlanNewChecklistText, setAddPlanNewChecklistText] = useState("");
   // Atelier — title / objectives / theme are pre-filled from the catalogue
   // (workshops table) and remain editable until the CSM submits.
   const [addPlanObjectives, setAddPlanObjectives] = useState<string[]>([]);
@@ -809,6 +822,7 @@ export default function ClientDetailView({ id }: { id: string }) {
         objectives: e.objectives?.length ? e.objectives : undefined,
         themeId: e.themeId || undefined,
         checklist: e.checklist?.length ? e.checklist : undefined,
+        mode: e.type === "onboarding" ? (e.mode ?? "presentiel") : undefined,
         workshopKitFiles: e.workshopKitFiles?.length ? e.workshopKitFiles : undefined,
       };
     };
@@ -887,6 +901,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     setEditPlanObjectives(eff.objectives ?? []);
     setEditPlanThemeId(eff.themeId ?? "");
     setEditPlanFiles(eff.files ?? []);
+    setEditPlanMode(eff.mode ?? "presentiel");
     setPlanItemComments(commentsStore.getByThread(String(eff.id)));
     setCommentDraft("");
   };
@@ -965,6 +980,7 @@ export default function ClientDetailView({ id }: { id: string }) {
           return cleaned.length ? cleaned : undefined;
         })(),
         themeId: editPlanType === "atelier" ? (editPlanThemeId || undefined) : undefined,
+        mode: editPlanType === "onboarding" ? editPlanMode : undefined,
       },
     }));
     setEditingPlanItem(null);
@@ -1156,7 +1172,7 @@ export default function ClientDetailView({ id }: { id: string }) {
 
   const openAddPlan = (
     quarter: string,
-    type: "atelier" | "kit" | "qbr" | "custom",
+    type: "atelier" | "kit" | "qbr" | "custom" | "onboarding",
     month?: number,
   ) => {
     setAddPlanCtx({ quarter, type, month });
@@ -1171,6 +1187,9 @@ export default function ClientDetailView({ id }: { id: string }) {
     setAddPlanObjectives([]);
     setAddPlanThemeId("");
     setAddPlanSourceMode("catalogue");
+    setAddPlanMode("presentiel");
+    setAddPlanChecklist([]);
+    setAddPlanNewChecklistText("");
     setIsPlanFileDragOver(false);
   };
 
@@ -1273,7 +1292,11 @@ export default function ClientDetailView({ id }: { id: string }) {
       if (!addPlanCustomTitle.trim()) return;
       const dateFr = formatDateFr(addPlanDate);
       const isQbr = addPlanCtx.type === "qbr";
+      const isOnboarding = addPlanCtx.type === "onboarding";
       const metaParts = [dateFr, addPlanTime.trim()].filter(Boolean);
+      const checklist = isOnboarding
+        ? addPlanChecklist.map((c) => ({ ...c, text: c.text.trim() })).filter((c) => c.text)
+        : undefined;
       setExtraPlanItems((prev) => [...prev, {
         id: newId,
         type: addPlanCtx.type,
@@ -1285,8 +1308,14 @@ export default function ClientDetailView({ id }: { id: string }) {
         quarter: addPlanCtx.quarter,
         detail: addPlanDetail.trim() || undefined,
         files: addPlanCustomFiles.length > 0 ? [...addPlanCustomFiles] : undefined,
+        // Onboarding — modalité + check-list cochable par le client.
+        mode: isOnboarding ? addPlanMode : undefined,
+        checklist: checklist && checklist.length > 0 ? checklist : undefined,
       }]);
-      if (isQbr && client) {
+      // QBR et onboarding sont des rendez-vous planifiés : on les pousse dans
+      // csmEventsStore pour qu'ils apparaissent sur la home CSM et la home
+      // client (« Prochains rendez-vous »).
+      if ((isQbr || isOnboarding) && client) {
         csmEventsStore.add({
           clientId: client.id,
           clientName: client.name,
@@ -1312,6 +1341,9 @@ export default function ClientDetailView({ id }: { id: string }) {
     setAddPlanObjectives([]);
     setAddPlanThemeId("");
     setAddPlanSourceMode("catalogue");
+    setAddPlanMode("presentiel");
+    setAddPlanChecklist([]);
+    setAddPlanNewChecklistText("");
     setAddPlanSearch("");
     setAddPlanCatFilter("Tous");
   };
@@ -1387,6 +1419,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     { key: "🎓 Ateliers", count: allPlanItems.filter((i) => i.type === "atelier").length },
     { key: "📢 Kits", count: allPlanItems.filter((i) => i.type === "kit").length },
     { key: "📊 QBR", count: allPlanItems.filter((i) => i.type === "qbr").length },
+    { key: "🚀 Onboarding", count: allPlanItems.filter((i) => i.type === "onboarding").length },
     { key: "⚡ Custom", count: allPlanItems.filter((i) => i.type === "custom").length },
   ].filter((o) => o.count > 0);
 
@@ -1397,7 +1430,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     if (planFilter === "Tous") return active;
     const typeMap: Record<string, string> = {
       "🎓 Ateliers": "atelier", "📢 Kits": "kit",
-      "📊 QBR": "qbr", "⚡ Custom": "custom",
+      "📊 QBR": "qbr", "🚀 Onboarding": "onboarding", "⚡ Custom": "custom",
     };
     return active.filter((i) => i.type === typeMap[planFilter]);
   };
@@ -1474,6 +1507,7 @@ export default function ClientDetailView({ id }: { id: string }) {
           ? (!!addPlanCustomTitle.trim() && !!addPlanDate && !!addPlanTime)
           : (!!selectedCatalogId && !!addPlanCustomTitle.trim() && !!addPlanDate && !!addPlanTime)) :
     addPlanCtx?.type === "qbr"    ? (!!addPlanCustomTitle.trim() && !!addPlanDate && !!addPlanTime) :
+    addPlanCtx?.type === "onboarding" ? (!!addPlanCustomTitle.trim() && !!addPlanDate && !!addPlanTime) :
     addPlanCtx?.type === "kit"    ? (addPlanSourceMode === "custom" ? !!addPlanCustomTitle.trim() : !!selectedCatalogId) :
     hasCatalog                    ? !!selectedCatalogId :
     !!addPlanCustomTitle.trim();
@@ -2728,7 +2762,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                             reach (no scroll past the items) and earlier in
                             the keyboard tab order. */}
                         <div className="mb-3 flex flex-wrap justify-center gap-1.5">
-                          {(["🎓 Atelier", "📢 Kit", "📊 QBR", "⚡ Custom"] as const).map((chip) => (
+                          {(["🎓 Atelier", "📢 Kit", "📊 QBR", "🚀 Onboarding", "⚡ Custom"] as const).map((chip) => (
                             <button
                               key={chip}
                               onClick={() => openAddPlan(qLower, CHIP_TYPE_MAP[chip], month.num)}
@@ -2798,7 +2832,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                     {/* Add-chips before the items so they sit just above the
                         dynamic content (faster to reach, earlier in Tab order). */}
                     <div className="flex flex-wrap justify-center gap-1.5">
-                      {(["🎓 Atelier", "📢 Kit", "📊 QBR", "⚡ Custom"] as const).map((chip) => (
+                      {(["🎓 Atelier", "📢 Kit", "📊 QBR", "🚀 Onboarding", "⚡ Custom"] as const).map((chip) => (
                         <button key={chip} onClick={() => openAddPlan(`next-${q}`, CHIP_TYPE_MAP[chip])} className="rounded-full border border-dashed border-[#1a3530] px-[10px] py-[5px] text-[11px] text-[#94a8a0] transition-all hover:border-[#84d4a6] hover:bg-[rgba(132,212,166,0.05)] hover:text-[#84d4a6]">{chip}</button>
                       ))}
                     </div>
@@ -3133,8 +3167,8 @@ export default function ClientDetailView({ id }: { id: string }) {
             <div>
               <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Type</label>
               <div className="flex gap-2">
-                {(["atelier", "kit", "qbr", "custom"] as const).map((t) => {
-                  const labels: Record<string, string> = { atelier: "🎓 Atelier", kit: "📢 Kit", qbr: "📊 QBR", custom: "⚡ Custom" };
+                {(["atelier", "kit", "qbr", "onboarding", "custom"] as const).map((t) => {
+                  const labels: Record<string, string> = { atelier: "🎓 Atelier", kit: "📢 Kit", qbr: "📊 QBR", onboarding: "🚀 Onboarding", custom: "⚡ Custom" };
                   const s = PLAN_STYLE[t];
                   return (
                     <button
@@ -3202,6 +3236,29 @@ export default function ClientDetailView({ id }: { id: string }) {
                 ))}
               </select>
             </div>
+
+            {/* Format — présentiel / distanciel, uniquement pour l'onboarding. */}
+            {editPlanType === "onboarding" && (
+              <div>
+                <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Format</label>
+                <div className="flex gap-2">
+                  {(["presentiel", "distanciel"] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setEditPlanMode(m)}
+                      className={`flex-1 rounded-[8px] border px-3 py-2 text-[12px] font-semibold transition-all ${
+                        editPlanMode === m
+                          ? "border-[rgba(251,146,60,0.5)] bg-[rgba(251,146,60,0.12)] text-[#fdba74]"
+                          : "border-[#1a3530] text-[#94a8a0] hover:text-[#e8f5ef]"
+                      }`}
+                    >
+                      {m === "presentiel" ? "🏢 Présentiel" : "💻 Distanciel"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Annulé — uniquement pour les ateliers. Un atelier annulé reste
                 visible sur le plan mais n'est pas décompté du quota contrat. */}
@@ -4333,6 +4390,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                 {addPlanCtx.type === "atelier" ? "🎓 Ajouter un atelier"
                   : addPlanCtx.type === "kit" ? "📢 Ajouter un kit de communication"
                   : addPlanCtx.type === "qbr" ? "📊 Nouvelle QBR"
+                  : addPlanCtx.type === "onboarding" ? "🚀 Nouvel onboarding"
                   : "⚡ Nouvel élément custom"}
               </h3>
               <p className="mt-0.5 text-[11px] text-[#94a8a0]">
@@ -4586,15 +4644,16 @@ export default function ClientDetailView({ id }: { id: string }) {
                   type="text"
                   value={addPlanCustomTitle}
                   onChange={(e) => setAddPlanCustomTitle(e.target.value)}
-                  placeholder={addPlanCtx.type === "qbr" ? "Ex : QBR Q2…" : "Ex : Webinar bien-être…"}
+                  placeholder={addPlanCtx.type === "qbr" ? "Ex : QBR Q2…" : addPlanCtx.type === "onboarding" ? "Ex : Onboarding équipe Produit…" : "Ex : Webinar bien-être…"}
                   className="w-full rounded-[10px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef] placeholder-[rgba(232,245,239,0.3)] outline-none focus:border-[rgba(94,234,212,0.5)]"
                 />
               </div>
 
-              {/* Date (+ Heure pour la QBR) */}
-              <div className={addPlanCtx.type === "qbr" ? "grid grid-cols-2 gap-3" : ""}>
+              {/* Date (+ Heure pour la QBR et l'onboarding) */}
+              {(() => { const withTime = addPlanCtx.type === "qbr" || addPlanCtx.type === "onboarding"; return (
+              <div className={withTime ? "grid grid-cols-2 gap-3" : ""}>
                 <div>
-                  <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Date {addPlanCtx.type === "qbr" ? "*" : "(optionnel)"}</label>
+                  <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Date {withTime ? "*" : "(optionnel)"}</label>
                   <input
                     type="date"
                     value={addPlanDate}
@@ -4603,7 +4662,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                     className="w-full rounded-[10px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef] outline-none focus:border-[rgba(94,234,212,0.5)]"
                   />
                 </div>
-                {addPlanCtx.type === "qbr" && (
+                {withTime && (
                   <div>
                     <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Heure *</label>
                     <input
@@ -4616,9 +4675,33 @@ export default function ClientDetailView({ id }: { id: string }) {
                   </div>
                 )}
               </div>
+              ); })()}
+
+              {/* Format — présentiel / distanciel, onboarding uniquement. */}
+              {addPlanCtx.type === "onboarding" && (
+                <div>
+                  <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Format *</label>
+                  <div className="flex gap-2">
+                    {(["presentiel", "distanciel"] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setAddPlanMode(m)}
+                        className={`flex-1 rounded-[10px] border px-3 py-2.5 text-[12px] font-semibold transition-all ${
+                          addPlanMode === m
+                            ? "border-[rgba(251,146,60,0.5)] bg-[rgba(251,146,60,0.12)] text-[#fdba74]"
+                            : "border-[rgba(255,255,255,0.1)] text-[#94a8a0] hover:text-[#e8f5ef]"
+                        }`}
+                      >
+                        {m === "presentiel" ? "🏢 Présentiel" : "💻 Distanciel"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Détail */}
-              {addPlanCtx.type === "custom" && (
+              {(addPlanCtx.type === "custom" || addPlanCtx.type === "onboarding") && (
                 <div>
                   <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Détail</label>
                   <textarea
@@ -4632,7 +4715,7 @@ export default function ClientDetailView({ id }: { id: string }) {
               )}
 
               {/* File upload */}
-              {addPlanCtx.type === "custom" && (
+              {(addPlanCtx.type === "custom" || addPlanCtx.type === "onboarding") && (
                 <div>
                   <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Fichiers joints</label>
                   <div
@@ -4688,6 +4771,65 @@ export default function ClientDetailView({ id }: { id: string }) {
                         {uploadError}
                       </p>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {/* Check-list — onboarding uniquement. Le client coche les items
+                  depuis son espace ; les bascules sont visibles par le CSM. */}
+              {addPlanCtx.type === "onboarding" && (
+                <div>
+                  <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">
+                    Check-list
+                    <span className="ml-1.5 normal-case font-normal text-[rgba(232,245,239,0.35)]">· cochable par le client</span>
+                  </label>
+                  {addPlanChecklist.length > 0 && (
+                    <ul className="mb-2 space-y-1.5">
+                      {addPlanChecklist.map((item) => (
+                        <li key={item.id} className="flex items-center gap-2 rounded-[8px] border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.02)] px-2.5 py-1.5">
+                          <input
+                            type="text"
+                            value={item.text}
+                            onChange={(e) => setAddPlanChecklist((prev) => prev.map((c) => c.id === item.id ? { ...c, text: e.target.value } : c))}
+                            className="flex-1 bg-transparent text-[12.5px] text-[#e8f5ef] outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setAddPlanChecklist((prev) => prev.filter((c) => c.id !== item.id))}
+                            aria-label="Retirer cette sous-tâche"
+                            className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] text-[#6b7c75] hover:bg-[rgba(230,170,153,0.12)] hover:text-[#E6AA99]"
+                          >×</button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={addPlanNewChecklistText}
+                      onChange={(e) => setAddPlanNewChecklistText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && addPlanNewChecklistText.trim()) {
+                          e.preventDefault();
+                          setAddPlanChecklist((prev) => [...prev, { id: `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`, text: addPlanNewChecklistText.trim(), done: false }]);
+                          setAddPlanNewChecklistText("");
+                        }
+                      }}
+                      placeholder="Ajouter une sous-tâche…"
+                      className="flex-1 rounded-[8px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2 text-[12.5px] text-[#e8f5ef] placeholder-[rgba(232,245,239,0.3)] outline-none focus:border-[rgba(94,234,212,0.5)]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!addPlanNewChecklistText.trim()) return;
+                        setAddPlanChecklist((prev) => [...prev, { id: `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`, text: addPlanNewChecklistText.trim(), done: false }]);
+                        setAddPlanNewChecklistText("");
+                      }}
+                      disabled={!addPlanNewChecklistText.trim()}
+                      className="rounded-[8px] bg-[rgba(94,234,212,0.12)] px-3 py-2 text-[12px] font-semibold text-[#5eead4] transition-colors hover:bg-[rgba(94,234,212,0.2)] disabled:opacity-30"
+                    >
+                      Ajouter
+                    </button>
                   </div>
                 </div>
               )}

@@ -57,7 +57,9 @@ export type PrioAction = {
   detail?: string;
 };
 
-export type PlanItemType = "atelier" | "kit" | "qbr" | "custom";
+export type PlanItemType = "atelier" | "kit" | "qbr" | "custom" | "onboarding";
+// Modalité d'un événement de plan (ex : onboarding) — présentiel ou distanciel.
+export type PlanItemMode = "presentiel" | "distanciel";
 export type ContractFormule = "holistique" | "digital + tokens" | "digital only";
 export type ProduitTeale = "Joy" | "Dashboard RH" | "Pulse" | "Call d'orientation" | "Ligne d'écoute" | "Assistante sociale" | "Teale Plus One";
 export type PlanItemFile = {
@@ -99,6 +101,8 @@ export type PlanItem = {
   themeId?: string;
   // CSM-authored sub-tasks; the client toggles them from the action modal.
   checklist?: ChecklistItem[];
+  // Onboarding — présentiel ou distanciel. Affiché côté client.
+  mode?: PlanItemMode;
   // Atelier — kit de communication issu du workshop choisi dans le
   // catalogue. Stocké dans le bucket kit-files (open via openKitFile).
   // Distinct de `files` (qui pointe sur client-files / per-client).

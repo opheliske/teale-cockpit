@@ -1,8 +1,8 @@
 import { supabase, ensureSession } from "@/lib/supabase";
 import { notifyChange, watchChanges } from "@/lib/sync";
-import type { PlanItemFile, ChecklistItem } from "@/lib/clients-data";
+import type { PlanItemFile, ChecklistItem, PlanItemMode } from "@/lib/clients-data";
 
-export type StoredPlanItemType = "atelier" | "kit" | "qbr" | "custom";
+export type StoredPlanItemType = "atelier" | "kit" | "qbr" | "custom" | "onboarding";
 
 export type QuarterThemes = { Q1: string; Q2: string; Q3: string; Q4: string };
 
@@ -34,6 +34,8 @@ export type StoredPlanItem = {
   themeId?: string;
   // CSM-authored sub-tasks; both sides can toggle `done`.
   checklist?: ChecklistItem[];
+  // Onboarding — présentiel ou distanciel.
+  mode?: PlanItemMode;
   // Atelier — kit de communication du workshop, copié à la création de
   // l'item. Stocké dans le bucket kit-files (open via openKitFile).
   workshopKitFiles?: { id: string; path: string; name: string; mimeType: string }[];
