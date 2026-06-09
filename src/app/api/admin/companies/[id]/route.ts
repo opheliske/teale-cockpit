@@ -3,7 +3,7 @@ import { requireAdmin, adminErrorResponse } from "@/lib/supabase-admin";
 import type { UpdateCompanyBody } from "@/lib/admin-types";
 
 // PATCH /api/admin/companies/[id] → rename, restyle, or reassign the owner CSM
-export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/admin/companies/[id]">) {
+export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
     const admin = await requireAdmin();
     const { id } = await ctx.params;
@@ -34,7 +34,7 @@ export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/admin/
 // DELETE /api/admin/companies/[id] → remove a company. Blocked while accounts
 // are still attached to it (and the DB also restricts deletion when client
 // data references it).
-export async function DELETE(_request: NextRequest, ctx: RouteContext<"/api/admin/companies/[id]">) {
+export async function DELETE(_request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
     const admin = await requireAdmin();
     const { id } = await ctx.params;

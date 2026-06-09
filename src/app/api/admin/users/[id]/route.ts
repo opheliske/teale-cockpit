@@ -5,7 +5,7 @@ import type { UpdateUserBody } from "@/lib/admin-types";
 // PATCH /api/admin/users/[id] → edit name/email/role/company/password, or
 // enable/disable the account. The app reads display data from `profiles` and
 // authorization from app_metadata.role, so we keep both in sync.
-export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/admin/users/[id]">) {
+export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
     const admin = await requireAdmin();
     const { id } = await ctx.params;
@@ -75,7 +75,7 @@ export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/admin/
 // DELETE /api/admin/users/[id] → permanently remove the account (cascades to
 // its profile). A CSM that still owns clients must be reassigned first,
 // otherwise their portfolio would silently become owner-less.
-export async function DELETE(_request: NextRequest, ctx: RouteContext<"/api/admin/users/[id]">) {
+export async function DELETE(_request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
     const admin = await requireAdmin();
     const { id } = await ctx.params;
