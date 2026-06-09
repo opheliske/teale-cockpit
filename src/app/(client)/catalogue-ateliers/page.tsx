@@ -525,7 +525,7 @@ function FavoriteButton({ isFavorite, onToggle }: { isFavorite: boolean; onToggl
   return (
     <button
       type="button"
-      onClick={onToggle}
+      onClick={(e) => { e.stopPropagation(); onToggle(); }}
       aria-pressed={isFavorite}
       title={isFavorite ? "Retirer de mes ateliers favoris" : "Ajouter à mes ateliers favoris"}
       className={`grid h-7 w-7 place-items-center rounded-[7px] border text-[12px] transition-all ${
@@ -564,7 +564,8 @@ function WorkshopCard({
   if (listMode) {
     return (
       <div
-        className={`flex items-center gap-3 rounded-[13px] border bg-[rgba(255,255,255,0.02)] p-3 transition-all hover:bg-[rgba(255,255,255,0.035)] ${
+        onClick={onOpen}
+        className={`flex cursor-pointer items-center gap-3 rounded-[13px] border bg-[rgba(255,255,255,0.02)] p-3 transition-all hover:bg-[rgba(255,255,255,0.035)] ${
           isSelected ? "border-[rgba(94,234,212,0.3)]" : "border-[rgba(255,255,255,0.05)]"
         }`}
       >
@@ -594,13 +595,13 @@ function WorkshopCard({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2 text-[11px] text-[#6b7c75]">
-          <button type="button" onClick={onOpen} className="font-semibold text-[#5eead4]">
+          <button type="button" onClick={(e) => { e.stopPropagation(); onOpen(); }} className="font-semibold text-[#5eead4]">
             Aperçu →
           </button>
           <FavoriteButton isFavorite={isFavorite} onToggle={onToggleFavorite} />
           <button
             type="button"
-            onClick={onSelect}
+            onClick={(e) => { e.stopPropagation(); onSelect(); }}
             className={`grid h-7 w-7 place-items-center rounded-[7px] border text-[12px] transition-all ${
               isSelected
                 ? "border-[rgba(94,234,212,0.3)] bg-[rgba(94,234,212,0.15)] text-[#5eead4]"
@@ -616,7 +617,8 @@ function WorkshopCard({
 
   return (
     <div
-      className={`flex flex-col rounded-[13px] border bg-[rgba(255,255,255,0.02)] p-[14px] transition-all hover:-translate-y-0.5 hover:border-[rgba(94,234,212,0.25)] hover:bg-[rgba(255,255,255,0.035)] hover:shadow-[0_8px_24px_-10px_rgba(0,0,0,0.4)] ${
+      onClick={onOpen}
+      className={`flex cursor-pointer flex-col rounded-[13px] border bg-[rgba(255,255,255,0.02)] p-[14px] transition-all hover:-translate-y-0.5 hover:border-[rgba(94,234,212,0.25)] hover:bg-[rgba(255,255,255,0.035)] hover:shadow-[0_8px_24px_-10px_rgba(0,0,0,0.4)] ${
         isSelected ? "border-[rgba(94,234,212,0.3)]" : "border-[rgba(255,255,255,0.05)]"
       }`}
     >
@@ -632,7 +634,7 @@ function WorkshopCard({
           <FavoriteButton isFavorite={isFavorite} onToggle={onToggleFavorite} />
           <button
             type="button"
-            onClick={onSelect}
+            onClick={(e) => { e.stopPropagation(); onSelect(); }}
             title={isSelected ? "Retirer de ma sélection" : "Ajouter à ma sélection"}
             className={`grid h-7 w-7 place-items-center rounded-[7px] border text-[12px] transition-all ${
               isSelected
@@ -678,7 +680,7 @@ function WorkshopCard({
 
       {/* footer */}
       <div className="flex items-center justify-between border-t border-[rgba(255,255,255,0.04)] pt-2.5 text-[11px] text-[#6b7c75]">
-        <button type="button" onClick={onOpen} className="font-semibold text-[#5eead4]">
+        <button type="button" onClick={(e) => { e.stopPropagation(); onOpen(); }} className="font-semibold text-[#5eead4]">
           Aperçu →
         </button>
       </div>

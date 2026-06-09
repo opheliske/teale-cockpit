@@ -43,6 +43,7 @@ export type HomeAction = {
   overdue?: boolean;
   echeance: string;
   done?: boolean;
+  detail?: string;
 };
 
 // ─── Detail types ─────────────────────────────────────────────────────────────
@@ -53,6 +54,7 @@ export type PrioAction = {
   title: string;
   dueLabel: string;
   status: PrioActionStatus;
+  detail?: string;
 };
 
 export type PlanItemType = "atelier" | "kit" | "qbr" | "custom";

@@ -423,6 +423,15 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [editPlanChecklist, setEditPlanChecklist] = useState<ChecklistItem[]>([]);
   const [newChecklistText, setNewChecklistText] = useState("");
   const [editPlanWorkshopKit, setEditPlanWorkshopKit] = useState<NonNullable<PlanItem["workshopKitFiles"]>>([]);
+  // Champs saisis à la création d'un jalon (détail / objectifs / thème /
+  // fichiers joints) — rechargés ici pour être relus / modifiés quand le CSM
+  // rouvre la carte. Sans ça, savePlanEdit les préserve mais ils restent
+  // invisibles dans la modale.
+  const [editPlanDetail, setEditPlanDetail] = useState("");
+  const [editPlanObjectives, setEditPlanObjectives] = useState<string[]>([]);
+  const [editPlanThemeId, setEditPlanThemeId] = useState("");
+  const [editPlanFiles, setEditPlanFiles] = useState<PlanItemFile[]>([]);
+  const editPlanFileInputRef = useRef<HTMLInputElement>(null);
   const [planFilter, setPlanFilter] = useState<string>("Tous");
   const [activeSection, setActiveSection] = useState<Section>("big-picture");
   const [planYear, setPlanYear] = useState<"prev" | "current" | "next">("current");
@@ -488,6 +497,7 @@ export default function ClientDetailView({ id }: { id: string }) {
         title: a.text,
         dueLabel: a.echeance,
         status: a.done ? "done" : a.overdue ? "late" : "normal",
+        detail: a.detail,
       }));
   };
   const [localActions, setLocalActions] = useState<PrioAction[]>(() => [
@@ -501,6 +511,7 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [newActionTitle, setNewActionTitle] = useState("");
   const [newActionDue, setNewActionDue] = useState("");
   const [newActionStatus, setNewActionStatus] = useState<"normal" | "warn" | "late">("normal");
+  const [newActionDetail, setNewActionDetail] = useState("");
   // Id de l'action en cours d'édition (null = création). Seules les actions
   // créées par le CSM (présentes dans clientActionsStore) sont modifiables.
   const [editingActionId, setEditingActionId] = useState<number | null>(null);
@@ -872,6 +883,10 @@ export default function ClientDetailView({ id }: { id: string }) {
     setEditPlanChecklist(eff.checklist ?? []);
     setNewChecklistText("");
     setEditPlanWorkshopKit(eff.workshopKitFiles ?? []);
+    setEditPlanDetail(eff.detail ?? "");
+    setEditPlanObjectives(eff.objectives ?? []);
+    setEditPlanThemeId(eff.themeId ?? "");
+    setEditPlanFiles(eff.files ?? []);
     setPlanItemComments(commentsStore.getByThread(String(eff.id)));
     setCommentDraft("");
   };
@@ -940,6 +955,16 @@ export default function ClientDetailView({ id }: { id: string }) {
           editPlanType === "atelier" && editPlanWorkshopKit.length
             ? editPlanWorkshopKit
             : undefined,
+        detail: editPlanDetail.trim() || undefined,
+        files: editPlanFiles.length ? editPlanFiles : undefined,
+        // Objectifs / thème ne concernent que les ateliers — on nettoie la
+        // forme persistée pour les autres types.
+        objectives: (() => {
+          if (editPlanType !== "atelier") return undefined;
+          const cleaned = editPlanObjectives.map((o) => o.trim()).filter(Boolean);
+          return cleaned.length ? cleaned : undefined;
+        })(),
+        themeId: editPlanType === "atelier" ? (editPlanThemeId || undefined) : undefined,
       },
     }));
     setEditingPlanItem(null);
@@ -968,6 +993,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     setNewActionTitle("");
     setNewActionDue("");
     setNewActionStatus("normal");
+    setNewActionDetail("");
   };
 
   const openNewAction = () => {
@@ -975,6 +1001,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     setNewActionTitle("");
     setNewActionDue("");
     setNewActionStatus("normal");
+    setNewActionDetail("");
     setShowNewAction(true);
   };
 
@@ -985,6 +1012,7 @@ export default function ClientDetailView({ id }: { id: string }) {
       action.dueLabel && action.dueLabel !== "Sans échéance" ? frDateToIso(action.dueLabel) : "",
     );
     setNewActionStatus(action.status === "late" ? "late" : "normal");
+    setNewActionDetail(action.detail ?? "");
     setShowNewAction(true);
   };
 
@@ -997,6 +1025,7 @@ export default function ClientDetailView({ id }: { id: string }) {
         text: newActionTitle.trim(),
         echeance: dueLabel,
         overdue: newActionStatus === "late",
+        detail: newActionDetail.trim(),
       });
     } else {
       void clientActionsStore.add({
@@ -1004,6 +1033,7 @@ export default function ClientDetailView({ id }: { id: string }) {
         clients: [{ name: client.name, color: client.color }],
         echeance: dueLabel,
         overdue: newActionStatus === "late",
+        detail: newActionDetail.trim(),
       });
     }
     closeActionModal();
@@ -1068,7 +1098,9 @@ export default function ClientDetailView({ id }: { id: string }) {
     });
   };
 
-  const handlePlanFileSelect = async (fileList: FileList) => {
+  // `target` route les fichiers uploadés vers la modale d'ajout (par défaut)
+  // ou vers la modale d'édition d'un jalon existant.
+  const handlePlanFileSelect = async (fileList: FileList, target: "add" | "edit" = "add") => {
     setUploadError("");
     for (const f of Array.from(fileList)) {
       const { path, error } = await uploadClientFile(id, f);
@@ -1083,7 +1115,8 @@ export default function ClientDetailView({ id }: { id: string }) {
         sizeLabel: formatFileSize(f.size),
         path,
       };
-      setAddPlanCustomFiles((prev) => [...prev, stored]);
+      if (target === "edit") setEditPlanFiles((prev) => [...prev, stored]);
+      else setAddPlanCustomFiles((prev) => [...prev, stored]);
     }
   };
 
@@ -2204,10 +2237,13 @@ export default function ClientDetailView({ id }: { id: string }) {
           <div className="grid grid-cols-6 gap-3">
             {localActions.map((action) => {
               const done = doneActions.has(action.id);
+              const isEditable = editableActionIds.has(action.id);
               return (
                 <article
                   key={action.id}
-                  className={`flex min-h-[185px] cursor-grab flex-col rounded-[14px] border p-4 transition-colors ${
+                  onClick={isEditable ? () => openEditAction(action) : undefined}
+                  title={isEditable ? "Cliquer pour lire / modifier le détail" : undefined}
+                  className={`flex min-h-[185px] flex-col rounded-[14px] border p-4 transition-colors ${isEditable ? "cursor-pointer" : ""} ${
                     done ? "border-[#1a3530] bg-[rgba(14,37,32,0.30)]"
                     : action.status === "late" ? "border-[rgba(230,170,153,0.30)] bg-[rgba(230,170,153,0.04)]"
                     : action.status === "warn" ? "border-[rgba(253,224,71,0.22)] bg-[rgba(253,224,71,0.03)]"
@@ -2229,18 +2265,21 @@ export default function ClientDetailView({ id }: { id: string }) {
                     }`}>
                       {done ? "Terminé" : action.status === "late" ? "En retard" : action.status === "warn" ? "Cette semaine" : "À traiter"}
                     </span>
-                    {editableActionIds.has(action.id) && (
+                    {isEditable && action.detail && (
+                      <span title="Cette action contient un détail" className="text-[11px] leading-none text-[#5eead4]" aria-label="Contient un détail">📝</span>
+                    )}
+                    {isEditable && (
                       <div className="ml-auto flex items-center gap-0.5">
                         <button
                           type="button"
-                          onClick={() => openEditAction(action)}
+                          onClick={(e) => { e.stopPropagation(); openEditAction(action); }}
                           title="Modifier l'action"
                           aria-label="Modifier l'action"
                           className="grid h-[22px] w-[22px] place-items-center rounded-[6px] text-[11px] text-[#94a8a0] transition-colors hover:bg-[rgba(94,234,212,0.12)] hover:text-[#5eead4]"
                         >✏️</button>
                         <button
                           type="button"
-                          onClick={() => handleDeleteAction(action.id)}
+                          onClick={(e) => { e.stopPropagation(); handleDeleteAction(action.id); }}
                           title="Supprimer l'action"
                           aria-label="Supprimer l'action"
                           className="grid h-[22px] w-[22px] place-items-center rounded-[6px] text-[15px] leading-none text-[#94a8a0] transition-colors hover:bg-[rgba(230,170,153,0.15)] hover:text-[#E6AA99]"
@@ -2259,7 +2298,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                   </span>
                   <div className="-mx-4 mt-auto border-t border-[#1a3530] px-4 pt-2.5">
                     <button
-                      onClick={() => setDoneActions((prev) => { const s = new Set(prev); if (done) s.delete(action.id); else s.add(action.id); return s; })}
+                      onClick={(e) => { e.stopPropagation(); setDoneActions((prev) => { const s = new Set(prev); if (done) s.delete(action.id); else s.add(action.id); return s; }); }}
                       className={`w-full rounded-[8px] border px-3 py-[7px] text-[12px] font-semibold transition-all ${
                         done ? "border-[#a8e895] bg-[#a8e895] text-[#06241d]" : "border-[#84d4a6] text-[#84d4a6] hover:bg-[#84d4a6] hover:text-[#06241d]"
                       }`}
@@ -3181,6 +3220,65 @@ export default function ClientDetailView({ id }: { id: string }) {
               </label>
             )}
 
+            {/* Thème + Objectifs — uniquement pour les ateliers, comme à la
+                création. */}
+            {editPlanType === "atelier" && (
+              <>
+                <div>
+                  <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Thème</label>
+                  <select
+                    value={editPlanThemeId}
+                    onChange={(e) => setEditPlanThemeId(e.target.value)}
+                    className="field-select w-full rounded-[9px] border border-[rgba(255,255,255,0.1)] bg-[#0e2520] px-3 py-2.5 text-[13px] text-[#e8f5ef]"
+                  >
+                    <option value="">— Aucun —</option>
+                    {workshopThemes.map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Objectifs</label>
+                  {editPlanObjectives.length > 0 && (
+                    <div className="mb-2 space-y-1.5">
+                      {editPlanObjectives.map((obj, i) => (
+                        <div key={i} className="flex gap-2">
+                          <input
+                            type="text"
+                            value={obj}
+                            onChange={(e) =>
+                              setEditPlanObjectives((prev) =>
+                                prev.map((o, idx) => (idx === i ? e.target.value : o)),
+                              )
+                            }
+                            placeholder="Objectif…"
+                            className="flex-1 rounded-[8px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2 text-[12px] text-[#e8f5ef] placeholder-[rgba(232,245,239,0.3)] outline-none focus:border-[rgba(94,234,212,0.5)]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEditPlanObjectives((prev) => prev.filter((_, idx) => idx !== i))
+                            }
+                            className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-[rgba(255,255,255,0.04)] text-[14px] text-[#94a8a0] hover:text-[#e8f5ef]"
+                            aria-label="Supprimer l'objectif"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setEditPlanObjectives((prev) => [...prev, ""])}
+                    className="text-[11px] font-semibold text-[#5eead4] hover:underline"
+                  >
+                    + Ajouter un objectif
+                  </button>
+                </div>
+              </>
+            )}
+
             {/* Impact */}
             <div>
               <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">
@@ -3193,6 +3291,19 @@ export default function ClientDetailView({ id }: { id: string }) {
                 placeholder="Décrivez l'impact attendu de cette action pour le client…"
                 rows={3}
                 className="w-full resize-none rounded-[9px] border border-[rgba(167,139,250,0.25)] bg-[rgba(167,139,250,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef] placeholder-[rgba(232,245,239,0.3)] outline-none focus:border-[rgba(167,139,250,0.5)]"
+              />
+            </div>
+
+            {/* Détail — note interne saisie à la création (type custom) ;
+                éditable ici pour tous les types. */}
+            <div>
+              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Détail</label>
+              <textarea
+                value={editPlanDetail}
+                onChange={(e) => setEditPlanDetail(e.target.value)}
+                placeholder="Contexte, objectifs, notes…"
+                rows={3}
+                className="w-full resize-none rounded-[9px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef] placeholder-[rgba(232,245,239,0.3)] outline-none focus:border-[rgba(94,234,212,0.5)]"
               />
             </div>
 
@@ -3293,6 +3404,66 @@ export default function ClientDetailView({ id }: { id: string }) {
               </div>
             </div>
 
+            {/* Fichiers joints — fichiers per-client (bucket client-files)
+                ajoutés à la création ; relisibles / modifiables ici. Distincts
+                du kit de communication du workshop ci-dessous. */}
+            <div>
+              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">
+                Fichiers joints
+                <span className="ml-1.5 normal-case font-normal text-[rgba(232,245,239,0.35)]">· téléchargeables par le client</span>
+              </label>
+              <input
+                ref={editPlanFileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => { if (e.target.files) void handlePlanFileSelect(e.target.files, "edit"); e.target.value = ""; }}
+              />
+              {editPlanFiles.length > 0 ? (
+                <ul className="mb-2 space-y-1.5">
+                  {editPlanFiles.map((f) => (
+                    <li
+                      key={f.id}
+                      className="flex items-center gap-2 rounded-[8px] border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.02)] px-2.5 py-2"
+                    >
+                      <span className="shrink-0 text-[14px]">{getFileIcon(f.mimeType)}</span>
+                      <span className="min-w-0 flex-1 truncate text-[12.5px] text-[#e8f5ef]">{f.name}</span>
+                      {f.sizeLabel && <span className="shrink-0 text-[11px] text-[#94a8a0]">{f.sizeLabel}</span>}
+                      <button
+                        type="button"
+                        onClick={() => void openClientFile(f.path, f.name)}
+                        className="shrink-0 text-[11px] font-semibold text-[#5eead4] hover:text-[#84d4a6]"
+                      >
+                        Aperçu
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditPlanFiles((prev) => prev.filter((x) => x.id !== f.id))}
+                        aria-label="Retirer ce fichier"
+                        className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] text-[#6b7c75] hover:bg-[rgba(230,170,153,0.12)] hover:text-[#E6AA99]"
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mb-2 rounded-[8px] border border-dashed border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.02)] px-3 py-2 text-[12px] italic text-[#6b7c75]">
+                  Aucun fichier joint pour le moment.
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => editPlanFileInputRef.current?.click()}
+                className="text-[11.5px] font-semibold text-[#5eead4] hover:underline"
+              >
+                + Ajouter un fichier
+              </button>
+              {uploadError && (
+                <p className="mt-2 rounded-[8px] bg-[rgba(239,68,68,0.1)] px-3 py-2 text-[11px] text-[#fca5a5]">{uploadError}</p>
+              )}
+            </div>
+
             {/* Kit de communication de l'atelier — uniquement pour le type
                 "atelier". Pré-attaché à la création (recopie du
                 communicationKit du workshop) ; le CSM peut retirer des
@@ -3305,8 +3476,8 @@ export default function ClientDetailView({ id }: { id: string }) {
               // bouton "Recharger" tant que la liste a au moins un kit.
               const sourceWorkshop =
                 workshopList.find((w) => w.title === editPlanTitle.trim()) ??
-                (editingPlanItem.themeId
-                  ? workshopList.find((w) => w.themeId === editingPlanItem.themeId && (w.communicationKit?.length ?? 0) > 0)
+                (editPlanThemeId
+                  ? workshopList.find((w) => w.themeId === editPlanThemeId && (w.communicationKit?.length ?? 0) > 0)
                   : undefined);
               const sourceKit = sourceWorkshop?.communicationKit ?? [];
               return (
@@ -3554,6 +3725,18 @@ export default function ClientDetailView({ id }: { id: string }) {
                 })}
               </div>
             </div>
+
+            {/* Détail */}
+            <div>
+              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Détail</label>
+              <textarea
+                rows={4}
+                value={newActionDetail}
+                onChange={(e) => setNewActionDetail(e.target.value)}
+                placeholder="Contexte, sous-tâches, points à traiter…"
+                className="w-full resize-none rounded-[9px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-[13px] leading-relaxed text-[#e8f5ef] placeholder-[rgba(232,245,239,0.3)] outline-none focus:border-[rgba(94,234,212,0.5)]"
+              />
+            </div>
           </div>
 
           {/* Footer */}
@@ -3687,20 +3870,6 @@ export default function ClientDetailView({ id }: { id: string }) {
                       onChange={(e) => setEditDraft((d) => d && { ...d, [key]: e.target.value })}
                       style={{ colorScheme: "dark" }}
                       className="w-full rounded-[9px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef] outline-none focus:border-[rgba(94,234,212,0.5)]"
-                    />
-                  </div>
-                ))}
-                {([
-                  ["Dernier événement CSM", "dernierPoint"],
-                ] as [string, keyof LocalDetail][]).map(([label, key]) => (
-                  <div key={key}>
-                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.8px] text-[rgba(232,245,239,0.45)]">{label}</label>
-                    <input
-                      type="text"
-                      value={editDraft[key] as string}
-                      onChange={(e) => setEditDraft((d) => d && { ...d, [key]: e.target.value })}
-                      placeholder="Ex : 15 juin 2026"
-                      className="w-full rounded-[9px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef] placeholder-[rgba(232,245,239,0.25)] outline-none focus:border-[rgba(94,234,212,0.5)]"
                     />
                   </div>
                 ))}

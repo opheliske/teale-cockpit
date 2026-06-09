@@ -14,6 +14,7 @@ function fromRow(row: Record<string, unknown>): HomeAction {
     echeance: row.echeance as string,
     overdue: row.overdue as boolean,
     done: row.done as boolean,
+    detail: (row.detail as string) ?? "",
   };
 }
 
@@ -81,6 +82,7 @@ export const clientActionsStore = {
         echeance: action.echeance,
         overdue: action.overdue ?? false,
         done: action.done ?? false,
+        detail: action.detail ?? "",
         owner_csm_id: user.id,
       })
       .select()
@@ -107,6 +109,7 @@ export const clientActionsStore = {
           echeance: action.echeance,
           overdue: action.overdue ?? false,
           done: action.done ?? false,
+          detail: action.detail ?? "",
           owner_csm_id: user.id,
         });
       notifyChange("client_actions");
