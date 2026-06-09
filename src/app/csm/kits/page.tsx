@@ -1272,7 +1272,7 @@ function Card({
           </span>
         )}
       </div>
-      <h3 className="text-[15px] font-semibold leading-snug tracking-[-0.2px] text-brand-cream">{card.title}</h3>
+      <h3 className="text-[13px] font-semibold leading-snug tracking-[-0.2px] text-brand-cream">{card.title}</h3>
       <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
         <span className="rounded-full border border-brand-border-dark/70 bg-brand-dark/50 px-2.5 py-1 text-[11px] text-brand-muted-on-dark">{card.theme}</span>
         {shownAuds.map((a) => (

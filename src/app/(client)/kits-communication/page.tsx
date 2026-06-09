@@ -926,7 +926,7 @@ function Card({
           </span>
         )}
       </div>
-      <h3 className="text-[15px] font-semibold leading-snug tracking-[-0.2px] text-brand-cream">
+      <h3 className="text-[13px] font-semibold leading-snug tracking-[-0.2px] text-brand-cream">
         {card.title}
       </h3>
       <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
