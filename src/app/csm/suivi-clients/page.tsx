@@ -190,9 +190,17 @@ export default function SuiviClientsPage() {
     return m;
   }, [cards]);
 
-  // Create modal
-  const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState(EMPTY_FORM);
+  // Create modal — opens straight away when arriving via the CSM home
+  // « Nouveau client » deep link (/csm/suivi-clients?nouveau=1). The state is
+  // derived at first render (not via setState in an effect); the param is
+  // stripped by the effect just below.
+  const cameFromNewClientLink =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("nouveau") === "1";
+  const [showCreate, setShowCreate] = useState(() => cameFromNewClientLink);
+  const [form, setForm] = useState(() =>
+    cameFromNewClientLink ? { ...EMPTY_FORM, csm: profile?.id ?? "" } : EMPTY_FORM,
+  );
   const [createError, setCreateError] = useState("");
   const [creating, setCreating] = useState(false);
   // Short-lived "✓ Client créé !" acknowledgement shown after a successful
@@ -207,6 +215,17 @@ export default function SuiviClientsPage() {
     set("produits", form.produits.includes(p) ? form.produits.filter((x) => x !== p) : [...form.produits, p]);
 
   const openCreate = () => { setForm({ ...EMPTY_FORM, csm: profile?.id ?? "" }); setCreateError(""); setCreated(false); setShowCreate(true); };
+
+  // Strip the ?nouveau=1 deep-link param once consumed, so a refresh or
+  // back-navigation doesn't re-open the modal.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("nouveau") !== "1") return;
+    params.delete("nouveau");
+    const qs = params.toString();
+    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+  }, []);
 
   const formValid = form.name.trim().length > 0 && form.collab.trim().length > 0;
 

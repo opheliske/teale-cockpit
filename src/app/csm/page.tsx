@@ -417,7 +417,7 @@ export default function CsmHomePage() {
           </h1>
         </div>
         <button
-          onClick={() => router.push("/csm/suivi-clients")}
+          onClick={() => router.push("/csm/suivi-clients?nouveau=1")}
           className="inline-flex shrink-0 items-center gap-2 rounded-[8px] bg-[#5EEAB0] px-4 py-2.5 text-[13px] font-semibold text-[#0A2018] transition-[filter] hover:brightness-105"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
