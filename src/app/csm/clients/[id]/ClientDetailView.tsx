@@ -562,9 +562,9 @@ export default function ClientDetailView({ id }: { id: string }) {
   // (workshops table) and remain editable until the CSM submits.
   const [addPlanObjectives, setAddPlanObjectives] = useState<string[]>([]);
   const [addPlanThemeId, setAddPlanThemeId] = useState<string>("");
-  // Atelier source : "catalogue" (choisi dans le référentiel workshops) ou
-  // "custom" (atelier sur-mesure saisi librement, hors catalogue).
-  const [addPlanAtelierMode, setAddPlanAtelierMode] = useState<"catalogue" | "custom">("catalogue");
+  // Source d'un atelier ou d'un kit : "catalogue" (choisi dans le référentiel)
+  // ou "custom" (élément sur-mesure saisi librement, hors catalogue).
+  const [addPlanSourceMode, setAddPlanSourceMode] = useState<"catalogue" | "custom">("catalogue");
   const [isPlanFileDragOver, setIsPlanFileDragOver] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1099,7 +1099,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     setAddPlanCustomFiles([]);
     setAddPlanObjectives([]);
     setAddPlanThemeId("");
-    setAddPlanAtelierMode("catalogue");
+    setAddPlanSourceMode("catalogue");
     setIsPlanFileDragOver(false);
   };
 
@@ -1113,7 +1113,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     const month = addPlanDate
       ? parseInt(addPlanDate.split("-")[1], 10) - 1
       : addPlanCtx.month;
-    const isCustomAtelier = addPlanCtx.type === "atelier" && addPlanAtelierMode === "custom";
+    const isCustomAtelier = addPlanCtx.type === "atelier" && addPlanSourceMode === "custom";
     if (isCustomAtelier) {
       // Atelier sur-mesure (hors catalogue) — titre libre saisi par le CSM,
       // pas de kit de communication pré-attaché. Objectifs / thème / fichiers
@@ -1132,6 +1132,23 @@ export default function ClientDetailView({ id }: { id: string }) {
         quarter: addPlanCtx.quarter,
         objectives: objectives.length > 0 ? objectives : undefined,
         themeId: addPlanThemeId || undefined,
+        files: addPlanCustomFiles.length > 0 ? [...addPlanCustomFiles] : undefined,
+      }]);
+    } else if (addPlanCtx.type === "kit" && addPlanSourceMode === "custom") {
+      // Kit de communication sur-mesure (hors catalogue) — titre libre, et
+      // fichiers optionnels téléchargeables par le client. Pas de thème /
+      // objectifs (concepts propres aux ateliers).
+      if (!addPlanCustomTitle.trim()) return;
+      const meta = formatDateFr(addPlanDate);
+      setExtraPlanItems((prev) => [...prev, {
+        id: newId,
+        type: "kit",
+        icon: "📢",
+        title: addPlanCustomTitle.trim(),
+        meta,
+        done: false,
+        month,
+        quarter: addPlanCtx.quarter,
         files: addPlanCustomFiles.length > 0 ? [...addPlanCustomFiles] : undefined,
       }]);
     } else if (addPlanCtx.type === "atelier" || addPlanCtx.type === "kit") {
@@ -1228,7 +1245,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     setAddPlanTargets([]);
     setAddPlanObjectives([]);
     setAddPlanThemeId("");
-    setAddPlanAtelierMode("catalogue");
+    setAddPlanSourceMode("catalogue");
     setAddPlanSearch("");
     setAddPlanCatFilter("Tous");
   };
@@ -1387,10 +1404,11 @@ export default function ClientDetailView({ id }: { id: string }) {
   const hasCatalog = addPlanCtx?.type === "atelier" || addPlanCtx?.type === "kit";
   const canAddToPlan =
     addPlanCtx?.type === "atelier"
-      ? (addPlanAtelierMode === "custom"
+      ? (addPlanSourceMode === "custom"
           ? (!!addPlanCustomTitle.trim() && !!addPlanDate && !!addPlanTime)
           : (!!selectedCatalogId && !!addPlanCustomTitle.trim() && !!addPlanDate && !!addPlanTime)) :
     addPlanCtx?.type === "qbr"    ? (!!addPlanCustomTitle.trim() && !!addPlanDate && !!addPlanTime) :
+    addPlanCtx?.type === "kit"    ? (addPlanSourceMode === "custom" ? !!addPlanCustomTitle.trim() : !!selectedCatalogId) :
     hasCatalog                    ? !!selectedCatalogId :
     !!addPlanCustomTitle.trim();
 
@@ -4079,22 +4097,22 @@ export default function ClientDetailView({ id }: { id: string }) {
 
           {hasCatalog ? (
             <div className="space-y-3">
-              {/* Atelier — source : catalogue ou sur-mesure (hors catalogue) */}
-              {addPlanCtx.type === "atelier" && (
+              {/* Atelier / kit — source : catalogue ou sur-mesure (hors catalogue) */}
+              {(addPlanCtx.type === "atelier" || addPlanCtx.type === "kit") && (
                 <div className="flex gap-1.5 rounded-[10px] border border-[#1a3530] bg-[rgba(14,37,32,0.5)] p-1">
                   {([["catalogue", "📚 Depuis le catalogue"], ["custom", "✏️ Sur-mesure"]] as const).map(([mode, label]) => (
                     <button
                       key={mode}
                       type="button"
                       onClick={() => {
-                        setAddPlanAtelierMode(mode);
+                        setAddPlanSourceMode(mode);
                         // Repartir d'un état propre en changeant de source.
                         setSelectedCatalogId(null);
                         setAddPlanCustomTitle("");
                         setAddPlanObjectives([]);
                         setAddPlanThemeId("");
                       }}
-                      className={`flex-1 rounded-[8px] px-3 py-2 text-[12px] font-semibold transition-all ${addPlanAtelierMode === mode ? "bg-[rgba(94,234,212,0.15)] text-[#5eead4]" : "text-[#94a8a0] hover:text-[#e8f5ef]"}`}
+                      className={`flex-1 rounded-[8px] px-3 py-2 text-[12px] font-semibold transition-all ${addPlanSourceMode === mode ? "bg-[rgba(94,234,212,0.15)] text-[#5eead4]" : "text-[#94a8a0] hover:text-[#e8f5ef]"}`}
                     >
                       {label}
                     </button>
@@ -4102,8 +4120,8 @@ export default function ClientDetailView({ id }: { id: string }) {
                 </div>
               )}
 
-              {/* Sélecteur catalogue — masqué pour un atelier sur-mesure */}
-              {!(addPlanCtx.type === "atelier" && addPlanAtelierMode === "custom") && (
+              {/* Sélecteur catalogue — masqué en mode sur-mesure (atelier ou kit) */}
+              {addPlanSourceMode === "catalogue" && (
                 <>
               {/* Search */}
               <input
@@ -4168,12 +4186,13 @@ export default function ClientDetailView({ id }: { id: string }) {
                 </>
               )}
 
-              {/* Atelier — aperçu éditable (catalogue pré-rempli ou sur-mesure) */}
-              {addPlanCtx.type === "atelier" && (selectedCatalogId || addPlanAtelierMode === "custom") && (
+              {/* Atelier / kit — aperçu éditable (catalogue pré-rempli ou sur-mesure) */}
+              {((addPlanCtx.type === "atelier" && (selectedCatalogId || addPlanSourceMode === "custom"))
+                || (addPlanCtx.type === "kit" && addPlanSourceMode === "custom")) && (
                 <div className="space-y-3 rounded-[12px] border border-[rgba(94,234,212,0.18)] bg-[rgba(94,234,212,0.04)] p-3.5">
                   <p className="text-[11px] font-semibold uppercase tracking-[1px] text-[#5eead4]">
-                    {addPlanAtelierMode === "custom"
-                      ? "✏️ Atelier sur-mesure — saisie libre"
+                    {addPlanSourceMode === "custom"
+                      ? (addPlanCtx.type === "kit" ? "✏️ Kit sur-mesure — saisie libre" : "✏️ Atelier sur-mesure — saisie libre")
                       : "✨ Pré-rempli depuis le catalogue — modifiable"}
                   </p>
                   <div>
@@ -4182,10 +4201,12 @@ export default function ClientDetailView({ id }: { id: string }) {
                       type="text"
                       value={addPlanCustomTitle}
                       onChange={(e) => setAddPlanCustomTitle(e.target.value)}
-                      placeholder="Ex : Atelier sur-mesure cohésion d'équipe…"
+                      placeholder={addPlanCtx.type === "kit" ? "Ex : Kit de communication sur-mesure…" : "Ex : Atelier sur-mesure cohésion d'équipe…"}
                       className="w-full rounded-[10px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef] placeholder-[rgba(232,245,239,0.3)] outline-none focus:border-[rgba(94,234,212,0.5)]"
                     />
                   </div>
+                  {addPlanCtx.type === "atelier" && (
+                  <>
                   <div>
                     <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Thème</label>
                     <select
@@ -4236,6 +4257,8 @@ export default function ClientDetailView({ id }: { id: string }) {
                       + Ajouter un objectif
                     </button>
                   </div>
+                  </>
+                  )}
 
                   {/* Fichiers joints — uploadés dans client-files (bucket
                       per-client), distincts du kit du workshop déjà pré-
