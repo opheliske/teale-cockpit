@@ -247,12 +247,7 @@ export default function ClientHomePage() {
             value={`${ateliersConsommes} / ${atelierTotal}`}
           />
           <StatCard
-            label="Prochain rendez-vous"
-            value={upcoming[0]?.date ?? "—"}
-            small
-          />
-          <StatCard
-            label="Collaborateurs"
+            label="Collaborateurs couverts"
             value={company.collab.toLocaleString("fr-FR")}
           />
         </div>
