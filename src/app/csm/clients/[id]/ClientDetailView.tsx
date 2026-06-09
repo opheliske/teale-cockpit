@@ -501,6 +501,9 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [newActionTitle, setNewActionTitle] = useState("");
   const [newActionDue, setNewActionDue] = useState("");
   const [newActionStatus, setNewActionStatus] = useState<"normal" | "warn" | "late">("normal");
+  // Id de l'action en cours d'édition (null = création). Seules les actions
+  // créées par le CSM (présentes dans clientActionsStore) sont modifiables.
+  const [editingActionId, setEditingActionId] = useState<number | null>(null);
   const [addPlanCtx, setAddPlanCtx] = useState<{ quarter: string; type: "atelier" | "kit" | "qbr" | "custom"; month?: number } | null>(null);
   const [selectedCatalogId, setSelectedCatalogId] = useState<string | null>(null);
   const [addPlanDate, setAddPlanDate] = useState("");
@@ -554,7 +557,6 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [docFiles, setDocFiles] = useState<StoredDocumentFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [addPlanTime, setAddPlanTime] = useState("");
-  const [addPlanResponsable, setAddPlanResponsable] = useState("");
   const [addPlanDetail, setAddPlanDetail] = useState("");
   const [addPlanCustomFiles, setAddPlanCustomFiles] = useState<PlanItemFile[]>([]);
   const [addPlanTargets, setAddPlanTargets] = useState<string[]>([]);
@@ -960,20 +962,57 @@ export default function ClientDetailView({ id }: { id: string }) {
     setEditingQ(null);
   };
 
-  const handleCreateAction = () => {
-    if (!newActionTitle.trim() || !client) return;
-    const dueLabel = newActionDue ? formatDateFr(newActionDue) : "Sans échéance";
-    // The store subscription refreshes localActions automatically.
-    void clientActionsStore.add({
-      text: newActionTitle.trim(),
-      clients: [{ name: client.name, color: client.color }],
-      echeance: dueLabel,
-      overdue: newActionStatus === "late",
-    });
+  const closeActionModal = () => {
+    setShowNewAction(false);
+    setEditingActionId(null);
     setNewActionTitle("");
     setNewActionDue("");
     setNewActionStatus("normal");
-    setShowNewAction(false);
+  };
+
+  const openNewAction = () => {
+    setEditingActionId(null);
+    setNewActionTitle("");
+    setNewActionDue("");
+    setNewActionStatus("normal");
+    setShowNewAction(true);
+  };
+
+  const openEditAction = (action: PrioAction) => {
+    setEditingActionId(action.id);
+    setNewActionTitle(action.title);
+    setNewActionDue(
+      action.dueLabel && action.dueLabel !== "Sans échéance" ? frDateToIso(action.dueLabel) : "",
+    );
+    setNewActionStatus(action.status === "late" ? "late" : "normal");
+    setShowNewAction(true);
+  };
+
+  const handleSaveAction = () => {
+    if (!newActionTitle.trim() || !client) return;
+    const dueLabel = newActionDue ? formatDateFr(newActionDue) : "Sans échéance";
+    // The store subscription refreshes localActions automatically.
+    if (editingActionId != null) {
+      void clientActionsStore.update(editingActionId, {
+        text: newActionTitle.trim(),
+        echeance: dueLabel,
+        overdue: newActionStatus === "late",
+      });
+    } else {
+      void clientActionsStore.add({
+        text: newActionTitle.trim(),
+        clients: [{ name: client.name, color: client.color }],
+        echeance: dueLabel,
+        overdue: newActionStatus === "late",
+      });
+    }
+    closeActionModal();
+  };
+
+  const handleDeleteAction = (actionId: number) => {
+    if (!window.confirm("Supprimer cette action prioritaire ?")) return;
+    // The store subscription refreshes localActions automatically.
+    void clientActionsStore.remove(actionId);
   };
 
   const openDocModal = (doc?: StoredDocument) => {
@@ -1094,7 +1133,6 @@ export default function ClientDetailView({ id }: { id: string }) {
     setAddPlanDate("");
     setAddPlanTime("");
     setAddPlanCustomTitle("");
-    setAddPlanResponsable("");
     setAddPlanDetail("");
     setAddPlanCustomFiles([]);
     setAddPlanObjectives([]);
@@ -1201,11 +1239,8 @@ export default function ClientDetailView({ id }: { id: string }) {
     } else {
       if (!addPlanCustomTitle.trim()) return;
       const dateFr = formatDateFr(addPlanDate);
-      // QBR ne porte pas de responsable (ni dans le meta, ni sur l'item, ni
-      // dans l'agenda CSM) — c'est purement un point CSM ↔ client.
       const isQbr = addPlanCtx.type === "qbr";
-      const responsable = isQbr ? "" : addPlanResponsable.trim();
-      const metaParts = [dateFr, addPlanTime.trim(), responsable].filter(Boolean);
+      const metaParts = [dateFr, addPlanTime.trim()].filter(Boolean);
       setExtraPlanItems((prev) => [...prev, {
         id: newId,
         type: addPlanCtx.type,
@@ -1215,7 +1250,6 @@ export default function ClientDetailView({ id }: { id: string }) {
         done: false,
         month,
         quarter: addPlanCtx.quarter,
-        responsable: responsable || undefined,
         detail: addPlanDetail.trim() || undefined,
         files: addPlanCustomFiles.length > 0 ? [...addPlanCustomFiles] : undefined,
       }]);
@@ -1239,7 +1273,6 @@ export default function ClientDetailView({ id }: { id: string }) {
     setAddPlanDate("");
     setAddPlanTime("");
     setAddPlanCustomTitle("");
-    setAddPlanResponsable("");
     setAddPlanDetail("");
     setAddPlanCustomFiles([]);
     setAddPlanTargets([]);
@@ -1413,6 +1446,14 @@ export default function ClientDetailView({ id }: { id: string }) {
     !!addPlanCustomTitle.trim();
 
   const openActionsCount = localActions.filter((a) => !doneActions.has(a.id)).length;
+  // Actions créées par le CSM (présentes dans clientActionsStore) → modifiables
+  // / supprimables. Les actions du seed statique (detail.actions) ne le sont pas.
+  const editableActionIds = new Set(
+    clientActionsStore
+      .getExtra()
+      .filter((a) => client && a.clients.some((c) => c.name === client.name))
+      .map((a) => a.id),
+  );
 
   return (
     <>
@@ -2188,6 +2229,24 @@ export default function ClientDetailView({ id }: { id: string }) {
                     }`}>
                       {done ? "Terminé" : action.status === "late" ? "En retard" : action.status === "warn" ? "Cette semaine" : "À traiter"}
                     </span>
+                    {editableActionIds.has(action.id) && (
+                      <div className="ml-auto flex items-center gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => openEditAction(action)}
+                          title="Modifier l'action"
+                          aria-label="Modifier l'action"
+                          className="grid h-[22px] w-[22px] place-items-center rounded-[6px] text-[11px] text-[#94a8a0] transition-colors hover:bg-[rgba(94,234,212,0.12)] hover:text-[#5eead4]"
+                        >✏️</button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteAction(action.id)}
+                          title="Supprimer l'action"
+                          aria-label="Supprimer l'action"
+                          className="grid h-[22px] w-[22px] place-items-center rounded-[6px] text-[15px] leading-none text-[#94a8a0] transition-colors hover:bg-[rgba(230,170,153,0.15)] hover:text-[#E6AA99]"
+                        >×</button>
+                      </div>
+                    )}
                   </div>
                   <h3 className={`flex-1 text-[14px] font-medium leading-[1.4] ${done ? "text-[#94a8a0] line-through" : "text-[#e8f5ef]"}`}>{action.title}</h3>
                   <span className={`my-3 self-start rounded-full px-[10px] py-1 text-[11px] font-medium ${
@@ -2212,7 +2271,7 @@ export default function ClientDetailView({ id }: { id: string }) {
               );
             })}
             {/* Add card */}
-            <button onClick={() => setShowNewAction(true)} className="flex min-h-[185px] cursor-pointer flex-col items-center justify-center gap-2.5 rounded-[14px] border border-dashed border-[#1a3530] p-4 transition-all hover:border-[#84d4a6] hover:bg-[rgba(132,212,166,0.04)]">
+            <button onClick={openNewAction} className="flex min-h-[185px] cursor-pointer flex-col items-center justify-center gap-2.5 rounded-[14px] border border-dashed border-[#1a3530] p-4 transition-all hover:border-[#84d4a6] hover:bg-[rgba(132,212,166,0.04)]">
               <div className="grid h-[38px] w-[38px] place-items-center rounded-full border border-[#84d4a6] text-[22px] leading-none text-[#84d4a6]">+</div>
               <div className="text-[13px] font-medium text-[#e8f5ef]">Nouvelle action</div>
               <div className="text-center text-[11px] leading-[1.4] text-[#94a8a0]">Synchronisée sur la homepage</div>
@@ -2258,37 +2317,52 @@ export default function ClientDetailView({ id }: { id: string }) {
             )}
           </header>
 
-          {/* ── Target filter bar ── */}
-          {clientLabels.length > 0 && planYear === "current" && (
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => setPlanTargetFilter(null)}
-                className={`rounded-full px-3 py-1 text-[11px] font-semibold transition ${planTargetFilter === null ? "bg-[rgba(94,234,212,0.15)] text-[#5eead4]" : "border border-[rgba(255,255,255,0.1)] text-[#94a8a0] hover:text-[#e8f5ef]"}`}
-              >Toutes les cibles</button>
-              {clientLabels.map((l) => (
-                <button key={l.id}
-                  onClick={() => setPlanTargetFilter(planTargetFilter === l.id ? null : l.id)}
-                  className="rounded-full px-3 py-1 text-[11px] font-semibold transition"
-                  style={planTargetFilter === l.id
-                    ? { background: l.color + "33", color: l.color, border: `1px solid ${l.color}66` }
-                    : { border: "1px solid rgba(255,255,255,0.1)", color: "#94a8a0" }}
-                >{l.name}</button>
-              ))}
-              <button
-                onClick={() => setShowLabelManager((v) => !v)}
-                className="ml-auto rounded-full border border-[rgba(255,255,255,0.08)] px-2.5 py-1 text-[10px] font-semibold text-[#6b7c75] transition hover:text-[#94a8a0]"
-              >⚙ Gérer les étiquettes</button>
-            </div>
-          )}
-          {planYear === "current" && clientLabels.length === 0 && (
-            <div className="mb-4 flex items-center gap-2">
-              <span className="text-[12px] text-[#6b7c75]">Aucune étiquette de cible pour ce client.</span>
-              <button onClick={() => setShowLabelManager(true)} className="rounded-full border border-[rgba(255,255,255,0.08)] px-2.5 py-1 text-[10px] font-semibold text-[#5eead4] transition hover:bg-[rgba(94,234,212,0.08)]">+ Créer</button>
+          {/* ── Étiquettes (cibles) : titre clair + gestion proéminente + filtre ── */}
+          {planYear === "current" && (
+            <div className="mb-4 rounded-[12px] border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.015)] px-3.5 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[1px] text-[#94a8a0]">
+                  <span aria-hidden>🏷️</span>
+                  Étiquettes du client
+                  {clientLabels.length > 0 && (
+                    <span className="font-normal normal-case tracking-normal text-[#6b7c75]">· filtrer les jalons par cible</span>
+                  )}
+                </div>
+                <button
+                  onClick={() => setShowLabelManager((v) => !v)}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[rgba(94,234,212,0.3)] bg-[rgba(94,234,212,0.08)] px-3 py-1 text-[11px] font-semibold text-[#5eead4] transition hover:bg-[rgba(94,234,212,0.16)]"
+                >
+                  {showLabelManager ? "✓ Terminé" : clientLabels.length === 0 ? "+ Créer une étiquette" : "⚙ Gérer les étiquettes"}
+                </button>
+              </div>
+
+              {clientLabels.length > 0 ? (
+                <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => setPlanTargetFilter(null)}
+                    className={`rounded-full px-3 py-1 text-[11px] font-semibold transition ${planTargetFilter === null ? "bg-[rgba(94,234,212,0.15)] text-[#5eead4]" : "border border-[rgba(255,255,255,0.1)] text-[#94a8a0] hover:text-[#e8f5ef]"}`}
+                  >Toutes</button>
+                  {clientLabels.map((l) => (
+                    <button key={l.id}
+                      onClick={() => setPlanTargetFilter(planTargetFilter === l.id ? null : l.id)}
+                      className="rounded-full px-3 py-1 text-[11px] font-semibold transition"
+                      style={planTargetFilter === l.id
+                        ? { background: l.color + "33", color: l.color, border: `1px solid ${l.color}66` }
+                        : { border: "1px solid rgba(255,255,255,0.1)", color: "#94a8a0" }}
+                    >{l.name}</button>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-1.5 text-[12px] leading-relaxed text-[#6b7c75]">
+                  Aucune étiquette pour ce client. Créez-en pour cibler et filtrer les jalons du plan (ex : «&nbsp;Managers&nbsp;», «&nbsp;RH&nbsp;», «&nbsp;Codir&nbsp;»).
+                </p>
+              )}
             </div>
           )}
           {showLabelManager && (
             <div className="mb-4 rounded-[12px] border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.02)] p-4">
-              <p className="mb-3 text-[11px] font-semibold uppercase tracking-[1px] text-[#94a8a0]">Étiquettes de cible</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[1px] text-[#94a8a0]">Gérer les étiquettes</p>
+              <p className="mb-3 mt-1 text-[11px] leading-relaxed text-[#6b7c75]">Créez vos étiquettes ici, puis assignez-les à chaque jalon depuis sa fiche. Elles servent aussi à filtrer le plan.</p>
               <div className="mb-3 flex flex-wrap gap-2">
                 {clientLabels.map((l) => (
                   <span key={l.id} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold"
@@ -2538,21 +2612,25 @@ export default function ClientDetailView({ id }: { id: string }) {
                             onBlur={commitEdit}
                             onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") commitEdit(); }}
                             onClick={(e) => e.stopPropagation()}
-                            className="mb-0.5 w-full rounded-[5px] bg-[rgba(255,255,255,0.08)] px-1.5 py-0.5 text-[13px] font-semibold text-[#e8f5ef] outline-none ring-1 ring-[rgba(94,234,212,0.4)]"
+                            placeholder="Thème du trimestre…"
+                            className="mb-0.5 w-full rounded-[5px] bg-[rgba(255,255,255,0.08)] px-1.5 py-0.5 text-[13px] font-semibold text-[#e8f5ef] outline-none ring-1 ring-[rgba(94,234,212,0.4)] placeholder:font-normal placeholder:text-[#94a8a0]"
                             autoFocus
                           />
                         ) : (
-                          <div className="group mb-0.5 flex items-start gap-1">
-                            <p className="min-w-0 flex-1 text-[13px] font-semibold text-[#e8f5ef]">
-                              {theme || <span className="text-[12px] font-normal text-[#6b7c75]">Définir le thème…</span>}
-                            </p>
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); setEditingQ(`curr-${qKey}`); setEditingVal(theme); }}
-                              className="mt-0.5 shrink-0 rounded-[3px] p-0.5 text-[13px] text-transparent transition-colors group-hover:text-[#94a8a0] hover:!text-[#5eead4]"
-                              title="Modifier le thème"
-                            >✏</button>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setUserPickedPlanQ(q); setEditingQ(`curr-${qKey}`); setEditingVal(theme); }}
+                            title="Modifier le thème du trimestre"
+                            className="group/theme -mx-1 mb-0.5 flex w-full items-center gap-1.5 rounded-[6px] px-1 py-0.5 text-left transition-colors hover:bg-[rgba(94,234,212,0.08)]"
+                          >
+                            <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-[#e8f5ef]">
+                              {theme || <span className="font-normal text-[#94a8a0]">Définir le thème…</span>}
+                            </span>
+                            <span
+                              className="shrink-0 text-[11px] text-[#5eead4] opacity-60 transition-opacity group-hover/theme:opacity-100"
+                              aria-hidden
+                            >✏️</span>
+                          </button>
                         )}
                         <div className="mb-2.5 text-[10px] tracking-[0.3px] text-[#6b7c75]">{monthsAbbr}</div>
                         <div className="h-[3px] overflow-hidden rounded-full bg-white/5">
@@ -3413,17 +3491,17 @@ export default function ClientDetailView({ id }: { id: string }) {
 
     {/* ── Nouvelle action modal ── */}
     {showNewAction && (
-      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-[2px]" onClick={() => setShowNewAction(false)}>
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-[2px]" onClick={closeActionModal}>
         <div className="my-4 max-h-[calc(100vh-2rem)] w-full max-w-[440px] overflow-y-auto rounded-[18px] border border-[rgba(94,234,212,0.18)] bg-[#061a16] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
           {/* Header */}
           <div className="mb-5 flex items-center justify-between">
             <div>
-              <h3 className="text-[15px] font-semibold text-[#e8f5ef]">Nouvelle action prioritaire</h3>
+              <h3 className="text-[15px] font-semibold text-[#e8f5ef]">{editingActionId != null ? "Modifier l'action prioritaire" : "Nouvelle action prioritaire"}</h3>
               <p className="mt-0.5 text-[11px] text-[#94a8a0]">
                 Sera aussi visible dans vos tâches sur la homepage · {client?.name}
               </p>
             </div>
-            <button onClick={() => setShowNewAction(false)} className="grid h-7 w-7 place-items-center rounded-[8px] bg-[rgba(255,255,255,0.05)] text-[16px] text-[#94a8a0] hover:text-[#e8f5ef]">×</button>
+            <button onClick={closeActionModal} className="grid h-7 w-7 place-items-center rounded-[8px] bg-[rgba(255,255,255,0.05)] text-[16px] text-[#94a8a0] hover:text-[#e8f5ef]">×</button>
           </div>
 
           <div className="space-y-4">
@@ -3435,7 +3513,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                 type="text"
                 value={newActionTitle}
                 onChange={(e) => setNewActionTitle(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleCreateAction()}
+                onKeyDown={(e) => e.key === "Enter" && handleSaveAction()}
                 placeholder="Ex : Préparer le bilan Q2 pour Marion..."
                 className="w-full rounded-[9px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef] placeholder-[rgba(232,245,239,0.3)] outline-none focus:border-[rgba(94,234,212,0.5)]"
               />
@@ -3480,15 +3558,15 @@ export default function ClientDetailView({ id }: { id: string }) {
 
           {/* Footer */}
           <div className="mt-6 flex justify-end gap-2">
-            <button onClick={() => setShowNewAction(false)} className="rounded-[9px] px-4 py-2 text-[12px] text-[rgba(232,245,239,0.5)] hover:text-[#e8f5ef]">
+            <button onClick={closeActionModal} className="rounded-[9px] px-4 py-2 text-[12px] text-[rgba(232,245,239,0.5)] hover:text-[#e8f5ef]">
               Annuler
             </button>
             <button
-              onClick={handleCreateAction}
+              onClick={handleSaveAction}
               disabled={!newActionTitle.trim()}
               className="rounded-[9px] bg-[rgba(94,234,212,0.9)] px-4 py-2 text-[12px] font-semibold text-[#061a16] transition-colors hover:bg-[#5eead4] disabled:opacity-40"
             >
-              Créer l&apos;action
+              {editingActionId != null ? "Enregistrer" : "Créer l'action"}
             </button>
           </div>
         </div>
@@ -4344,8 +4422,8 @@ export default function ClientDetailView({ id }: { id: string }) {
                 />
               </div>
 
-              {/* Date + Time (CSM) or Date + Responsable (custom) */}
-              <div className="grid grid-cols-2 gap-3">
+              {/* Date (+ Heure pour la QBR) */}
+              <div className={addPlanCtx.type === "qbr" ? "grid grid-cols-2 gap-3" : ""}>
                 <div>
                   <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Date {addPlanCtx.type === "qbr" ? "*" : "(optionnel)"}</label>
                   <input
@@ -4356,7 +4434,7 @@ export default function ClientDetailView({ id }: { id: string }) {
                     className="w-full rounded-[10px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef] outline-none focus:border-[rgba(94,234,212,0.5)]"
                   />
                 </div>
-                {addPlanCtx.type === "qbr" ? (
+                {addPlanCtx.type === "qbr" && (
                   <div>
                     <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Heure *</label>
                     <input
@@ -4365,17 +4443,6 @@ export default function ClientDetailView({ id }: { id: string }) {
                       onChange={(e) => setAddPlanTime(e.target.value)}
                       style={{ colorScheme: "dark" }}
                       className="w-full rounded-[10px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef] outline-none focus:border-[rgba(94,234,212,0.5)]"
-                    />
-                  </div>
-                ) : (
-                  <div>
-                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-[rgba(232,245,239,0.5)]">Responsable</label>
-                    <input
-                      type="text"
-                      value={addPlanResponsable}
-                      onChange={(e) => setAddPlanResponsable(e.target.value)}
-                      placeholder="Ex : Lucie Martin"
-                      className="w-full rounded-[10px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 text-[13px] text-[#e8f5ef] placeholder-[rgba(232,245,239,0.3)] outline-none focus:border-[rgba(94,234,212,0.5)]"
                     />
                   </div>
                 )}
