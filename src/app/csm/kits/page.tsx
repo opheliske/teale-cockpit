@@ -23,6 +23,7 @@ import { setSeenIds } from "@/lib/catalogue-read-state";
 import { useNewCatalogueItems } from "@/lib/use-new-catalogue-items";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { RichText } from "@/components/RichText";
+import { KitFilePreviewList } from "@/components/KitFilePreview";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Cette page reprend EXACTEMENT l'UX de la page client (grille unique à facettes,
@@ -1896,9 +1897,6 @@ function KitsFormSlideOver({
 // Détail (lecture seule) — un corps par type
 // ─────────────────────────────────────────────────────────────────────────────
 
-function isAssetUrl(s: string): boolean {
-  return /^https?:\/\//i.test(s);
-}
 
 function KitDetailModal({
   card,
@@ -1987,45 +1985,14 @@ function AssetList({ label, items, accent }: { label: string; items: string[]; a
       </div>
     );
   }
-  const images = items.filter((s) => isAssetUrl(s) && /\.(png|jpe?g|webp|gif)$/i.test(s));
-  const links = items.filter((s) => isAssetUrl(s) && !/\.(png|jpe?g|webp|gif)$/i.test(s));
-  const filenames = items.filter((s) => !isAssetUrl(s));
-
+  // Les items sont des chemins de stockage (kit-files) : on délègue au même
+  // composant que côté client, qui signe l'URL et affiche une vignette + un
+  // aperçu. (L'ancienne version n'attendait que des URLs http → les chemins
+  // étaient faussement marqués « non uploadé » avec leur nom brut.)
   return (
     <div>
       <p className="mb-2 text-[10px] font-bold uppercase tracking-[1.2px]" style={{ color: accent }}>{label}</p>
-      {images.length > 0 && (
-        <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {images.map((src) => (
-            <a key={src} href={src} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-[8px] border border-[rgba(255,255,255,0.06)] transition-all hover:border-[rgba(94,234,212,0.4)]">
-              {/* eslint-disable-next-line @next/next/no-img-element -- external Supabase Storage URL, no Next image loader configured for this bucket */}
-              <img src={src} alt="" loading="lazy" className="h-28 w-full object-cover" />
-            </a>
-          ))}
-        </div>
-      )}
-      {links.length > 0 && (
-        <ul className="mb-2 space-y-1">
-          {links.map((href) => (
-            <li key={href}>
-              <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[12px] text-[#5eead4] hover:underline">
-                📄 {href.split("/").pop()}
-              </a>
-            </li>
-          ))}
-        </ul>
-      )}
-      {filenames.length > 0 && (
-        <ul className="space-y-1 text-[12px] text-[#94a8a0]">
-          {filenames.map((fn) => (
-            <li key={fn} className="flex items-center gap-1.5">
-              <span aria-hidden>📎</span>
-              <span className="truncate">{fn}</span>
-              <span className="ml-1 rounded-full bg-[rgba(255,181,71,0.12)] px-1.5 py-0.5 text-[9px] font-semibold text-[#FFB547]">non uploadé</span>
-            </li>
-          ))}
-        </ul>
-      )}
+      <KitFilePreviewList files={items.map((path) => ({ path, name: kitFileLabel(path) || path }))} />
     </div>
   );
 }
