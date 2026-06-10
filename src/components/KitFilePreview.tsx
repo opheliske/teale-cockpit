@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { getKitFileUrl, openKitFile } from "@/lib/storage";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -130,7 +131,13 @@ function KitFileLightbox({ file, onClose }: { file: PreviewFile; onClose: () => 
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  // Portail vers <body> : sinon le `fixed` est « contenu » par la modale
+  // (qui a un backdrop-filter/transform) et l'aperçu s'ancre en haut de la
+  // modale scrollée au lieu de couvrir le viewport. Le portail le sort de cet
+  // ancêtre → centré à l'écran, peu importe où on a cliqué.
+  return createPortal(
     <div
       className="fixed inset-0 z-[70] flex flex-col bg-black/80 p-4 backdrop-blur-sm sm:p-8"
       onClick={onClose}
@@ -182,6 +189,7 @@ function KitFileLightbox({ file, onClose }: { file: PreviewFile; onClose: () => 
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
