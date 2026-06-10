@@ -6,28 +6,45 @@ import {
   type AnimationItem,
   type EmailTopicKit,
   type VisuelKit,
+  type VisuelFile,
 } from "@/app/(client)/kits-communication/data";
 import { notifyChange, watchChanges } from "@/lib/sync";
+import { kitFileLabel } from "@/lib/storage";
 
 export type { LancementKit, AnimationItem, EmailTopicKit, VisuelKit };
 
 function visuelFromRow(row: Record<string, unknown>): VisuelKit {
+  const raw = (row.files as VisuelFile[] | null) ?? [];
+  const legacyPath = (row.path as string | null) ?? undefined;
+  const legacyMime = (row.mime_type as string | null) ?? undefined;
+  // Normalise toujours vers `files` : un ancien visuel mono-fichier (path /
+  // mime_type sans `files`) est exposé comme un tableau à un seul élément.
+  const files: VisuelFile[] =
+    raw.length > 0
+      ? raw
+      : legacyPath
+        ? [{ id: `${row.id as string}-0`, path: legacyPath, name: kitFileLabel(legacyPath), mimeType: legacyMime ?? "" }]
+        : [];
   return {
     id: row.id as string,
     title: row.title as string,
     category: row.category as VisuelKit["category"],
-    path: row.path as string,
-    mimeType: row.mime_type as string,
+    files,
+    path: legacyPath,
+    mimeType: legacyMime,
   };
 }
 
 function visuelToRow(v: VisuelKit) {
+  const files = v.files ?? [];
   return {
     id: v.id,
     title: v.title,
     category: v.category,
-    path: v.path,
-    mime_type: v.mimeType,
+    files,
+    // Compat : path / mime_type = premier fichier (anciens lecteurs).
+    path: files[0]?.path ?? null,
+    mime_type: files[0]?.mimeType ?? null,
   };
 }
 

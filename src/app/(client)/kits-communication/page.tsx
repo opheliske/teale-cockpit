@@ -16,7 +16,7 @@ import {
   VISUEL_CATEGORIES,
 } from "./data";
 import { useKitsStore } from "@/lib/kits-store";
-import { openKitFile, kitFileLabel, getKitFileUrl } from "@/lib/storage";
+import { kitFileLabel } from "@/lib/storage";
 import { useWorkshops, themes as workshopThemes, type Workshop } from "@/lib/workshops-store";
 import { setSeenIds } from "@/lib/catalogue-read-state";
 import { useNewCatalogueItems } from "@/lib/use-new-catalogue-items";
@@ -1453,17 +1453,6 @@ function WorkshopModalBody({ workshop }: { workshop: Workshop }) {
 }
 
 function VisuelModalBody({ item }: { item: VisuelKit }) {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  useEffect(() => {
-    let alive = true;
-    void getKitFileUrl(item.path).then((u) => {
-      if (alive) setPreviewUrl(u);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [item.path]);
-  const isImage = item.mimeType.startsWith("image/");
   const categoryLabel =
     VISUEL_CATEGORIES.find((c) => c.id === item.category)?.label ?? item.category;
   return (
@@ -1473,34 +1462,19 @@ function VisuelModalBody({ item }: { item: VisuelKit }) {
           {categoryLabel}
         </span>
         <span className="rounded-full bg-brand-cream/10 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-brand-cream">
-          {kitFileLabel(item.path) || item.path}
+          {item.files.length} fichier{item.files.length > 1 ? "s" : ""}
         </span>
       </div>
       <h2 className="mt-3 text-2xl font-medium tracking-tight text-brand-cream">{item.title}</h2>
 
-      <div className="mt-5 grid aspect-video w-full place-items-center overflow-hidden rounded-xl border border-brand-border-dark bg-brand-dark/40">
-        {isImage && previewUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={previewUrl}
-            alt={item.title}
-            className="max-h-full max-w-full object-contain p-4"
-          />
-        ) : (
-          <span className="text-4xl opacity-60" aria-hidden>
-            📄
-          </span>
-        )}
-      </div>
-
-      <div className="mt-6 flex flex-wrap items-center justify-end gap-2 border-t border-brand-border-dark pt-5">
-        <button
-          type="button"
-          onClick={() => void openKitFile(item.path, kitFileLabel(item.path) || item.title)}
-          className="inline-flex items-center gap-1.5 rounded-full bg-brand-accent px-4 py-2 text-xs font-medium text-brand-dark transition-colors hover:bg-brand-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/60"
-        >
-          <DownloadIcon /> Télécharger
-        </button>
+      <div className="mt-5">
+        <KitFilePreviewList
+          files={item.files.map((f) => ({
+            path: f.path,
+            name: f.name || kitFileLabel(f.path),
+            mimeType: f.mimeType,
+          }))}
+        />
       </div>
     </>
   );
@@ -1973,25 +1947,6 @@ function CheckIcon() {
   );
 }
 
-function DownloadIcon() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <path d="M7 10l5 5 5-5" />
-      <path d="M12 15V3" />
-    </svg>
-  );
-}
 
 function LinkIcon() {
   return (

@@ -84,8 +84,9 @@ create table if not exists kits_visuels (
   id          text primary key,
   title       text not null,
   category    text not null check (category in ('logo', 'icone', 'picto', 'banniere')),
-  path        text not null,
-  mime_type   text not null,
+  files       jsonb not null default '[]',  -- [{id, path, name, mimeType}] dans le bucket "kit-files"
+  path        text,                         -- legacy mono-fichier (rétro-compat)
+  mime_type   text,                         -- legacy mono-fichier (rétro-compat)
   created_at  timestamptz not null default now()
 );
 create index if not exists kits_visuels_category_idx on kits_visuels (category);

@@ -38,12 +38,22 @@ export type EmailTopicKit = {
 
 export type VisuelCategory = 'logo' | 'icone' | 'picto' | 'banniere';
 
+export type VisuelFile = {
+  id: string;
+  path: string;       // storage path inside "kit-files"
+  name: string;
+  mimeType: string;
+};
+
 export type VisuelKit = {
   id: string;
   title: string;
   category: VisuelCategory;
-  path: string;       // storage path inside "kit-files"
-  mimeType: string;
+  files: VisuelFile[];
+  // Anciens visuels mono-fichier — conservés pour la rétro-compat. Le store
+  // normalise toujours vers `files`, donc l'UI ne lit que `files`.
+  path?: string;
+  mimeType?: string;
 };
 
 export const VISUEL_CATEGORIES: { id: VisuelCategory; label: string; icon: string }[] = [

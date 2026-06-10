@@ -16,8 +16,8 @@ import {
   type EmailTopicKit,
   type VisuelKit,
 } from "@/lib/kits-store";
-import { VISUEL_CATEGORIES, type VisuelCategory } from "@/app/(client)/kits-communication/data";
-import { uploadKitFile, getKitFileUrl, kitFileLabel, openKitFile } from "@/lib/storage";
+import { VISUEL_CATEGORIES, type VisuelCategory, type VisuelFile } from "@/app/(client)/kits-communication/data";
+import { uploadKitFile, kitFileLabel, openKitFile } from "@/lib/storage";
 import { useWorkshops, themes as workshopThemes, type Workshop } from "@/lib/workshops-store";
 import { setSeenIds } from "@/lib/catalogue-read-state";
 import { useNewCatalogueItems } from "@/lib/use-new-catalogue-items";
@@ -218,14 +218,13 @@ type EmailLanguage = "FR" | "EN";
 interface VisuelForm {
   title: string;
   category: VisuelCategory;
-  path: string;
-  mimeType: string;
+  files: VisuelFile[];
 }
 
-const EMPTY_VISUEL: VisuelForm = { title: "", category: "logo", path: "", mimeType: "" };
+const EMPTY_VISUEL: VisuelForm = { title: "", category: "logo", files: [] };
 
 function visuelToForm(v: VisuelKit): VisuelForm {
-  return { title: v.title, category: v.category, path: v.path, mimeType: v.mimeType };
+  return { title: v.title, category: v.category, files: v.files ?? [] };
 }
 
 function formToVisuel(f: VisuelForm, existingId?: string): VisuelKit {
@@ -233,8 +232,7 @@ function formToVisuel(f: VisuelForm, existingId?: string): VisuelKit {
     id: existingId ?? "vis-" + Date.now().toString(36),
     title: f.title.trim(),
     category: f.category,
-    path: f.path,
-    mimeType: f.mimeType,
+    files: f.files,
   };
 }
 
@@ -718,7 +716,7 @@ export default function CsmKitsPage() {
       if (editingId === "new") addEmailTopicKit(item); else updateEmailTopicKit(item);
     } else if (editingKind === "visuel") {
       if (!visuelForm.title.trim()) { setFormError("Le titre est obligatoire."); return; }
-      if (!visuelForm.path) { setFormError("Uploadez un fichier avant d'enregistrer."); return; }
+      if (visuelForm.files.length === 0) { setFormError("Uploadez au moins un fichier avant d'enregistrer."); return; }
       const item = formToVisuel(visuelForm, editingId === "new" ? kitDraftId ?? undefined : editingId!);
       if (editingId === "new") addVisuelKit(item); else updateVisuelKit(item);
     }
@@ -1660,7 +1658,13 @@ function KitsFormSlideOver({
       setUploadError(err ?? "Échec de l'envoi du fichier.");
       return;
     }
-    setVisuelForm((f) => ({ ...f, path, mimeType: file.type || "application/octet-stream" }));
+    const newFile: VisuelFile = {
+      id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      path,
+      name: file.name,
+      mimeType: file.type || "application/octet-stream",
+    };
+    setVisuelForm((f) => ({ ...f, files: [...f.files, newFile] }));
   };
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -1857,17 +1861,23 @@ function KitsFormSlideOver({
                 </select>
               </div>
               <div>
-                <label className={LABEL}>Fichier *</label>
-                <label className="flex cursor-pointer items-center gap-2 rounded-[10px] border border-dashed border-[rgba(255,255,255,0.12)] bg-[rgba(255,255,255,0.02)] px-4 py-3 text-[12px] text-[#94a8a0] hover:border-[rgba(94,234,212,0.4)] hover:text-[#e8f5ef]">
-                  📤 {visuelForm.path ? "Remplacer le fichier" : "Uploader un fichier"}
-                  <input type="file" accept="image/*,.svg,.pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { void handleVisuelUpload(f); e.target.value = ""; } }} />
-                </label>
-                {visuelForm.path && (
-                  <div className="mt-2 flex items-center justify-between gap-2 rounded-[8px] border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] px-3 py-2 text-[12px] text-[#c1d4cc]">
-                    <span className="min-w-0 flex-1 truncate">📎 {kitFileLabel(visuelForm.path)}</span>
-                    <button type="button" onClick={() => void openKitFile(visuelForm.path, kitFileLabel(visuelForm.path) || visuelForm.title)} className="shrink-0 text-[11px] font-semibold text-[#5eead4] hover:text-[#84d4a6]">Aperçu</button>
-                  </div>
+                <label className={LABEL}>Fichiers * <span className="font-normal normal-case text-[#6b7c75]">— images (png/jpeg…) ou PDF, plusieurs possibles</span></label>
+                {visuelForm.files.length > 0 && (
+                  <ul className="mb-2 space-y-1.5">
+                    {visuelForm.files.map((file) => (
+                      <li key={file.id} className="flex items-center gap-2 rounded-[8px] border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] px-3 py-2 text-[12px] text-[#c1d4cc]">
+                        <span aria-hidden>📎</span>
+                        <span className="min-w-0 flex-1 truncate">{file.name || kitFileLabel(file.path)}</span>
+                        <button type="button" onClick={() => void openKitFile(file.path, file.name || kitFileLabel(file.path) || visuelForm.title)} className="shrink-0 text-[11px] font-semibold text-[#5eead4] hover:text-[#84d4a6]">Aperçu</button>
+                        <button type="button" onClick={() => setVisuelForm((f) => ({ ...f, files: f.files.filter((x) => x.id !== file.id) }))} aria-label="Retirer ce fichier" className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] text-[#6b7c75] hover:bg-[rgba(230,170,153,0.12)] hover:text-[#E6AA99]">×</button>
+                      </li>
+                    ))}
+                  </ul>
                 )}
+                <label className="flex cursor-pointer items-center gap-2 rounded-[10px] border border-dashed border-[rgba(255,255,255,0.12)] bg-[rgba(255,255,255,0.02)] px-4 py-3 text-[12px] text-[#94a8a0] hover:border-[rgba(94,234,212,0.4)] hover:text-[#e8f5ef]">
+                  📤 {visuelForm.files.length > 0 ? "Ajouter un fichier" : "Uploader un fichier"}
+                  <input type="file" multiple accept="image/*,.svg,.pdf" className="hidden" onChange={(e) => { const fs = e.target.files; if (fs) { Array.from(fs).forEach((f) => void handleVisuelUpload(f)); e.target.value = ""; } }} />
+                </label>
               </div>
               {uploadError && (
                 <p className="rounded-[8px] bg-[rgba(239,68,68,0.1)] px-3 py-2 text-[12px] font-medium text-[#fca5a5]">{uploadError}</p>
@@ -2076,29 +2086,12 @@ function EmailDetailBody({ item }: { item: EmailTopicKit }) {
 }
 
 function VisuelDetailBody({ item }: { item: VisuelKit }) {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  useEffect(() => {
-    let alive = true;
-    void getKitFileUrl(item.path).then((u) => { if (alive) setPreviewUrl(u); });
-    return () => { alive = false; };
-  }, [item.path]);
-  const isImage = item.mimeType.startsWith("image/");
   return (
     <div className="space-y-4">
-      <DetailRow label="Fichier" value={kitFileLabel(item.path) || item.path} />
-      <div className="grid aspect-video w-full place-items-center overflow-hidden rounded-xl border border-[rgba(255,255,255,0.06)] bg-brand-dark/40">
-        {isImage && previewUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={previewUrl} alt={item.title} className="max-h-full max-w-full object-contain p-4" />
-        ) : (
-          <span className="text-4xl opacity-60" aria-hidden>📄</span>
-        )}
-      </div>
-      <div className="flex justify-end">
-        <button type="button" onClick={() => void openKitFile(item.path, kitFileLabel(item.path) || item.title)} className="inline-flex items-center gap-1.5 rounded-full bg-[#5eead4] px-4 py-2 text-xs font-medium text-[#06140f] transition-colors hover:bg-[#84d4a6]">
-          <DownloadIcon /> Télécharger
-        </button>
-      </div>
+      <DetailRow label="Fichiers" value={`${item.files.length} fichier${item.files.length > 1 ? "s" : ""}`} />
+      <KitFilePreviewList
+        files={item.files.map((f) => ({ path: f.path, name: f.name || kitFileLabel(f.path), mimeType: f.mimeType }))}
+      />
     </div>
   );
 }
