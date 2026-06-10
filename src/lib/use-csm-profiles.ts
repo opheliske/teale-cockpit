@@ -5,7 +5,12 @@ import { supabase } from "@/lib/supabase";
 
 export type CsmProfile = { id: string; full_name: string };
 
-/** Loads every CSM profile (role = 'csm') — used for the CSM filters/picker. */
+/**
+ * Loads every CSM profile — used for the CSM filters/picker and the
+ * "responsable" owner dropdown. Includes `admin` accounts : admin is a superset
+ * of CSM (cf. is_csm()) et peut être propriétaire de clients ; sans ça, un admin
+ * en charge de clients apparaît « Non assigné » et n'est pas sélectionnable.
+ */
 export function useCsmProfiles() {
   const [profiles, setProfiles] = useState<CsmProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,7 +33,7 @@ export function useCsmProfiles() {
       const { data, error } = await supabase
         .from("profiles")
         .select("id, full_name")
-        .eq("role", "csm")
+        .in("role", ["csm", "admin"])
         .order("full_name");
       if (error) console.error("[use-csm-profiles]", error);
       if (active) {
