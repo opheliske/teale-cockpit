@@ -20,6 +20,8 @@ import { openKitFile, kitFileLabel, getKitFileUrl } from "@/lib/storage";
 import { useWorkshops, themes as workshopThemes, type Workshop } from "@/lib/workshops-store";
 import { setSeenIds } from "@/lib/catalogue-read-state";
 import { useNewCatalogueItems } from "@/lib/use-new-catalogue-items";
+import { RichText } from "@/components/RichText";
+import { copyKitBody } from "@/lib/rich-text";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Normalisation
@@ -1342,12 +1344,12 @@ function WorkshopModalBody({ workshop }: { workshop: Workshop }) {
   const files = workshop.communicationKit ?? [];
 
   const copy = () => {
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(body).then(() => {
+    void copyKitBody(body).then((ok) => {
+      if (ok) {
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
-      });
-    }
+      }
+    });
   };
 
   return (
@@ -1412,9 +1414,7 @@ function WorkshopModalBody({ workshop }: { workshop: Workshop }) {
       <h3 className="mt-6 mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-accent">
         Aperçu du contenu
       </h3>
-      <div className="max-h-72 overflow-y-auto whitespace-pre-wrap rounded-lg border border-brand-border-dark bg-brand-dark/40 p-4 text-sm leading-relaxed text-brand-cream">
-        {body}
-      </div>
+      <RichText body={body} className="max-h-72 overflow-y-auto rounded-lg border border-brand-border-dark bg-brand-dark/40 p-4 text-sm leading-relaxed text-brand-cream" />
       <p className="mt-2 text-[11px] text-brand-muted-on-dark">
         Aperçu indicatif — adaptez les variables (prénoms, dates, liens) avant envoi.
       </p>
@@ -1536,12 +1536,12 @@ function TextKitModalBody({
   setCopied: (v: boolean) => void;
 }) {
   const copy = () => {
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(body).then(() => {
+    void copyKitBody(body).then((ok) => {
+      if (ok) {
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
-      });
-    }
+      }
+    });
   };
 
   return (
@@ -1561,9 +1561,7 @@ function TextKitModalBody({
       <h3 className="mt-6 mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-accent">
         Aperçu du contenu
       </h3>
-      <div className="max-h-80 overflow-y-auto whitespace-pre-wrap rounded-lg border border-brand-border-dark bg-brand-dark/40 p-4 text-sm leading-relaxed text-brand-cream">
-        {body}
-      </div>
+      <RichText body={body} className="max-h-80 overflow-y-auto rounded-lg border border-brand-border-dark bg-brand-dark/40 p-4 text-sm leading-relaxed text-brand-cream" />
       <p className="mt-2 text-[11px] text-brand-muted-on-dark">
         Aperçu indicatif — adaptez les variables (prénoms, dates, liens) avant envoi.
       </p>
@@ -1709,12 +1707,12 @@ function ResourceGroup({
 function CopyableTextBlock({ body }: { body: string }) {
   const [copied, setCopied] = useState(false);
   const copy = () => {
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(body).then(() => {
+    void copyKitBody(body).then((ok) => {
+      if (ok) {
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
-      });
-    }
+      }
+    });
   };
   return (
     <div className="mt-6">
@@ -1738,9 +1736,7 @@ function CopyableTextBlock({ body }: { body: string }) {
           )}
         </button>
       </div>
-      <div className="max-h-60 overflow-y-auto whitespace-pre-wrap rounded-lg border border-brand-border-dark bg-brand-dark/40 p-4 text-sm leading-relaxed text-brand-cream">
-        {body}
-      </div>
+      <RichText body={body} className="max-h-60 overflow-y-auto rounded-lg border border-brand-border-dark bg-brand-dark/40 p-4 text-sm leading-relaxed text-brand-cream" />
     </div>
   );
 }

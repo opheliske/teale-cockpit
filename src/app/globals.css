@@ -105,3 +105,77 @@ summary::-webkit-details-marker {
   color: var(--teal-bright);
   font-weight: 600;
 }
+
+/* ── Texte riche des kits de communication ──────────────────────────────── */
+/* Mise en forme partagée par l'aperçu client (.kit-rich) et l'éditeur Tiptap
+   côté CSM (.kit-editor.ProseMirror, qui ajoute aussi .kit-rich). */
+.kit-rich {
+  line-height: 1.6;
+}
+.kit-rich p {
+  margin: 0 0 0.5em;
+}
+.kit-rich p:last-child {
+  margin-bottom: 0;
+}
+.kit-rich strong,
+.kit-rich b {
+  font-weight: 700;
+}
+.kit-rich em,
+.kit-rich i {
+  font-style: italic;
+}
+.kit-rich u {
+  text-decoration: underline;
+}
+.kit-rich s,
+.kit-rich del {
+  text-decoration: line-through;
+}
+.kit-rich h2 {
+  font-size: 1.15em;
+  font-weight: 600;
+  margin: 0.6em 0 0.35em;
+}
+.kit-rich h3 {
+  font-size: 1.05em;
+  font-weight: 600;
+  margin: 0.5em 0 0.3em;
+}
+.kit-rich ul {
+  list-style: disc;
+  padding-left: 1.4em;
+  margin: 0.3em 0 0.6em;
+}
+.kit-rich ol {
+  list-style: decimal;
+  padding-left: 1.4em;
+  margin: 0.3em 0 0.6em;
+}
+.kit-rich li {
+  margin: 0.15em 0;
+}
+.kit-rich a {
+  color: var(--teal-bright);
+  text-decoration: underline;
+}
+.kit-rich blockquote {
+  border-left: 2px solid var(--brand-border-dark);
+  padding-left: 0.8em;
+  margin: 0.4em 0;
+  color: var(--brand-muted-on-dark);
+}
+.kit-rich code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+}
+
+/* Éditeur Tiptap (ProseMirror) */
+.kit-editor.ProseMirror {
+  color: var(--brand-cream);
+  outline: none;
+}

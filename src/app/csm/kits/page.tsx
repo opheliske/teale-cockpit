@@ -21,6 +21,7 @@ import { uploadKitFile, getKitFileUrl, kitFileLabel, openKitFile } from "@/lib/s
 import { useWorkshops, themes as workshopThemes, type Workshop } from "@/lib/workshops-store";
 import { setSeenIds } from "@/lib/catalogue-read-state";
 import { useNewCatalogueItems } from "@/lib/use-new-catalogue-items";
+import { RichTextEditor } from "@/components/RichTextEditor";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Cette page reprend EXACTEMENT l'UX de la page client (grille unique à facettes,
@@ -1718,7 +1719,7 @@ function KitsFormSlideOver({
               </div>
               <div>
                 <label className={LABEL}>Contenu à copier par le client <span className="font-normal normal-case text-[#6b7c75]">— optionnel</span></label>
-                <textarea className={TEXTAREA} rows={10} value={lancementForm.body} onChange={(e) => setLancementForm((f) => ({ ...f, body: e.target.value }))} placeholder="Texte de l'email tel qu'il sera proposé au client (sujet, corps, variables…). Laissé vide : le client voit le modèle auto-généré." />
+                <RichTextEditor value={lancementForm.body} onChange={(html) => setLancementForm((f) => ({ ...f, body: html }))} hint="Texte de l'email tel qu'il sera proposé au client (sujet, corps, variables…). Collez depuis Word/Docs : la mise en forme est conservée. Laissé vide : le client voit le modèle auto-généré." />
               </div>
             </>
           )}
@@ -1806,7 +1807,7 @@ function KitsFormSlideOver({
               )}
               <div>
                 <label className={LABEL}>Contenu à copier par le client <span className="font-normal normal-case text-[#6b7c75]">— optionnel</span></label>
-                <textarea className={TEXTAREA} rows={8} value={animationForm.body} onChange={(e) => setAnimationForm((f) => ({ ...f, body: e.target.value }))} placeholder="Texte d'accompagnement (description, suggestions de post Slack/Teams, légende…) que le client pourra copier-coller depuis son espace." />
+                <RichTextEditor value={animationForm.body} onChange={(html) => setAnimationForm((f) => ({ ...f, body: html }))} hint="Texte d'accompagnement (description, suggestions de post Slack/Teams, légende…) que le client pourra copier-coller depuis son espace. La mise en forme collée est conservée." />
               </div>
             </>
           )}
@@ -1834,7 +1835,7 @@ function KitsFormSlideOver({
               </div>
               <div>
                 <label className={LABEL}>Contenu à copier par le client <span className="font-normal normal-case text-[#6b7c75]">— optionnel</span></label>
-                <textarea className={TEXTAREA} rows={10} value={emailForm.body} onChange={(e) => setEmailForm((f) => ({ ...f, body: e.target.value }))} placeholder="Texte de l'email tel qu'il sera proposé au client. Laissé vide : le client voit le modèle auto-généré." />
+                <RichTextEditor value={emailForm.body} onChange={(html) => setEmailForm((f) => ({ ...f, body: html }))} hint="Texte de l'email tel qu'il sera proposé au client. Collez depuis Word/Docs : la mise en forme est conservée. Laissé vide : le client voit le modèle auto-généré." />
               </div>
             </>
           )}
