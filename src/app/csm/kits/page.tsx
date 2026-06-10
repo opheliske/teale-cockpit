@@ -22,6 +22,7 @@ import { useWorkshops, themes as workshopThemes, type Workshop } from "@/lib/wor
 import { setSeenIds } from "@/lib/catalogue-read-state";
 import { useNewCatalogueItems } from "@/lib/use-new-catalogue-items";
 import { RichTextEditor } from "@/components/RichTextEditor";
+import { RichText } from "@/components/RichText";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Cette page reprend EXACTEMENT l'UX de la page client (grille unique à facettes,
@@ -2040,9 +2041,10 @@ function BodyPreview({ body }: { body?: string }) {
     );
   }
   return (
-    <div className="max-h-72 overflow-y-auto whitespace-pre-wrap rounded-[10px] border border-[rgba(94,234,212,0.18)] bg-[rgba(94,234,212,0.04)] p-4 text-[13px] leading-relaxed text-[#e8f5ef]">
-      {body}
-    </div>
+    <RichText
+      body={body}
+      className="max-h-72 overflow-y-auto rounded-[10px] border border-[rgba(94,234,212,0.18)] bg-[rgba(94,234,212,0.04)] p-4 text-[13px] leading-relaxed text-[#e8f5ef]"
+    />
   );
 }
 
