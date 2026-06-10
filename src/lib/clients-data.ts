@@ -99,6 +99,9 @@ export type PlanItem = {
   // Atelier — pre-filled from the catalogue at creation, then editable.
   objectives?: string[];
   themeId?: string;
+  // Atelier — id du workshop catalogue dont il est issu. Sert à marquer cet
+  // atelier « déjà animé » dans le catalogue du client une fois sa date passée.
+  workshopId?: string;
   // CSM-authored sub-tasks; the client toggles them from the action modal.
   checklist?: ChecklistItem[];
   // Onboarding — présentiel ou distanciel. Affiché côté client.

@@ -99,6 +99,23 @@ export const commentsStore = {
     }
   },
 
+  // Removes a whole thread — called when the plan item it hangs off is
+  // deleted. Without this, the messages stay in plan_comments and keep
+  // surfacing on the client home as unread ("Nouveaux messages du CSM").
+  // Scoped to clientId so the delete stays inside RLS boundaries.
+  deleteThread: async (threadId: string, clientId: string) => {
+    if (!(await ensureSession())) return;
+    await supabase
+      .from("plan_comments")
+      .delete()
+      .eq("thread_id", threadId)
+      .eq("client_id", clientId);
+    _comments = _comments.filter((c) => c.threadId !== threadId);
+    _loadedThreads.delete(threadId);
+    notify();
+    notifyChange("plan_comments");
+  },
+
   subscribe: (listener: () => void): (() => void) => {
     _listeners.add(listener);
     return () => _listeners.delete(listener);

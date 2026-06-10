@@ -821,6 +821,7 @@ export default function ClientDetailView({ id }: { id: string }) {
         targets: e.targets?.length ? e.targets : (itemTargets[e.id]?.length ? itemTargets[e.id] : undefined),
         objectives: e.objectives?.length ? e.objectives : undefined,
         themeId: e.themeId || undefined,
+        workshopId: e.type === "atelier" ? (e.workshopId || undefined) : undefined,
         checklist: e.checklist?.length ? e.checklist : undefined,
         mode: e.type === "onboarding" ? (e.mode ?? "presentiel") : undefined,
         workshopKitFiles: e.workshopKitFiles?.length ? e.workshopKitFiles : undefined,
@@ -980,15 +981,36 @@ export default function ClientDetailView({ id }: { id: string }) {
           return cleaned.length ? cleaned : undefined;
         })(),
         themeId: editPlanType === "atelier" ? (editPlanThemeId || undefined) : undefined,
+        // Conserve le lien workshop pour les ateliers, le nettoie sinon.
+        workshopId: editPlanType === "atelier" ? editingPlanItem.workshopId : undefined,
         mode: editPlanType === "onboarding" ? editPlanMode : undefined,
       },
     }));
     setEditingPlanItem(null);
   };
 
-  const deletePlanItem = (id: number) => {
-    setDeletedPlanIds((prev) => new Set([...prev, id]));
+  const deletePlanItem = (itemId: number) => {
+    setDeletedPlanIds((prev) => new Set([...prev, itemId]));
     setEditingPlanItem(null);
+    // Cascade : les données rattachées à l'item vivent dans d'autres tables et
+    // ne suivaient pas la suppression — elles restaient orphelines sur la home
+    // client (messages CSM non lus, prochains rendez-vous). On les purge ici.
+    void commentsStore.deleteThread(String(itemId), id);
+    const base = [
+      ...planBase.planQ1,
+      ...planBase.planQ2Done,
+      ...planBase.planQ2Upcoming,
+      ...planBase.planQ3,
+      ...planBase.planQ4,
+      ...extraPlanItems,
+    ].find((i) => i.id === itemId);
+    const item = base ? getEffective(base) : undefined;
+    if (item && (item.type === "qbr" || item.type === "onboarding")) {
+      // L'event agenda a été créé avec date = première partie du meta
+      // ("15 juin 2026 · 14:00" → "15 juin 2026").
+      const eventDate = (item.meta ?? "").split(" · ")[0]?.trim() ?? "";
+      if (eventDate) void csmEventsStore.removeForPlanItem(id, item.title, eventDate);
+    }
   };
 
   const commitEdit = () => {
@@ -1280,6 +1302,9 @@ export default function ClientDetailView({ id }: { id: string }) {
         quarter: addPlanCtx.quarter,
         objectives: objectives && objectives.length > 0 ? objectives : undefined,
         themeId,
+        // Atelier — garde le lien vers le workshop catalogue choisi, pour
+        // dériver « déjà animé » côté client une fois la date passée.
+        workshopId: isAtelier ? (selectedCatalogId ?? undefined) : undefined,
         workshopKitFiles,
         // Fichiers personnalisés ajoutés par le CSM (per-client, bucket
         // client-files) — distincts du workshopKitFiles qui pointe sur le

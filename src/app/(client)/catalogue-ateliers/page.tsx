@@ -7,6 +7,8 @@ import { openKitFile } from "@/lib/storage";
 import { setSeenIds } from "@/lib/catalogue-read-state";
 import { useActiveClient } from "@/lib/client-context";
 import { useFavoriteWorkshops } from "@/lib/favorite-workshops-store";
+import { planStore, type StoredPlanState } from "@/lib/plan-store";
+import { isPlanItemPast } from "@/lib/plan-dates";
 
 // --- helpers ---
 function workshopHaystack(w: Workshop): string {
@@ -187,10 +189,52 @@ ${workshopsHTML}
 }
 
 export default function CatalogueAteliersPage() {
-  const { workshops } = useWorkshops();
+  const { workshops: catalogueWorkshops } = useWorkshops();
   const { clientId } = useActiveClient();
   const { favoriteIds, toggle: toggleFavorite, add: addFavorites } =
     useFavoriteWorkshops(clientId);
+
+  // « Déjà animé » est par-client : on le dérive du plan annuel du client,
+  // pas du drapeau global `already_animated` du catalogue (qui s'appliquerait
+  // à tous les clients). Un atelier est « déjà animé » dès qu'un item atelier
+  // correspondant — même workshop, ou à défaut même titre — a sa date passée
+  // et n'est pas annulé (mêmes critères que « ateliers consommés »).
+  const [plan, setPlan] = useState<StoredPlanState | null>(() => planStore.getState());
+  useEffect(() => {
+    planStore.load(clientId);
+    return planStore.subscribe(() => setPlan(planStore.getState()));
+  }, [clientId]);
+
+  const animatedFromPlan = useMemo(() => {
+    const yearNow = new Date().getFullYear();
+    const ids = new Set<string>();
+    const titles = new Set<string>();
+    for (const it of plan?.items ?? []) {
+      if (it.type !== "atelier" || it.cancelled) continue;
+      const calendarYear = it.year === "next" ? yearNow + 1 : yearNow;
+      if (!isPlanItemPast({ month: it.month, meta: it.meta, cancelled: it.cancelled, calendarYear })) {
+        continue;
+      }
+      if (it.workshopId) ids.add(it.workshopId);
+      if (it.title) titles.add(it.title.trim().toLowerCase());
+    }
+    return { ids, titles };
+  }, [plan]);
+
+  // Catalogue partagé, mais avec un `alreadyAnimated` recalculé pour CE client
+  // — tout le reste de la page (filtres, compteurs, badges, PDF) consomme ce
+  // champ sans changement.
+  const workshops = useMemo(
+    () =>
+      catalogueWorkshops.map((w) => ({
+        ...w,
+        alreadyAnimated:
+          animatedFromPlan.ids.has(w.id) ||
+          animatedFromPlan.titles.has(w.title.trim().toLowerCase()),
+      })),
+    [catalogueWorkshops, animatedFromPlan],
+  );
+
   // Visiting the catalogue clears the "new ateliers" badge on the home —
   // every currently visible workshop is marked as seen.
   useEffect(() => {

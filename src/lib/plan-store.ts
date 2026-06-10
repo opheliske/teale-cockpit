@@ -32,6 +32,9 @@ export type StoredPlanItem = {
   // Absent on legacy rows and on non-atelier items.
   objectives?: string[];
   themeId?: string;
+  // Atelier — référence au workshop catalogue (voir PlanItem.workshopId).
+  // Permet de dériver le statut « déjà animé » par-client côté catalogue.
+  workshopId?: string;
   // CSM-authored sub-tasks; both sides can toggle `done`.
   checklist?: ChecklistItem[];
   // Onboarding — présentiel ou distanciel.

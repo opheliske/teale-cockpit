@@ -102,6 +102,25 @@ export const csmEventsStore = {
     notifyChange("csm_events");
   },
 
+  // Removes the agenda event mirroring a QBR/onboarding plan item. The event
+  // isn't keyed by plan-item id, so we match on client + title + date (the
+  // exact tuple used at creation). Called when the plan item is deleted, so
+  // it stops showing under the client home's "Prochains rendez-vous".
+  removeForPlanItem: async (clientId: string, title: string, date: string) => {
+    if (!(await ensureSession())) return;
+    await supabase
+      .from("csm_events")
+      .delete()
+      .eq("client_id", clientId)
+      .eq("title", title)
+      .eq("date", date);
+    _events = _events.filter(
+      (e) => !(e.clientId === clientId && e.title === title && e.date === date),
+    );
+    _listeners.forEach((l) => l());
+    notifyChange("csm_events");
+  },
+
   subscribe: (listener: () => void): (() => void) => {
     _listeners.add(listener);
     ensureLoaded();
