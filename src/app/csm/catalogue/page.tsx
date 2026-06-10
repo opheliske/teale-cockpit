@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useRef, type ReactNode } from "react";
 import { themes, type Workshop, type WorkshopKitFile } from "@/app/(client)/catalogue-ateliers/data";
 import { useWorkshops } from "@/lib/workshops-store";
 import { uploadKitFile, openKitFile } from "@/lib/storage";
+import { KitFilePreviewList } from "@/components/KitFilePreview";
 import { setSeenIds } from "@/lib/catalogue-read-state";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -811,21 +812,13 @@ function PreviewModal({ workshop, onClose, onEdit }: { workshop: Workshop; onClo
           </ModalBlock>
           {workshop.communicationKit && workshop.communicationKit.length > 0 && (
             <ModalBlock title="Kit de communication">
-              <ul className="flex flex-col gap-1.5">
-                {workshop.communicationKit.map((f) => (
-                  <li key={f.id}>
-                    <button
-                      type="button"
-                      onClick={() => void openKitFile(f.path, f.name)}
-                      className="flex w-full items-center gap-2.5 rounded-[10px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.02)] px-3 py-2 text-left transition-colors hover:border-[rgba(94,234,212,0.3)]"
-                    >
-                      <span className="shrink-0 text-[14px]">📎</span>
-                      <span className="min-w-0 flex-1 truncate text-[12.5px] text-[#e8f5ef]">{f.name}</span>
-                      <span className="shrink-0 text-[11px] font-semibold text-[#5eead4]">Télécharger ↓</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <KitFilePreviewList
+                files={workshop.communicationKit.map((f) => ({
+                  path: f.path,
+                  name: f.name,
+                  mimeType: f.mimeType,
+                }))}
+              />
             </ModalBlock>
           )}
         </div>
