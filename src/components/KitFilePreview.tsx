@@ -15,12 +15,25 @@ export type PreviewFile = { path: string; name: string; mimeType?: string };
 
 const IMG_RE = /\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i;
 const PDF_RE = /\.pdf$/i;
+// Word / Excel / PowerPoint — pas affichables nativement par le navigateur ;
+// rendus via le visualiseur Office Online (cf. lightbox).
+const OFFICE_RE = /\.(docx?|xlsx?|pptx?)$/i;
+const OFFICE_MIME_RE = /(msword|wordprocessingml|ms-excel|spreadsheetml|ms-powerpoint|presentationml)/i;
 
-function fileKind(f: PreviewFile): "image" | "pdf" | "other" {
+function fileKind(f: PreviewFile): "image" | "pdf" | "office" | "other" {
   const mt = f.mimeType ?? "";
-  if (mt.startsWith("image/") || IMG_RE.test(f.path) || IMG_RE.test(f.name)) return "image";
-  if (mt === "application/pdf" || PDF_RE.test(f.path) || PDF_RE.test(f.name)) return "pdf";
+  const hay = `${f.path} ${f.name}`;
+  if (mt.startsWith("image/") || IMG_RE.test(hay)) return "image";
+  if (mt === "application/pdf" || PDF_RE.test(hay)) return "pdf";
+  if (OFFICE_MIME_RE.test(mt) || OFFICE_RE.test(hay)) return "office";
   return "other";
+}
+
+function officeGlyph(f: PreviewFile): string {
+  const hay = `${f.path} ${f.name}`.toLowerCase();
+  if (/\.xlsx?$/.test(hay)) return "📊";
+  if (/\.pptx?$/.test(hay)) return "📑";
+  return "📝";
 }
 
 // Un chemin de stockage valide contient toujours un "/" (category/itemId/file).
@@ -81,7 +94,7 @@ function KitFileCard({ file, onPreview }: { file: PreviewFile; onPreview: () => 
           <img src={url} alt={file.name} loading="lazy" className="h-full w-full object-cover" />
         ) : (
           <span className="text-[28px] opacity-60" aria-hidden>
-            {kind === "pdf" ? "📄" : kind === "image" ? "🖼️" : "📎"}
+            {kind === "pdf" ? "📄" : kind === "office" ? officeGlyph(file) : kind === "image" ? "🖼️" : "📎"}
           </span>
         )}
         {previewable && (
@@ -181,6 +194,14 @@ function KitFileLightbox({ file, onClose }: { file: PreviewFile; onClose: () => 
             </div>
           ) : kind === "pdf" ? (
             <iframe src={url} title={file.name} className="h-full w-full bg-white" />
+          ) : kind === "office" ? (
+            // Word/Excel/PowerPoint : rendu par le visualiseur Office Online.
+            // L'URL signée du fichier est transmise aux serveurs Microsoft.
+            <iframe
+              src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`}
+              title={file.name}
+              className="h-full w-full bg-white"
+            />
           ) : (
             <div className="grid h-full place-items-center gap-3 p-6 text-center text-sm text-white/60">
               <span className="text-4xl" aria-hidden>📎</span>
