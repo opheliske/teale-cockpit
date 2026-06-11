@@ -100,6 +100,16 @@ create table if not exists kits_fiches (
 );
 create index if not exists kits_fiches_language_idx on kits_fiches (language);
 
+create table if not exists kits_videos (
+  id         text primary key,
+  title      text not null,
+  language   text not null check (language in ('FR', 'EN')),
+  url        text,                          -- lien YouTube/Vimeo/Loom/mp4
+  files      jsonb not null default '[]',   -- [{id, path, name, mimeType}] dans le bucket "kit-files"
+  created_at timestamptz not null default now()
+);
+create index if not exists kits_videos_language_idx on kits_videos (language);
+
 -- ─── Client actions (CSM home to-do list, per-CSM ownership) ────────────────
 create table if not exists client_actions (
   id            bigint primary key generated always as identity,

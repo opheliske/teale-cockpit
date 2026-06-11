@@ -16,6 +16,7 @@ import {
   type EmailTopicKit,
   type VisuelKit,
   type FicheKit,
+  type VideoKit,
 } from "@/lib/kits-store";
 import { VISUEL_CATEGORIES, type VisuelCategory, type VisuelFile } from "@/app/(client)/kits-communication/data";
 import { uploadKitFile, kitFileLabel, openKitFile } from "@/lib/storage";
@@ -25,6 +26,7 @@ import { useNewCatalogueItems } from "@/lib/use-new-catalogue-items";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { RichText } from "@/components/RichText";
 import { KitFilePreviewList } from "@/components/KitFilePreview";
+import { VideoEmbed } from "@/components/VideoEmbed";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Cette page reprend EXACTEMENT l'UX de la page client (grille unique à facettes,
@@ -37,7 +39,7 @@ import { KitFilePreviewList } from "@/components/KitFilePreview";
 
 // ─── normalisation (identique au client) ─────────────────────────────────────
 
-type KitTypeId = "tempsfort" | "atelier" | "email" | "lancement" | "visuel" | "fiche";
+type KitTypeId = "tempsfort" | "atelier" | "email" | "lancement" | "visuel" | "fiche" | "video";
 type AudId = "tous" | "managers" | "codir" | "elus" | "rh";
 type LangId = "fr" | "en" | "both";
 
@@ -51,8 +53,9 @@ const TYPE_META: Record<
   lancement: { label: "Lancement", icon: "🚀", badge: "bg-[#e0b657]/15 text-[#e0b657]" },
   visuel: { label: "Visuel", icon: "🎨", badge: "bg-[#bca6e8]/15 text-[#bca6e8]" },
   fiche: { label: "Fiche pratique", icon: "📋", badge: "bg-[#7dd3fc]/15 text-[#7dd3fc]" },
+  video: { label: "Vidéo", icon: "🎬", badge: "bg-[#f0abfc]/15 text-[#f0abfc]" },
 };
-const TYPE_ORDER: KitTypeId[] = ["tempsfort", "atelier", "email", "lancement", "visuel", "fiche"];
+const TYPE_ORDER: KitTypeId[] = ["tempsfort", "atelier", "email", "lancement", "visuel", "fiche", "video"];
 
 const AUD_META: Record<AudId, string> = {
   tous: "Tous les collaborateurs",
@@ -70,7 +73,7 @@ const LANG_META: Record<LangId, string> = {
 };
 const LANG_ORDER: LangId[] = ["fr", "both", "en"];
 
-type EditingKind = "lancement" | "animation" | "email" | "visuel" | "fiche";
+type EditingKind = "lancement" | "animation" | "email" | "visuel" | "fiche" | "video";
 
 type ActiveCard =
   | { kind: "lancement"; data: LancementKit }
@@ -78,6 +81,7 @@ type ActiveCard =
   | { kind: "email"; data: EmailTopicKit }
   | { kind: "visuel"; data: VisuelKit }
   | { kind: "fiche"; data: FicheKit }
+  | { kind: "video"; data: VideoKit }
   | { kind: "workshop"; workshop: Workshop };
 
 type KitCard = {
@@ -195,12 +199,12 @@ type TabId = "actualites" | "lancement" | "divers";
 const TAB_META: { id: TabId; icon: string; label: string; sub: string }[] = [
   { id: "actualites", icon: "📅", label: "Actualités", sub: "Temps forts du calendrier" },
   { id: "lancement", icon: "🚀", label: "Lancement", sub: "Déployer teale dans vos équipes" },
-  { id: "divers", icon: "🧰", label: "Divers", sub: "Ateliers, emails, visuels & fiches pratiques" },
+  { id: "divers", icon: "🧰", label: "Divers", sub: "Ateliers, emails, visuels, fiches & vidéos" },
 ];
 const RUBRIC_TYPES: Record<TabId, KitTypeId[]> = {
   actualites: ["tempsfort"],
   lancement: ["lancement"],
-  divers: ["atelier", "email", "visuel", "fiche"],
+  divers: ["atelier", "email", "visuel", "fiche", "video"],
 };
 const STEP_ORDER = ["before", "dday", "after"] as const;
 
@@ -256,6 +260,29 @@ function formToFiche(f: FicheForm, existingId?: string): FicheKit {
     id: existingId ?? "fiche-" + Date.now().toString(36),
     title: f.title.trim(),
     language: f.language,
+    files: f.files,
+  };
+}
+
+interface VideoForm {
+  title: string;
+  language: "FR" | "EN";
+  url: string;
+  files: VisuelFile[];
+}
+
+const EMPTY_VIDEO: VideoForm = { title: "", language: "FR", url: "", files: [] };
+
+function videoToForm(v: VideoKit): VideoForm {
+  return { title: v.title, language: v.language, url: v.url ?? "", files: v.files ?? [] };
+}
+
+function formToVideo(f: VideoForm, existingId?: string): VideoKit {
+  return {
+    id: existingId ?? "video-" + Date.now().toString(36),
+    title: f.title.trim(),
+    language: f.language,
+    url: f.url.trim() || undefined,
     files: f.files,
   };
 }
@@ -380,16 +407,18 @@ const ADD_KINDS: { kind: EditingKind; label: string; icon: string }[] = [
   { kind: "lancement", label: "Lancement", icon: "🚀" },
   { kind: "visuel", label: "Visuel", icon: "🎨" },
   { kind: "fiche", label: "Fiche pratique", icon: "📋" },
+  { kind: "video", label: "Vidéo", icon: "🎬" },
 ];
 
 export default function CsmKitsPage() {
   const {
-    lancementKits, animationItems, emailTopicKits, visuelKits, ficheKits,
+    lancementKits, animationItems, emailTopicKits, visuelKits, ficheKits, videoKits,
     addLancementKit, updateLancementKit, deleteLancementKit,
     addAnimationItem, updateAnimationItem, deleteAnimationItem,
     addEmailTopicKit, updateEmailTopicKit, deleteEmailTopicKit,
     addVisuelKit, updateVisuelKit, deleteVisuelKit,
     addFicheKit, updateFicheKit, deleteFicheKit,
+    addVideoKit, updateVideoKit, deleteVideoKit,
   } = useKitsStore();
   const { workshops } = useWorkshops();
   const { kits: newKitIds, ateliers: newAtelierIds } = useNewCatalogueItems();
@@ -412,8 +441,9 @@ export default function CsmKitsPage() {
       ...emailTopicKits.map((e) => `email:${e.id}`),
       ...visuelKits.map((v) => `vis:${v.id}`),
       ...ficheKits.map((f) => `fiche:${f.id}`),
+      ...videoKits.map((v) => `video:${v.id}`),
     ];
-  }, [lancementKits, animationItems, emailTopicKits, visuelKits, ficheKits]);
+  }, [lancementKits, animationItems, emailTopicKits, visuelKits, ficheKits, videoKits]);
   useEffect(() => {
     return () => {
       if (allKitIdsRef.current.length > 0) setSeenIds("kits", allKitIdsRef.current);
@@ -448,6 +478,7 @@ export default function CsmKitsPage() {
   const [emailForm, setEmailForm] = useState<EmailForm>(EMPTY_EMAIL);
   const [visuelForm, setVisuelForm] = useState<VisuelForm>(EMPTY_VISUEL);
   const [ficheForm, setFicheForm] = useState<FicheForm>(EMPTY_FICHE);
+  const [videoForm, setVideoForm] = useState<VideoForm>(EMPTY_VIDEO);
   const [formError, setFormError] = useState("");
 
   // delete confirm + detail viewer
@@ -587,8 +618,26 @@ export default function CsmKitsPage() {
       );
     }
 
+    for (const v of videoKits) {
+      out.push(
+        makeCard({
+          id: `video:${v.id}`,
+          type: "video",
+          title: v.title,
+          theme: "Vidéo",
+          audiences: ["tous"],
+          lang: v.language === "EN" ? "en" : "fr",
+          month: null,
+          isNew: isNew(`video:${v.id}`),
+          payload: { kind: "video", data: v },
+          editKind: "video",
+          rawId: v.id,
+        })
+      );
+    }
+
     return out;
-  }, [animationItems, workshops, emailTopicKits, lancementKits, visuelKits, ficheKits, newSet]);
+  }, [animationItems, workshops, emailTopicKits, lancementKits, visuelKits, ficheKits, videoKits, newSet]);
 
   // ── base de la rubrique active (après recherche) ────────────────────────────
   const rubricBase = useMemo(() => {
@@ -717,13 +766,15 @@ export default function CsmKitsPage() {
       : kind === "animation" ? "ani"
       : kind === "email" ? "email"
       : kind === "visuel" ? "vis"
-      : "fiche";
+      : kind === "fiche" ? "fiche"
+      : "video";
     setKitDraftId(genDraftId(prefix));
     if (kind === "lancement") setLancementForm(EMPTY_LANCEMENT);
     if (kind === "animation") setAnimationForm(EMPTY_ANIMATION);
     if (kind === "email") setEmailForm(EMPTY_EMAIL);
     if (kind === "visuel") setVisuelForm(EMPTY_VISUEL);
     if (kind === "fiche") setFicheForm(EMPTY_FICHE);
+    if (kind === "video") setVideoForm(EMPTY_VIDEO);
   }
 
   function openEdit(kind: EditingKind, id: string) {
@@ -746,6 +797,9 @@ export default function CsmKitsPage() {
     } else if (kind === "fiche") {
       const item = ficheKits.find((f) => f.id === id);
       if (item) setFicheForm(ficheToForm(item));
+    } else if (kind === "video") {
+      const item = videoKits.find((v) => v.id === id);
+      if (item) setVideoForm(videoToForm(item));
     }
   }
 
@@ -778,6 +832,11 @@ export default function CsmKitsPage() {
       if (ficheForm.files.length === 0) { setFormError("Uploadez au moins un fichier avant d'enregistrer."); return; }
       const item = formToFiche(ficheForm, editingId === "new" ? kitDraftId ?? undefined : editingId!);
       if (editingId === "new") addFicheKit(item); else updateFicheKit(item);
+    } else if (editingKind === "video") {
+      if (!videoForm.title.trim()) { setFormError("Le titre est obligatoire."); return; }
+      if (!videoForm.url.trim() && videoForm.files.length === 0) { setFormError("Ajoutez un lien vidéo ou uploadez un fichier."); return; }
+      const item = formToVideo(videoForm, editingId === "new" ? kitDraftId ?? undefined : editingId!);
+      if (editingId === "new") addVideoKit(item); else updateVideoKit(item);
     }
     closeForm();
   }
@@ -790,6 +849,7 @@ export default function CsmKitsPage() {
     else if (kind === "email") deleteEmailTopicKit(id);
     else if (kind === "visuel") deleteVisuelKit(id);
     else if (kind === "fiche") deleteFicheKit(id);
+    else if (kind === "video") deleteVideoKit(id);
     setConfirmDelete(null);
   }
 
@@ -801,6 +861,7 @@ export default function CsmKitsPage() {
     if (kind === "email") return emailTopicKits.find((e) => e.id === id)?.title ?? "";
     if (kind === "visuel") return visuelKits.find((v) => v.id === id)?.title ?? "";
     if (kind === "fiche") return ficheKits.find((f) => f.id === id)?.title ?? "";
+    if (kind === "video") return videoKits.find((v) => v.id === id)?.title ?? "";
     return "";
   }
 
@@ -1142,6 +1203,8 @@ export default function CsmKitsPage() {
           setVisuelForm={setVisuelForm}
           ficheForm={ficheForm}
           setFicheForm={setFicheForm}
+          videoForm={videoForm}
+          setVideoForm={setVideoForm}
           error={formError}
           onSubmit={handleSubmit}
           onClose={closeForm}
@@ -1681,6 +1744,8 @@ function KitsFormSlideOver({
   setVisuelForm,
   ficheForm,
   setFicheForm,
+  videoForm,
+  setVideoForm,
   error,
   onSubmit,
   onClose,
@@ -1698,6 +1763,8 @@ function KitsFormSlideOver({
   setVisuelForm: Dispatch<SetStateAction<VisuelForm>>;
   ficheForm: FicheForm;
   setFicheForm: Dispatch<SetStateAction<FicheForm>>;
+  videoForm: VideoForm;
+  setVideoForm: Dispatch<SetStateAction<VideoForm>>;
   error: string;
   onSubmit: () => void;
   onClose: () => void;
@@ -1748,6 +1815,21 @@ function KitsFormSlideOver({
     };
     setFicheForm((f) => ({ ...f, files: [...f.files, newFile] }));
   };
+  const handleVideoUpload = async (file: File) => {
+    setUploadError("");
+    const { path, error: err } = await uploadKitFile("videos", kitId, file);
+    if (err || !path) {
+      setUploadError(err ?? "Échec de l'envoi du fichier.");
+      return;
+    }
+    const newFile: VisuelFile = {
+      id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      path,
+      name: file.name,
+      mimeType: file.type || "application/octet-stream",
+    };
+    setVideoForm((f) => ({ ...f, files: [...f.files, newFile] }));
+  };
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1767,6 +1849,7 @@ function KitsFormSlideOver({
     : kind === "animation" ? "Temps fort mensuel"
     : kind === "email" ? "Email thématique"
     : kind === "fiche" ? "Fiche pratique"
+    : kind === "video" ? "Vidéo"
     : "Visuel teale";
 
   return (
@@ -2007,6 +2090,53 @@ function KitsFormSlideOver({
             </>
           )}
 
+          {kind === "video" && (
+            <>
+              <div>
+                <label className={LABEL}>Titre *</label>
+                <input className={INPUT} value={videoForm.title} onChange={(e) => setVideoForm((f) => ({ ...f, title: e.target.value }))} placeholder="Ex: Témoignage collaborateur" />
+              </div>
+              <div>
+                <label className={LABEL}>Langue *</label>
+                <select className={`${INPUT} field-select`} value={videoForm.language} onChange={(e) => setVideoForm((f) => ({ ...f, language: e.target.value as "FR" | "EN" }))}>
+                  <option value="FR">FR — Français</option>
+                  <option value="EN">EN — English</option>
+                </select>
+                <p className="mt-1 text-[11px] text-[#6b7c75]">Une carte par langue : créez une vidéo FR et une vidéo EN.</p>
+              </div>
+              <div>
+                <label className={LABEL}>Lien vidéo <span className="font-normal normal-case text-[#6b7c75]">— YouTube, Vimeo, Loom, mp4…</span></label>
+                <input className={INPUT} type="url" value={videoForm.url} onChange={(e) => setVideoForm((f) => ({ ...f, url: e.target.value }))} placeholder="https://youtu.be/…" />
+                {videoForm.url.trim() && (
+                  <div className="mt-2"><VideoEmbed url={videoForm.url} /></div>
+                )}
+              </div>
+              <div>
+                <label className={LABEL}>…ou fichiers vidéo <span className="font-normal normal-case text-[#6b7c75]">— mp4/webm, plusieurs possibles</span></label>
+                {videoForm.files.length > 0 && (
+                  <ul className="mb-2 space-y-1.5">
+                    {videoForm.files.map((file) => (
+                      <li key={file.id} className="flex items-center gap-2 rounded-[8px] border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] px-3 py-2 text-[12px] text-[#c1d4cc]">
+                        <span aria-hidden>🎬</span>
+                        <span className="min-w-0 flex-1 truncate">{file.name || kitFileLabel(file.path)}</span>
+                        <button type="button" onClick={() => void openKitFile(file.path, file.name || kitFileLabel(file.path) || videoForm.title)} className="shrink-0 text-[11px] font-semibold text-[#5eead4] hover:text-[#84d4a6]">Aperçu</button>
+                        <button type="button" onClick={() => setVideoForm((f) => ({ ...f, files: f.files.filter((x) => x.id !== file.id) }))} aria-label="Retirer ce fichier" className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] text-[#6b7c75] hover:bg-[rgba(230,170,153,0.12)] hover:text-[#E6AA99]">×</button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <label className="flex cursor-pointer items-center gap-2 rounded-[10px] border border-dashed border-[rgba(255,255,255,0.12)] bg-[rgba(255,255,255,0.02)] px-4 py-3 text-[12px] text-[#94a8a0] hover:border-[rgba(94,234,212,0.4)] hover:text-[#e8f5ef]">
+                  📤 {videoForm.files.length > 0 ? "Ajouter une vidéo" : "Uploader une vidéo"}
+                  <input type="file" multiple accept="video/*" className="hidden" onChange={(e) => { const fs = e.target.files; if (fs) { Array.from(fs).forEach((f) => void handleVideoUpload(f)); e.target.value = ""; } }} />
+                </label>
+              </div>
+              <p className="text-[11px] text-[#6b7c75]">Renseignez au moins un lien ou un fichier.</p>
+              {uploadError && (
+                <p className="rounded-[8px] bg-[rgba(239,68,68,0.1)] px-3 py-2 text-[12px] font-medium text-[#fca5a5]">{uploadError}</p>
+              )}
+            </>
+          )}
+
           {error && (
             <p className="rounded-[8px] bg-[rgba(239,68,68,0.1)] px-3 py-2 text-[12px] font-medium text-[#fca5a5]">{error}</p>
           )}
@@ -2072,6 +2202,10 @@ function KitDetailModal({
     kindLabel = "Fiche pratique — " + (p.data.language === "EN" ? "English" : "Français");
     title = p.data.title;
     body = <FicheDetailBody item={p.data} />;
+  } else if (p.kind === "video") {
+    kindLabel = "Vidéo — " + (p.data.language === "EN" ? "English" : "Français");
+    title = p.data.title;
+    body = <VideoDetailBody item={p.data} />;
   } else {
     kindLabel = "Kit atelier";
     title = p.workshop.title;
@@ -2219,6 +2353,20 @@ function FicheDetailBody({ item }: { item: FicheKit }) {
       <KitFilePreviewList
         files={item.files.map((f) => ({ path: f.path, name: f.name || kitFileLabel(f.path), mimeType: f.mimeType }))}
       />
+    </div>
+  );
+}
+
+function VideoDetailBody({ item }: { item: VideoKit }) {
+  return (
+    <div className="space-y-4">
+      <DetailRow label="Langue" value={item.language === "EN" ? "🇬🇧 English" : "🇫🇷 Français"} />
+      {item.url && <VideoEmbed url={item.url} />}
+      {item.files.length > 0 && (
+        <KitFilePreviewList
+          files={item.files.map((f) => ({ path: f.path, name: f.name || kitFileLabel(f.path), mimeType: f.mimeType }))}
+        />
+      )}
     </div>
   );
 }

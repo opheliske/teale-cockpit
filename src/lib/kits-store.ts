@@ -8,11 +8,12 @@ import {
   type VisuelKit,
   type VisuelFile,
   type FicheKit,
+  type VideoKit,
 } from "@/app/(client)/kits-communication/data";
 import { notifyChange, watchChanges } from "@/lib/sync";
 import { kitFileLabel } from "@/lib/storage";
 
-export type { LancementKit, AnimationItem, EmailTopicKit, VisuelKit, FicheKit };
+export type { LancementKit, AnimationItem, EmailTopicKit, VisuelKit, FicheKit, VideoKit };
 
 function ficheFromRow(row: Record<string, unknown>): FicheKit {
   return {
@@ -25,6 +26,26 @@ function ficheFromRow(row: Record<string, unknown>): FicheKit {
 
 function ficheToRow(f: FicheKit) {
   return { id: f.id, title: f.title, language: f.language, files: f.files ?? [] };
+}
+
+function videoFromRow(row: Record<string, unknown>): VideoKit {
+  return {
+    id: row.id as string,
+    title: row.title as string,
+    language: row.language as VideoKit["language"],
+    url: (row.url as string | null) ?? undefined,
+    files: (row.files as VisuelFile[] | null) ?? [],
+  };
+}
+
+function videoToRow(v: VideoKit) {
+  return {
+    id: v.id,
+    title: v.title,
+    language: v.language,
+    url: v.url?.trim() ? v.url.trim() : null,
+    files: v.files ?? [],
+  };
 }
 
 function visuelFromRow(row: Record<string, unknown>): VisuelKit {
@@ -104,13 +125,14 @@ function animationToRow(a: AnimationItem) {
 // client /kits-communication page and the home page until a full reload.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TABLES = ["kits_lancement", "kits_animation", "kits_email", "kits_visuels", "kits_fiches"];
+const TABLES = ["kits_lancement", "kits_animation", "kits_email", "kits_visuels", "kits_fiches", "kits_videos"];
 
 let _lancement: LancementKit[] = [];
 let _animation: AnimationItem[] = [];
 let _email: EmailTopicKit[] = [];
 let _visuels: VisuelKit[] = [];
 let _fiches: FicheKit[] = [];
+let _videos: VideoKit[] = [];
 let _loaded = false;
 const _listeners = new Set<() => void>();
 
@@ -122,12 +144,14 @@ let _snapshot: {
   emailTopicKits: EmailTopicKit[];
   visuelKits: VisuelKit[];
   ficheKits: FicheKit[];
+  videoKits: VideoKit[];
 } = {
   lancementKits: _lancement,
   animationItems: _animation,
   emailTopicKits: _email,
   visuelKits: _visuels,
   ficheKits: _fiches,
+  videoKits: _videos,
 };
 
 function emit() {
@@ -137,6 +161,7 @@ function emit() {
     emailTopicKits: _email,
     visuelKits: _visuels,
     ficheKits: _fiches,
+    videoKits: _videos,
   };
   _listeners.forEach((l) => l());
 }
@@ -150,12 +175,13 @@ async function fetchKits() {
     _loaded = false; // allow a later ensureLoaded() to retry
     return;
   }
-  const [lancement, animation, emails, visuels, fiches] = await Promise.all([
+  const [lancement, animation, emails, visuels, fiches, videos] = await Promise.all([
     supabase.from("kits_lancement").select("*").order("id"),
     supabase.from("kits_animation").select("*").order("id"),
     supabase.from("kits_email").select("*").order("id"),
     supabase.from("kits_visuels").select("*").order("created_at", { ascending: false }),
     supabase.from("kits_fiches").select("*").order("created_at", { ascending: false }),
+    supabase.from("kits_videos").select("*").order("created_at", { ascending: false }),
   ]);
   if (lancement.error || animation.error || emails.error || visuels.error) {
     // Transient failure — keep the current lists rather than blanking them.
@@ -169,10 +195,12 @@ async function fetchKits() {
   _animation = (animation.data ?? []).map(animationFromRow);
   _email = (emails.data ?? []) as EmailTopicKit[];
   _visuels = (visuels.data ?? []).map(visuelFromRow);
-  // Fiches pratiques — table récente : on tolère son absence (migration pas
+  // Fiches & vidéos — tables récentes : on tolère leur absence (migration pas
   // encore appliquée) sans bloquer le reste du catalogue.
   if (fiches.error) console.error("[kits-store] load fiches", fiches.error);
   else _fiches = (fiches.data ?? []).map(ficheFromRow);
+  if (videos.error) console.error("[kits-store] load videos", videos.error);
+  else _videos = (videos.data ?? []).map(videoFromRow);
   _loaded = true;
   emit();
 }
@@ -327,6 +355,34 @@ async function deleteFicheKit(id: string) {
   notifyChange("kits_fiches");
 }
 
+async function addVideoKit(item: VideoKit) {
+  if (!(await ensureSession())) return;
+  const { data } = await supabase.from("kits_videos").insert(videoToRow(item)).select().single();
+  if (data) {
+    _videos = [videoFromRow(data), ..._videos];
+    emit();
+    notifyChange("kits_videos");
+  }
+}
+
+async function updateVideoKit(updated: VideoKit) {
+  if (!(await ensureSession())) return;
+  const { data } = await supabase.from("kits_videos").update(videoToRow(updated)).eq("id", updated.id).select().single();
+  if (data) {
+    _videos = _videos.map((v) => (v.id === updated.id ? videoFromRow(data) : v));
+    emit();
+    notifyChange("kits_videos");
+  }
+}
+
+async function deleteVideoKit(id: string) {
+  if (!(await ensureSession())) return;
+  await supabase.from("kits_videos").delete().eq("id", id);
+  _videos = _videos.filter((v) => v.id !== id);
+  emit();
+  notifyChange("kits_videos");
+}
+
 function subscribe(listener: () => void): () => void {
   _listeners.add(listener);
   void ensureLoaded();
@@ -340,7 +396,7 @@ function getSnapshot() {
 }
 
 export function useKitsStore() {
-  const { lancementKits, animationItems, emailTopicKits, visuelKits, ficheKits } = useSyncExternalStore(
+  const { lancementKits, animationItems, emailTopicKits, visuelKits, ficheKits, videoKits } = useSyncExternalStore(
     subscribe,
     getSnapshot,
     getSnapshot,
@@ -351,6 +407,7 @@ export function useKitsStore() {
     emailTopicKits,
     visuelKits,
     ficheKits,
+    videoKits,
     addLancementKit,
     updateLancementKit,
     deleteLancementKit,
@@ -366,5 +423,8 @@ export function useKitsStore() {
     addFicheKit,
     updateFicheKit,
     deleteFicheKit,
+    addVideoKit,
+    updateVideoKit,
+    deleteVideoKit,
   };
 }

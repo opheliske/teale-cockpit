@@ -15,16 +15,18 @@ export type PreviewFile = { path: string; name: string; mimeType?: string };
 
 const IMG_RE = /\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i;
 const PDF_RE = /\.pdf$/i;
+const VIDEO_RE = /\.(mp4|webm|ogg|mov|m4v)$/i;
 // Word / Excel / PowerPoint — pas affichables nativement par le navigateur ;
 // rendus via le visualiseur Office Online (cf. lightbox).
 const OFFICE_RE = /\.(docx?|xlsx?|pptx?)$/i;
 const OFFICE_MIME_RE = /(msword|wordprocessingml|ms-excel|spreadsheetml|ms-powerpoint|presentationml)/i;
 
-function fileKind(f: PreviewFile): "image" | "pdf" | "office" | "other" {
+function fileKind(f: PreviewFile): "image" | "pdf" | "office" | "video" | "other" {
   const mt = f.mimeType ?? "";
   const hay = `${f.path} ${f.name}`;
   if (mt.startsWith("image/") || IMG_RE.test(hay)) return "image";
   if (mt === "application/pdf" || PDF_RE.test(hay)) return "pdf";
+  if (mt.startsWith("video/") || VIDEO_RE.test(hay)) return "video";
   if (OFFICE_MIME_RE.test(mt) || OFFICE_RE.test(hay)) return "office";
   return "other";
 }
@@ -94,7 +96,7 @@ function KitFileCard({ file, onPreview }: { file: PreviewFile; onPreview: () => 
           <img src={url} alt={file.name} loading="lazy" className="h-full w-full object-cover" />
         ) : (
           <span className="text-[28px] opacity-60" aria-hidden>
-            {kind === "pdf" ? "📄" : kind === "office" ? officeGlyph(file) : kind === "image" ? "🖼️" : "📎"}
+            {kind === "pdf" ? "📄" : kind === "office" ? officeGlyph(file) : kind === "video" ? "🎬" : kind === "image" ? "🖼️" : "📎"}
           </span>
         )}
         {previewable && (
@@ -194,6 +196,10 @@ function KitFileLightbox({ file, onClose }: { file: PreviewFile; onClose: () => 
             </div>
           ) : kind === "pdf" ? (
             <iframe src={url} title={file.name} className="h-full w-full bg-white" />
+          ) : kind === "video" ? (
+            <div className="grid h-full place-items-center bg-black p-2">
+              <video src={url} controls autoPlay className="max-h-full max-w-full" />
+            </div>
           ) : kind === "office" ? (
             // Word/Excel/PowerPoint : rendu par le visualiseur Office Online.
             // L'URL signée du fichier est transmise aux serveurs Microsoft.

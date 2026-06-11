@@ -14,6 +14,7 @@ import {
   type LancementKit,
   type VisuelKit,
   type FicheKit,
+  type VideoKit,
   VISUEL_CATEGORIES,
 } from "./data";
 import { useKitsStore } from "@/lib/kits-store";
@@ -24,6 +25,7 @@ import { useNewCatalogueItems } from "@/lib/use-new-catalogue-items";
 import { RichText } from "@/components/RichText";
 import { copyKitBody } from "@/lib/rich-text";
 import { KitFilePreviewList } from "@/components/KitFilePreview";
+import { VideoEmbed } from "@/components/VideoEmbed";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Normalisation
@@ -35,7 +37,7 @@ import { KitFilePreviewList } from "@/components/KitFilePreview";
 // conserve la donnée d'origine pour rouvrir la modale adéquate.
 // ─────────────────────────────────────────────────────────────────────────────
 
-type KitTypeId = "tempsfort" | "atelier" | "email" | "lancement" | "visuel" | "fiche";
+type KitTypeId = "tempsfort" | "atelier" | "email" | "lancement" | "visuel" | "fiche" | "video";
 type AudId = "tous" | "managers" | "codir" | "elus" | "rh";
 type LangId = "fr" | "en" | "both";
 
@@ -49,9 +51,10 @@ const TYPE_META: Record<
   lancement: { label: "Lancement", icon: "🚀", badge: "bg-[#e0b657]/15 text-[#e0b657]" },
   visuel: { label: "Visuel", icon: "🎨", badge: "bg-[#bca6e8]/15 text-[#bca6e8]" },
   fiche: { label: "Fiche pratique", icon: "📋", badge: "bg-[#7dd3fc]/15 text-[#7dd3fc]" },
+  video: { label: "Vidéo", icon: "🎬", badge: "bg-[#f0abfc]/15 text-[#f0abfc]" },
 };
 // Ordre d'affichage du badge "type" dans la facette.
-const TYPE_ORDER: KitTypeId[] = ["tempsfort", "atelier", "email", "lancement", "visuel", "fiche"];
+const TYPE_ORDER: KitTypeId[] = ["tempsfort", "atelier", "email", "lancement", "visuel", "fiche", "video"];
 
 const AUD_META: Record<AudId, string> = {
   tous: "Tous les collaborateurs",
@@ -75,6 +78,7 @@ type ActiveCard =
   | { kind: "email"; data: EmailTopicKit }
   | { kind: "visuel"; data: VisuelKit }
   | { kind: "fiche"; data: FicheKit }
+  | { kind: "video"; data: VideoKit }
   | { kind: "workshop"; workshop: Workshop };
 
 type KitCard = {
@@ -215,12 +219,12 @@ type TabId = "actualites" | "lancement" | "divers";
 const TAB_META: { id: TabId; icon: string; label: string; sub: string }[] = [
   { id: "actualites", icon: "📅", label: "Actualités", sub: "Temps forts du calendrier" },
   { id: "lancement", icon: "🚀", label: "Lancement", sub: "Déployer teale dans vos équipes" },
-  { id: "divers", icon: "🧰", label: "Divers", sub: "Ateliers, emails, visuels & fiches pratiques" },
+  { id: "divers", icon: "🧰", label: "Divers", sub: "Ateliers, emails, visuels, fiches & vidéos" },
 ];
 const RUBRIC_TYPES: Record<TabId, KitTypeId[]> = {
   actualites: ["tempsfort"],
   lancement: ["lancement"],
-  divers: ["atelier", "email", "visuel", "fiche"],
+  divers: ["atelier", "email", "visuel", "fiche", "video"],
 };
 const STEP_ORDER = ["before", "dday", "after"] as const;
 
@@ -234,7 +238,7 @@ function toggle<T>(setter: Dispatch<SetStateAction<Set<T>>>, val: T) {
 }
 
 export default function KitsCommunicationPage() {
-  const { lancementKits, animationItems, emailTopicKits, visuelKits, ficheKits } = useKitsStore();
+  const { lancementKits, animationItems, emailTopicKits, visuelKits, ficheKits, videoKits } = useKitsStore();
   const { workshops } = useWorkshops();
   const { kits: newKitIds, ateliers: newAtelierIds } = useNewCatalogueItems();
 
@@ -395,8 +399,24 @@ export default function KitsCommunicationPage() {
       );
     }
 
+    for (const v of videoKits) {
+      out.push(
+        makeCard({
+          id: `video:${v.id}`,
+          type: "video",
+          title: v.title,
+          theme: "Vidéo",
+          audiences: ["tous"],
+          lang: v.language === "EN" ? "en" : "fr",
+          month: null,
+          isNew: isNew(`video:${v.id}`),
+          payload: { kind: "video", data: v },
+        })
+      );
+    }
+
     return out;
-  }, [animationItems, workshops, emailTopicKits, lancementKits, visuelKits, ficheKits, newSet]);
+  }, [animationItems, workshops, emailTopicKits, lancementKits, visuelKits, ficheKits, videoKits, newSet]);
 
   // ── Base de la rubrique active (après recherche) ────────────────────────────
   // Drive les options/compteurs des filtres contextuels ET le compteur d'onglet.
@@ -1351,6 +1371,8 @@ function KitModal({ active, onClose }: { active: ActiveCard; onClose: () => void
         {active.kind === "visuel" && <VisuelModalBody item={active.data} />}
 
         {active.kind === "fiche" && <FicheModalBody item={active.data} />}
+
+        {active.kind === "video" && <VideoModalBody item={active.data} />}
       </div>
     </div>
   );
@@ -1469,6 +1491,38 @@ function WorkshopModalBody({ workshop }: { workshop: Workshop }) {
           )}
         </button>
       </div>
+    </>
+  );
+}
+
+function VideoModalBody({ item }: { item: VideoKit }) {
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-2 pr-12">
+        <span className="rounded-full bg-brand-accent/15 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-brand-accent">
+          Vidéo
+        </span>
+        <span className="rounded-full bg-brand-cream/10 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-brand-cream">
+          {item.language === "EN" ? "🇬🇧 English" : "🇫🇷 Français"}
+        </span>
+      </div>
+      <h2 className="mt-3 text-2xl font-medium tracking-tight text-brand-cream">{item.title}</h2>
+      {item.url && (
+        <div className="mt-5">
+          <VideoEmbed url={item.url} />
+        </div>
+      )}
+      {item.files.length > 0 && (
+        <div className="mt-5">
+          <KitFilePreviewList
+            files={item.files.map((f) => ({
+              path: f.path,
+              name: f.name || kitFileLabel(f.path),
+              mimeType: f.mimeType,
+            }))}
+          />
+        </div>
+      )}
     </>
   );
 }

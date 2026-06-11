@@ -65,6 +65,16 @@ export type FicheKit = {
   files: VisuelFile[];
 };
 
+// Vidéo — une carte par langue (FR ou EN), rubrique « Divers ». Peut porter un
+// lien (YouTube/Vimeo/Loom/mp4) et/ou des fichiers vidéo uploadés (≥ 1 des deux).
+export type VideoKit = {
+  id: string;
+  title: string;
+  language: EmailLanguage; // "FR" | "EN"
+  url?: string;
+  files: VisuelFile[];
+};
+
 export const VISUEL_CATEGORIES: { id: VisuelCategory; label: string; icon: string }[] = [
   { id: 'logo', label: 'Logos teale', icon: '🟢' },
   { id: 'icone', label: 'Icônes', icon: '✨' },
