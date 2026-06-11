@@ -26,7 +26,7 @@ export function useNewCatalogueItems(): {
   kits: string[];
 } {
   const { workshops } = useWorkshops();
-  const { lancementKits, animationItems, emailTopicKits, visuelKits } = useKitsStore();
+  const { lancementKits, animationItems, emailTopicKits, visuelKits, ficheKits, videoKits } = useKitsStore();
   const [tick, setTick] = useState(0);
 
   useEffect(() => subscribeCatalogueReadState(() => setTick((t) => t + 1)), []);
@@ -45,8 +45,10 @@ export function useNewCatalogueItems(): {
         ...animationItems.map((a) => `ani:${a.id}`),
         ...emailTopicKits.map((e) => `email:${e.id}`),
         ...visuelKits.map((v) => `vis:${v.id}`),
+        ...ficheKits.map((f) => `fiche:${f.id}`),
+        ...videoKits.map((v) => `video:${v.id}`),
       ]),
-    [lancementKits, animationItems, emailTopicKits, visuelKits],
+    [lancementKits, animationItems, emailTopicKits, visuelKits, ficheKits, videoKits],
   );
 
   // First-visit bootstrap. Wrapped in async to dodge the

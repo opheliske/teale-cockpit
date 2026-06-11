@@ -791,7 +791,7 @@ export default function CsmHomePage() {
                   )}
                   {newCatalogue.kits.length > 0 && (
                     <li
-                      onClick={() => router.push("/csm/kits")}
+                      onClick={() => router.push("/csm/kits?tab=nouveautes")}
                       className="flex cursor-pointer items-center gap-3 bg-[rgba(94,234,212,0.04)] px-4 py-3 transition-colors hover:bg-[rgba(94,234,212,0.08)]"
                     >
                       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[rgba(94,234,212,0.12)] text-[14px]">📦</span>

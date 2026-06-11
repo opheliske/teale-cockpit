@@ -421,7 +421,7 @@ export default function ClientHomePage() {
                   {newCatalogue.kits.length > 0 && (
                     <li>
                       <Link
-                        href="/kits-communication"
+                        href="/kits-communication?tab=nouveautes"
                         className="flex items-center gap-2.5 rounded-[10px] border border-[rgba(94,234,212,0.18)] bg-[rgba(94,234,212,0.04)] px-3 py-2.5 transition-colors hover:border-[rgba(94,234,212,0.4)]"
                       >
                         <span className="shrink-0 text-sm">📦</span>

@@ -196,17 +196,25 @@ type SortId = "relevance" | "new" | "az" | "period";
 // ── Sous-rubriques (segmented nav) ───────────────────────────────────────────
 // Chaque onglet mappe sur un ou plusieurs types EXISTANTS (KitTypeId). Aucune
 // nouvelle dimension : on réorganise uniquement l'affichage par rubrique.
-type TabId = "actualites" | "lancement" | "divers";
+type TabId = "nouveautes" | "actualites" | "lancement" | "divers";
 const TAB_META: { id: TabId; icon: string; label: string; sub: string }[] = [
   { id: "actualites", icon: "📅", label: "Actualités", sub: "Temps forts du calendrier" },
   { id: "lancement", icon: "🚀", label: "Lancement", sub: "Déployer teale dans vos équipes" },
   { id: "divers", icon: "🧰", label: "Divers", sub: "Ateliers, emails, visuels, fiches & vidéos" },
 ];
+// Rubrique temporaire « Nouveautés » : affichée seulement quand des kits ont été
+// ajoutés depuis la dernière visite ; ouverte au clic sur l'alerte de la home
+// (?tab=nouveautes). Filtre sur isNew (cf. inRubric), pas sur le type.
+const NOUVEAUTES_TAB = { id: "nouveautes" as TabId, icon: "✨", label: "Nouveautés", sub: "Derniers kits ajoutés" };
 const RUBRIC_TYPES: Record<TabId, KitTypeId[]> = {
+  nouveautes: ["tempsfort", "email", "lancement", "visuel", "fiche", "video"],
   actualites: ["tempsfort"],
   lancement: ["lancement"],
   divers: ["email", "visuel", "fiche", "video"],
 };
+function inRubric(c: KitCard, tab: TabId): boolean {
+  return tab === "nouveautes" ? c.isNew : RUBRIC_TYPES[tab].includes(c.type);
+}
 const STEP_ORDER = ["before", "dday", "after"] as const;
 
 function toggle<T>(setter: Dispatch<SetStateAction<Set<T>>>, val: T) {
@@ -241,8 +249,10 @@ export default function KitsCommunicationPage() {
       ...animationItems.map((a) => `ani:${a.id}`),
       ...emailTopicKits.map((e) => `email:${e.id}`),
       ...visuelKits.map((v) => `vis:${v.id}`),
+      ...ficheKits.map((f) => `fiche:${f.id}`),
+      ...videoKits.map((v) => `video:${v.id}`),
     ];
-  }, [lancementKits, animationItems, emailTopicKits, visuelKits]);
+  }, [lancementKits, animationItems, emailTopicKits, visuelKits, ficheKits, videoKits]);
   useEffect(() => {
     return () => {
       if (allKitIdsRef.current.length > 0) setSeenIds("kits", allKitIdsRef.current);
@@ -386,12 +396,27 @@ export default function KitsCommunicationPage() {
     return out;
   }, [animationItems, emailTopicKits, lancementKits, visuelKits, ficheKits, videoKits, newSet]);
 
+  // Onglet « Nouveautés » : présent tant qu'il reste des kits non vus (ou si on
+  // est déjà dessus). Ouvert automatiquement quand on arrive via l'alerte home.
+  const newCount = useMemo(() => cards.filter((c) => c.isNew).length, [cards]);
+  const tabs = useMemo(
+    () => (newCount > 0 || tab === "nouveautes" ? [NOUVEAUTES_TAB, ...TAB_META] : TAB_META),
+    [newCount, tab],
+  );
+  useEffect(() => {
+    // Init unique depuis l'URL au montage (en effet pour rester SSR-safe — pas
+    // de window au rendu). Ouvre l'onglet Nouveautés si on arrive via l'alerte.
+    const p = new URLSearchParams(window.location.search);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- init depuis l'URL
+    if (p.get("tab") === "nouveautes") setTab("nouveautes");
+  }, []);
+
   // ── Base de la rubrique active (après recherche) ────────────────────────────
   // Drive les options/compteurs des filtres contextuels ET le compteur d'onglet.
   const rubricBase = useMemo(() => {
     const query = q.trim().toLowerCase();
     return cards.filter(
-      (c) => RUBRIC_TYPES[tab].includes(c.type) && (!query || c.searchHay.includes(query))
+      (c) => inRubric(c, tab) && (!query || c.searchHay.includes(query))
     );
   }, [cards, tab, q]);
 
@@ -403,6 +428,7 @@ export default function KitsCommunicationPage() {
     for (const t of TAB_META) {
       out[t.id] = cards.filter((c) => RUBRIC_TYPES[t.id].includes(c.type) && match(c)).length;
     }
+    out.nouveautes = cards.filter((c) => c.isNew && match(c)).length;
     return out;
   }, [cards, q]);
 
@@ -459,7 +485,7 @@ export default function KitsCommunicationPage() {
   const visible = useMemo(() => {
     const query = q.trim().toLowerCase();
     const list = cards.filter((c) => {
-      if (!RUBRIC_TYPES[tab].includes(c.type)) return false;
+      if (!inRubric(c, tab)) return false;
       if (types.size && !types.has(c.type)) return false;
       if (themesSel.size && !themesSel.has(c.theme)) return false;
       if (auds.size && !c.audiences.some((a) => auds.has(a))) return false;
@@ -653,7 +679,7 @@ export default function KitsCommunicationPage() {
 
         {/* Onglets — segmented nav (une seule rubrique affichée à la fois) */}
         <nav className="mt-7 flex flex-wrap gap-1 border-b border-brand-border-dark" aria-label="Rubriques">
-          {TAB_META.map((t) => {
+          {tabs.map((t) => {
             const active = tab === t.id;
             return (
               <button
