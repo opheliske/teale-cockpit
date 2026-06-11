@@ -886,7 +886,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     const eff = getEffective(item);
     // Mark the chat thread as read — clears the unread pastille both on
     // the card here and on the CSM home alerts.
-    markThreadRead("csm", String(eff.id));
+    markThreadRead(String(eff.id));
     setEditingPlanItem(eff);
     setEditPlanTitle(eff.title);
     setEditPlanMeta(eff.meta ?? "");

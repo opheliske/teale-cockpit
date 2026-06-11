@@ -659,7 +659,7 @@ export default function MonPlanningPage() {
     for (const m of Object.keys(yearEvents)) {
       const ev = (yearEvents[m] ?? []).find((e) => e.threadId === openPlan);
       if (ev) {
-        markThreadRead("client", openPlan);
+        markThreadRead(openPlan);
         // eslint-disable-next-line react-hooks/set-state-in-effect -- ouverture depuis l'URL une fois le plan prêt
         setActiveEvent({ event: ev, month: m });
         break;
@@ -843,7 +843,7 @@ export default function MonPlanningPage() {
                     // home alerts list — happens before the modal mounts
                     // so the badge disappears even if the user closes
                     // the modal immediately.
-                    if (event.threadId) markThreadRead("client", event.threadId);
+                    if (event.threadId) markThreadRead(event.threadId);
                     setActiveEvent({ event, month: m });
                   }}
                   labels={clientLabels}

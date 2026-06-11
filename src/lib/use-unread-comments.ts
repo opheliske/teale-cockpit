@@ -88,7 +88,7 @@ export function useUnreadComments(
     for (const [threadId, list] of byThread) {
       // `list` is already sorted desc by created_at thanks to the query.
       const latest = list[0];
-      const seenAt = getThreadLastSeen(side, threadId);
+      const seenAt = getThreadLastSeen(threadId);
       const newer = list.filter((r) => new Date(r.created_at).getTime() > seenAt);
       if (newer.length === 0) continue;
       result.set(threadId, {
@@ -100,7 +100,7 @@ export function useUnreadComments(
       });
     }
     return result;
-  }, [rows, readTick, side]);
+  }, [rows, readTick]);
 
   return { unread, loading };
 }
