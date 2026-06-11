@@ -9,8 +9,9 @@ import { createServerClient } from "@supabase/ssr";
 type Role = "csm" | "client" | "admin";
 
 function homeFor(role: Role | undefined): string {
-  if (role === "admin") return "/admin";
-  if (role === "csm") return "/csm";
+  // L'admin atterrit par défaut sur l'espace CSM (sur-ensemble de CSM) ; il
+  // reste libre d'aller sur /admin, autorisé plus bas.
+  if (role === "admin" || role === "csm") return "/csm";
   return "/";
 }
 

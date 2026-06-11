@@ -41,7 +41,9 @@ export default function LoginPage() {
       return;
     }
 
-    if (profile.role === "csm") {
+    // CSM et admin atterrissent par défaut sur l'espace CSM (l'admin est un
+    // sur-ensemble de CSM ; il garde l'accès à /admin via l'URL / la nav).
+    if (profile.role === "csm" || profile.role === "admin") {
       impersonationStore.set(null);
       router.replace("/csm");
       return;
