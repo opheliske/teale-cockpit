@@ -1551,6 +1551,8 @@ function EventModal({
     commentsStore.getByThread(threadId)
   );
   const [draft, setDraft] = useState("");
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editText, setEditText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1874,18 +1876,49 @@ function EventModal({
                 const dateLabel = d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) + " · " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
                 const pending = c.status === "pending";
                 const failed = c.status === "failed";
+                const own = isClient && c.id > 0 && !c.status; // message envoyé par le client
+                const editing = editId === c.id;
                 return (
-                  <div key={c.id} className={`flex flex-col gap-0.5 ${isClient ? "items-end" : "items-start"}`}>
+                  <div key={c.id} className={`group flex flex-col gap-0.5 ${isClient ? "items-end" : "items-start"}`}>
                     <span className="text-[10px] text-brand-muted-on-dark px-1">
                       {isClient ? "Vous" : csmName} · {dateLabel}{pending ? " · envoi…" : ""}
                     </span>
-                    <div className={`max-w-[85%] rounded-[12px] px-3.5 py-2.5 text-[13px] leading-snug ${
-                      isClient
-                        ? "rounded-br-[4px] bg-brand-teal-bright/15 text-brand-cream"
-                        : "rounded-bl-[4px] bg-white/[0.06] text-brand-cream"
-                    } ${pending ? "opacity-60" : ""} ${failed ? "border border-brand-salmon/55" : ""}`}>
-                      <ChatMessageText text={c.text} />
-                    </div>
+                    {editing ? (
+                      <div className="flex w-full max-w-[85%] flex-col items-end gap-1">
+                        <textarea
+                          autoFocus
+                          rows={2}
+                          value={editText}
+                          maxLength={2000}
+                          onChange={(e) => setEditText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void commentsStore.editMessage(c.id, editText).then((r) => { if (r.ok) setEditId(null); }); }
+                            if (e.key === "Escape") setEditId(null);
+                          }}
+                          className="w-full resize-none rounded-[10px] border border-brand-teal-bright/40 bg-white/[0.04] px-3.5 py-2.5 text-[13px] text-brand-cream outline-none"
+                        />
+                        <div className="flex gap-2 text-[11px]">
+                          <button type="button" onClick={() => void commentsStore.editMessage(c.id, editText).then((r) => { if (r.ok) setEditId(null); })} className="font-semibold text-brand-teal-bright">Enregistrer</button>
+                          <button type="button" onClick={() => setEditId(null)} className="text-brand-muted-on-dark">Annuler</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        {own && (
+                          <span className="flex shrink-0 gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+                            <button type="button" title="Modifier" onClick={() => { setEditId(c.id); setEditText(c.text); }} className="text-[12px] text-brand-muted-on-dark hover:text-brand-cream">✎</button>
+                            <button type="button" title="Supprimer" onClick={() => void commentsStore.deleteMessage(c.id)} className="text-[12px] text-brand-muted-on-dark hover:text-brand-salmon">🗑</button>
+                          </span>
+                        )}
+                        <div className={`max-w-[85%] rounded-[12px] px-3.5 py-2.5 text-[13px] leading-snug ${
+                          isClient
+                            ? "rounded-br-[4px] bg-brand-teal-bright/15 text-brand-cream"
+                            : "rounded-bl-[4px] bg-white/[0.06] text-brand-cream"
+                        } ${pending ? "opacity-60" : ""} ${failed ? "border border-brand-salmon/55" : ""}`}>
+                          <ChatMessageText text={c.text} />
+                        </div>
+                      </div>
+                    )}
                     {failed && (
                       <span className="px-1 text-[10px] text-brand-salmon">
                         Échec ·{" "}

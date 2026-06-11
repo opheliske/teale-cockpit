@@ -156,6 +156,42 @@ export const commentsStore = {
     notify();
   },
 
+  // Édite le texte d'un message déjà envoyé. La RLS n'autorise que ses propres
+  // messages (CSM : tous ; client : author='client' de sa société).
+  editMessage: async (id: number, text: string): Promise<{ ok: boolean }> => {
+    const trimmed = text.trim();
+    if (!trimmed || id < 0) return { ok: false };
+    if (!(await ensureSession())) return { ok: false };
+    const { error } = await supabase.from("plan_comments").update({ text: trimmed }).eq("id", id);
+    if (error) {
+      console.error("[comments-store] edit", error);
+      return { ok: false };
+    }
+    _comments = _comments.map((c) => (c.id === id ? { ...c, text: trimmed } : c));
+    notify();
+    notifyChange("plan_comments");
+    return { ok: true };
+  },
+
+  // Supprime un message (RLS : ses propres messages uniquement, cf. ci-dessus).
+  deleteMessage: async (id: number): Promise<{ ok: boolean }> => {
+    if (id < 0) {
+      _comments = _comments.filter((c) => c.id !== id);
+      notify();
+      return { ok: true };
+    }
+    if (!(await ensureSession())) return { ok: false };
+    const { error } = await supabase.from("plan_comments").delete().eq("id", id);
+    if (error) {
+      console.error("[comments-store] delete", error);
+      return { ok: false };
+    }
+    _comments = _comments.filter((c) => c.id !== id);
+    notify();
+    notifyChange("plan_comments");
+    return { ok: true };
+  },
+
   // Removes a whole thread — called when the plan item it hangs off is
   // deleted. Without this, the messages stay in plan_comments and keep
   // surfacing on the client home as unread ("Nouveaux messages du CSM").

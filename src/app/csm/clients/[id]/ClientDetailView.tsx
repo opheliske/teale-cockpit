@@ -422,6 +422,8 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [editPlanImpact, setEditPlanImpact] = useState("");
   const [planItemComments, setPlanItemComments] = useState<PlanComment[]>([]);
   const [commentDraft, setCommentDraft] = useState("");
+  const [editCommentId, setEditCommentId] = useState<number | null>(null);
+  const [editCommentText, setEditCommentText] = useState("");
   const commentBottomRef = useRef<HTMLDivElement>(null);
   const [editPlanType, setEditPlanType] = useState<PlanItemType>("atelier");
   const [editPlanIcon, setEditPlanIcon] = useState("");
@@ -3675,18 +3677,49 @@ export default function ClientDetailView({ id }: { id: string }) {
                 const dateLabel = d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) + " · " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
                 const pending = c.status === "pending";
                 const failed = c.status === "failed";
+                const own = isCsm && c.id > 0 && !c.status; // message envoyé par le CSM
+                const editing = editCommentId === c.id;
                 return (
-                  <div key={c.id} className={`flex flex-col gap-0.5 ${isCsm ? "items-end" : "items-start"}`}>
+                  <div key={c.id} className={`group flex flex-col gap-0.5 ${isCsm ? "items-end" : "items-start"}`}>
                     <span className="px-1 text-[10px] text-[#6b7c75]">
                       {isCsm ? "Vous (CSM)" : "Client"} · {dateLabel}{pending ? " · envoi…" : ""}
                     </span>
-                    <div className={`max-w-[85%] rounded-[10px] px-3 py-2 text-[12px] leading-snug ${
-                      isCsm
-                        ? "rounded-br-[3px] bg-[rgba(94,234,212,0.12)] text-[#e8f5ef]"
-                        : "rounded-bl-[3px] bg-[rgba(255,255,255,0.06)] text-[#e8f5ef]"
-                    } ${pending ? "opacity-60" : ""} ${failed ? "border border-[rgba(230,170,153,0.55)]" : ""}`}>
-                      <ChatMessageText text={c.text} />
-                    </div>
+                    {editing ? (
+                      <div className="flex w-full max-w-[85%] flex-col items-end gap-1">
+                        <textarea
+                          autoFocus
+                          rows={2}
+                          value={editCommentText}
+                          maxLength={2000}
+                          onChange={(e) => setEditCommentText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void commentsStore.editMessage(c.id, editCommentText).then((r) => { if (r.ok) setEditCommentId(null); }); }
+                            if (e.key === "Escape") setEditCommentId(null);
+                          }}
+                          className="w-full resize-none rounded-[8px] border border-[rgba(94,234,212,0.4)] bg-[rgba(255,255,255,0.04)] px-3 py-2 text-[12px] text-[#e8f5ef] outline-none"
+                        />
+                        <div className="flex gap-2 text-[10px]">
+                          <button type="button" onClick={() => void commentsStore.editMessage(c.id, editCommentText).then((r) => { if (r.ok) setEditCommentId(null); })} className="font-semibold text-[#5eead4]">Enregistrer</button>
+                          <button type="button" onClick={() => setEditCommentId(null)} className="text-[#6b7c75]">Annuler</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        {own && (
+                          <span className="flex shrink-0 gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+                            <button type="button" title="Modifier" onClick={() => { setEditCommentId(c.id); setEditCommentText(c.text); }} className="text-[11px] text-[#6b7c75] hover:text-[#e8f5ef]">✎</button>
+                            <button type="button" title="Supprimer" onClick={() => void commentsStore.deleteMessage(c.id)} className="text-[11px] text-[#6b7c75] hover:text-[#E6AA99]">🗑</button>
+                          </span>
+                        )}
+                        <div className={`max-w-[85%] rounded-[10px] px-3 py-2 text-[12px] leading-snug ${
+                          isCsm
+                            ? "rounded-br-[3px] bg-[rgba(94,234,212,0.12)] text-[#e8f5ef]"
+                            : "rounded-bl-[3px] bg-[rgba(255,255,255,0.06)] text-[#e8f5ef]"
+                        } ${pending ? "opacity-60" : ""} ${failed ? "border border-[rgba(230,170,153,0.55)]" : ""}`}>
+                          <ChatMessageText text={c.text} />
+                        </div>
+                      </div>
+                    )}
                     {failed && (
                       <span className="px-1 text-[10px] text-[#E6AA99]">
                         Échec ·{" "}
