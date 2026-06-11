@@ -85,6 +85,13 @@ async function insertComment(
   _comments = _comments.map((c) => (c.id === tempId ? fromRow(data) : c));
   notify();
   notifyChange("plan_comments");
+  // Notification email du destinataire — best-effort, non bloquant, no-op si
+  // RESEND_API_KEY n'est pas configurée côté serveur.
+  void fetch("/api/messages/notify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ threadId, clientId, author, text }),
+  }).catch(() => {});
   return { ok: true };
 }
 
