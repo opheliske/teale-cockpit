@@ -20,7 +20,7 @@ import {
 } from "@/lib/kits-store";
 import { VISUEL_CATEGORIES, type VisuelCategory, type VisuelFile } from "@/app/(client)/kits-communication/data";
 import { uploadKitFile, kitFileLabel, openKitFile } from "@/lib/storage";
-import { useWorkshops, themes as workshopThemes, type Workshop } from "@/lib/workshops-store";
+import { type Workshop } from "@/lib/workshops-store";
 import { setSeenIds } from "@/lib/catalogue-read-state";
 import { useNewCatalogueItems } from "@/lib/use-new-catalogue-items";
 import { RichTextEditor } from "@/components/RichTextEditor";
@@ -98,10 +98,6 @@ type KitCard = {
   rawId: string;
   searchHay: string;
 };
-
-const workshopThemeNameById = Object.fromEntries(
-  workshopThemes.map((t) => [t.id, t.name])
-);
 
 type WorkshopKitType = "invitation" | "relance" | "post";
 
@@ -204,7 +200,7 @@ const TAB_META: { id: TabId; icon: string; label: string; sub: string }[] = [
 const RUBRIC_TYPES: Record<TabId, KitTypeId[]> = {
   actualites: ["tempsfort"],
   lancement: ["lancement"],
-  divers: ["atelier", "email", "visuel", "fiche", "video"],
+  divers: ["email", "visuel", "fiche", "video"],
 };
 const STEP_ORDER = ["before", "dday", "after"] as const;
 
@@ -420,7 +416,6 @@ export default function CsmKitsPage() {
     addFicheKit, updateFicheKit, deleteFicheKit,
     addVideoKit, updateVideoKit, deleteVideoKit,
   } = useKitsStore();
-  const { workshops } = useWorkshops();
   const { kits: newKitIds, ateliers: newAtelierIds } = useNewCatalogueItems();
 
   // Ensemble des "nouveautés" — stable pendant la visite car on ne marque "vu"
@@ -528,23 +523,9 @@ export default function CsmKitsPage() {
       );
     }
 
-    for (const w of workshops) {
-      out.push(
-        makeCard({
-          id: `ws:${w.id}`,
-          type: "atelier",
-          title: w.title,
-          theme: workshopThemeNameById[w.themeId] ?? "Atelier",
-          audiences: deriveAudiences(w.title),
-          lang: "both",
-          month: null,
-          isNew: isNew(w.id),
-          payload: { kind: "workshop", workshop: w },
-          editKind: null, // géré dans le Catalogue d'ateliers
-          rawId: w.id,
-        })
-      );
-    }
+    // Les kits de communication d'ateliers ne sont volontairement PAS listés
+    // ici : ils ne vivent que dans le Catalogue d'ateliers (carte atelier →
+    // bloc « Kit de communication »).
 
     for (const e of emailTopicKits) {
       out.push(
@@ -637,7 +618,7 @@ export default function CsmKitsPage() {
     }
 
     return out;
-  }, [animationItems, workshops, emailTopicKits, lancementKits, visuelKits, ficheKits, videoKits, newSet]);
+  }, [animationItems, emailTopicKits, lancementKits, visuelKits, ficheKits, videoKits, newSet]);
 
   // ── base de la rubrique active (après recherche) ────────────────────────────
   const rubricBase = useMemo(() => {

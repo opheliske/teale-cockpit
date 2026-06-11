@@ -19,7 +19,7 @@ import {
 } from "./data";
 import { useKitsStore } from "@/lib/kits-store";
 import { kitFileLabel } from "@/lib/storage";
-import { useWorkshops, themes as workshopThemes, type Workshop } from "@/lib/workshops-store";
+import { themes as workshopThemes, type Workshop } from "@/lib/workshops-store";
 import { setSeenIds } from "@/lib/catalogue-read-state";
 import { useNewCatalogueItems } from "@/lib/use-new-catalogue-items";
 import { RichText } from "@/components/RichText";
@@ -224,7 +224,7 @@ const TAB_META: { id: TabId; icon: string; label: string; sub: string }[] = [
 const RUBRIC_TYPES: Record<TabId, KitTypeId[]> = {
   actualites: ["tempsfort"],
   lancement: ["lancement"],
-  divers: ["atelier", "email", "visuel", "fiche", "video"],
+  divers: ["email", "visuel", "fiche", "video"],
 };
 const STEP_ORDER = ["before", "dday", "after"] as const;
 
@@ -239,7 +239,6 @@ function toggle<T>(setter: Dispatch<SetStateAction<Set<T>>>, val: T) {
 
 export default function KitsCommunicationPage() {
   const { lancementKits, animationItems, emailTopicKits, visuelKits, ficheKits, videoKits } = useKitsStore();
-  const { workshops } = useWorkshops();
   const { kits: newKitIds, ateliers: newAtelierIds } = useNewCatalogueItems();
 
   // Ensemble des "nouveautés" (kits + ateliers) tel que vu à l'instant. Comme on
@@ -319,21 +318,9 @@ export default function KitsCommunicationPage() {
       );
     }
 
-    for (const w of workshops) {
-      out.push(
-        makeCard({
-          id: `ws:${w.id}`,
-          type: "atelier",
-          title: w.title,
-          theme: workshopThemeNameById[w.themeId] ?? "Atelier",
-          audiences: deriveAudiences(w.title),
-          lang: "both",
-          month: null,
-          isNew: isNew(w.id),
-          payload: { kind: "workshop", workshop: w },
-        })
-      );
-    }
+    // Les kits de communication d'ateliers ne sont volontairement PAS listés
+    // ici : ils n'apparaissent que dans le catalogue d'ateliers (carte atelier
+    // → bloc « Kit de communication »).
 
     for (const e of emailTopicKits) {
       out.push(
@@ -416,7 +403,7 @@ export default function KitsCommunicationPage() {
     }
 
     return out;
-  }, [animationItems, workshops, emailTopicKits, lancementKits, visuelKits, ficheKits, videoKits, newSet]);
+  }, [animationItems, emailTopicKits, lancementKits, visuelKits, ficheKits, videoKits, newSet]);
 
   // ── Base de la rubrique active (après recherche) ────────────────────────────
   // Drive les options/compteurs des filtres contextuels ET le compteur d'onglet.
