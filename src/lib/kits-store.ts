@@ -7,11 +7,25 @@ import {
   type EmailTopicKit,
   type VisuelKit,
   type VisuelFile,
+  type FicheKit,
 } from "@/app/(client)/kits-communication/data";
 import { notifyChange, watchChanges } from "@/lib/sync";
 import { kitFileLabel } from "@/lib/storage";
 
-export type { LancementKit, AnimationItem, EmailTopicKit, VisuelKit };
+export type { LancementKit, AnimationItem, EmailTopicKit, VisuelKit, FicheKit };
+
+function ficheFromRow(row: Record<string, unknown>): FicheKit {
+  return {
+    id: row.id as string,
+    title: row.title as string,
+    language: row.language as FicheKit["language"],
+    files: (row.files as VisuelFile[] | null) ?? [],
+  };
+}
+
+function ficheToRow(f: FicheKit) {
+  return { id: f.id, title: f.title, language: f.language, files: f.files ?? [] };
+}
 
 function visuelFromRow(row: Record<string, unknown>): VisuelKit {
   const raw = (row.files as VisuelFile[] | null) ?? [];
@@ -90,12 +104,13 @@ function animationToRow(a: AnimationItem) {
 // client /kits-communication page and the home page until a full reload.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TABLES = ["kits_lancement", "kits_animation", "kits_email", "kits_visuels"];
+const TABLES = ["kits_lancement", "kits_animation", "kits_email", "kits_visuels", "kits_fiches"];
 
 let _lancement: LancementKit[] = [];
 let _animation: AnimationItem[] = [];
 let _email: EmailTopicKit[] = [];
 let _visuels: VisuelKit[] = [];
+let _fiches: FicheKit[] = [];
 let _loaded = false;
 const _listeners = new Set<() => void>();
 
@@ -106,11 +121,13 @@ let _snapshot: {
   animationItems: AnimationItem[];
   emailTopicKits: EmailTopicKit[];
   visuelKits: VisuelKit[];
+  ficheKits: FicheKit[];
 } = {
   lancementKits: _lancement,
   animationItems: _animation,
   emailTopicKits: _email,
   visuelKits: _visuels,
+  ficheKits: _fiches,
 };
 
 function emit() {
@@ -119,6 +136,7 @@ function emit() {
     animationItems: _animation,
     emailTopicKits: _email,
     visuelKits: _visuels,
+    ficheKits: _fiches,
   };
   _listeners.forEach((l) => l());
 }
@@ -132,11 +150,12 @@ async function fetchKits() {
     _loaded = false; // allow a later ensureLoaded() to retry
     return;
   }
-  const [lancement, animation, emails, visuels] = await Promise.all([
+  const [lancement, animation, emails, visuels, fiches] = await Promise.all([
     supabase.from("kits_lancement").select("*").order("id"),
     supabase.from("kits_animation").select("*").order("id"),
     supabase.from("kits_email").select("*").order("id"),
     supabase.from("kits_visuels").select("*").order("created_at", { ascending: false }),
+    supabase.from("kits_fiches").select("*").order("created_at", { ascending: false }),
   ]);
   if (lancement.error || animation.error || emails.error || visuels.error) {
     // Transient failure — keep the current lists rather than blanking them.
@@ -150,6 +169,10 @@ async function fetchKits() {
   _animation = (animation.data ?? []).map(animationFromRow);
   _email = (emails.data ?? []) as EmailTopicKit[];
   _visuels = (visuels.data ?? []).map(visuelFromRow);
+  // Fiches pratiques — table récente : on tolère son absence (migration pas
+  // encore appliquée) sans bloquer le reste du catalogue.
+  if (fiches.error) console.error("[kits-store] load fiches", fiches.error);
+  else _fiches = (fiches.data ?? []).map(ficheFromRow);
   _loaded = true;
   emit();
 }
@@ -276,6 +299,34 @@ async function deleteVisuelKit(id: string) {
   notifyChange("kits_visuels");
 }
 
+async function addFicheKit(item: FicheKit) {
+  if (!(await ensureSession())) return;
+  const { data } = await supabase.from("kits_fiches").insert(ficheToRow(item)).select().single();
+  if (data) {
+    _fiches = [ficheFromRow(data), ..._fiches];
+    emit();
+    notifyChange("kits_fiches");
+  }
+}
+
+async function updateFicheKit(updated: FicheKit) {
+  if (!(await ensureSession())) return;
+  const { data } = await supabase.from("kits_fiches").update(ficheToRow(updated)).eq("id", updated.id).select().single();
+  if (data) {
+    _fiches = _fiches.map((f) => (f.id === updated.id ? ficheFromRow(data) : f));
+    emit();
+    notifyChange("kits_fiches");
+  }
+}
+
+async function deleteFicheKit(id: string) {
+  if (!(await ensureSession())) return;
+  await supabase.from("kits_fiches").delete().eq("id", id);
+  _fiches = _fiches.filter((f) => f.id !== id);
+  emit();
+  notifyChange("kits_fiches");
+}
+
 function subscribe(listener: () => void): () => void {
   _listeners.add(listener);
   void ensureLoaded();
@@ -289,7 +340,7 @@ function getSnapshot() {
 }
 
 export function useKitsStore() {
-  const { lancementKits, animationItems, emailTopicKits, visuelKits } = useSyncExternalStore(
+  const { lancementKits, animationItems, emailTopicKits, visuelKits, ficheKits } = useSyncExternalStore(
     subscribe,
     getSnapshot,
     getSnapshot,
@@ -299,6 +350,7 @@ export function useKitsStore() {
     animationItems,
     emailTopicKits,
     visuelKits,
+    ficheKits,
     addLancementKit,
     updateLancementKit,
     deleteLancementKit,
@@ -311,5 +363,8 @@ export function useKitsStore() {
     addVisuelKit,
     updateVisuelKit,
     deleteVisuelKit,
+    addFicheKit,
+    updateFicheKit,
+    deleteFicheKit,
   };
 }

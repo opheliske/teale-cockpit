@@ -56,6 +56,15 @@ export type VisuelKit = {
   mimeType?: string;
 };
 
+// Fiche pratique — document téléchargeable, une carte par langue (FR ou EN),
+// rangée dans la rubrique « Divers ». Réutilise VisuelFile pour le multi-fichiers.
+export type FicheKit = {
+  id: string;
+  title: string;
+  language: EmailLanguage; // "FR" | "EN"
+  files: VisuelFile[];
+};
+
 export const VISUEL_CATEGORIES: { id: VisuelCategory; label: string; icon: string }[] = [
   { id: 'logo', label: 'Logos teale', icon: '🟢' },
   { id: 'icone', label: 'Icônes', icon: '✨' },

@@ -13,6 +13,7 @@ import {
   type EmailTopicKit,
   type LancementKit,
   type VisuelKit,
+  type FicheKit,
   VISUEL_CATEGORIES,
 } from "./data";
 import { useKitsStore } from "@/lib/kits-store";
@@ -34,7 +35,7 @@ import { KitFilePreviewList } from "@/components/KitFilePreview";
 // conserve la donnée d'origine pour rouvrir la modale adéquate.
 // ─────────────────────────────────────────────────────────────────────────────
 
-type KitTypeId = "tempsfort" | "atelier" | "email" | "lancement" | "visuel";
+type KitTypeId = "tempsfort" | "atelier" | "email" | "lancement" | "visuel" | "fiche";
 type AudId = "tous" | "managers" | "codir" | "elus" | "rh";
 type LangId = "fr" | "en" | "both";
 
@@ -47,9 +48,10 @@ const TYPE_META: Record<
   tempsfort: { label: "Temps fort", icon: "📅", badge: "bg-brand-blue-soft/15 text-brand-blue-soft" },
   lancement: { label: "Lancement", icon: "🚀", badge: "bg-[#e0b657]/15 text-[#e0b657]" },
   visuel: { label: "Visuel", icon: "🎨", badge: "bg-[#bca6e8]/15 text-[#bca6e8]" },
+  fiche: { label: "Fiche pratique", icon: "📋", badge: "bg-[#7dd3fc]/15 text-[#7dd3fc]" },
 };
 // Ordre d'affichage du badge "type" dans la facette.
-const TYPE_ORDER: KitTypeId[] = ["tempsfort", "atelier", "email", "lancement", "visuel"];
+const TYPE_ORDER: KitTypeId[] = ["tempsfort", "atelier", "email", "lancement", "visuel", "fiche"];
 
 const AUD_META: Record<AudId, string> = {
   tous: "Tous les collaborateurs",
@@ -72,6 +74,7 @@ type ActiveCard =
   | { kind: "animation"; data: AnimationItem }
   | { kind: "email"; data: EmailTopicKit }
   | { kind: "visuel"; data: VisuelKit }
+  | { kind: "fiche"; data: FicheKit }
   | { kind: "workshop"; workshop: Workshop };
 
 type KitCard = {
@@ -212,12 +215,12 @@ type TabId = "actualites" | "lancement" | "divers";
 const TAB_META: { id: TabId; icon: string; label: string; sub: string }[] = [
   { id: "actualites", icon: "📅", label: "Actualités", sub: "Temps forts du calendrier" },
   { id: "lancement", icon: "🚀", label: "Lancement", sub: "Déployer teale dans vos équipes" },
-  { id: "divers", icon: "🧰", label: "Divers", sub: "Ateliers, emails & visuels" },
+  { id: "divers", icon: "🧰", label: "Divers", sub: "Ateliers, emails, visuels & fiches pratiques" },
 ];
 const RUBRIC_TYPES: Record<TabId, KitTypeId[]> = {
   actualites: ["tempsfort"],
   lancement: ["lancement"],
-  divers: ["atelier", "email", "visuel"],
+  divers: ["atelier", "email", "visuel", "fiche"],
 };
 const STEP_ORDER = ["before", "dday", "after"] as const;
 
@@ -231,7 +234,7 @@ function toggle<T>(setter: Dispatch<SetStateAction<Set<T>>>, val: T) {
 }
 
 export default function KitsCommunicationPage() {
-  const { lancementKits, animationItems, emailTopicKits, visuelKits } = useKitsStore();
+  const { lancementKits, animationItems, emailTopicKits, visuelKits, ficheKits } = useKitsStore();
   const { workshops } = useWorkshops();
   const { kits: newKitIds, ateliers: newAtelierIds } = useNewCatalogueItems();
 
@@ -376,8 +379,24 @@ export default function KitsCommunicationPage() {
       );
     }
 
+    for (const f of ficheKits) {
+      out.push(
+        makeCard({
+          id: `fiche:${f.id}`,
+          type: "fiche",
+          title: f.title,
+          theme: "Fiche pratique",
+          audiences: ["tous"],
+          lang: f.language === "EN" ? "en" : "fr",
+          month: null,
+          isNew: isNew(`fiche:${f.id}`),
+          payload: { kind: "fiche", data: f },
+        })
+      );
+    }
+
     return out;
-  }, [animationItems, workshops, emailTopicKits, lancementKits, visuelKits, newSet]);
+  }, [animationItems, workshops, emailTopicKits, lancementKits, visuelKits, ficheKits, newSet]);
 
   // ── Base de la rubrique active (après recherche) ────────────────────────────
   // Drive les options/compteurs des filtres contextuels ET le compteur d'onglet.
@@ -1330,6 +1349,8 @@ function KitModal({ active, onClose }: { active: ActiveCard; onClose: () => void
         {active.kind === "animation" && <AnimationModalBody item={active.data} />}
 
         {active.kind === "visuel" && <VisuelModalBody item={active.data} />}
+
+        {active.kind === "fiche" && <FicheModalBody item={active.data} />}
       </div>
     </div>
   );
@@ -1447,6 +1468,31 @@ function WorkshopModalBody({ workshop }: { workshop: Workshop }) {
             </>
           )}
         </button>
+      </div>
+    </>
+  );
+}
+
+function FicheModalBody({ item }: { item: FicheKit }) {
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-2 pr-12">
+        <span className="rounded-full bg-brand-accent/15 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-brand-accent">
+          Fiche pratique
+        </span>
+        <span className="rounded-full bg-brand-cream/10 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-brand-cream">
+          {item.language === "EN" ? "🇬🇧 English" : "🇫🇷 Français"}
+        </span>
+      </div>
+      <h2 className="mt-3 text-2xl font-medium tracking-tight text-brand-cream">{item.title}</h2>
+      <div className="mt-5">
+        <KitFilePreviewList
+          files={item.files.map((f) => ({
+            path: f.path,
+            name: f.name || kitFileLabel(f.path),
+            mimeType: f.mimeType,
+          }))}
+        />
       </div>
     </>
   );

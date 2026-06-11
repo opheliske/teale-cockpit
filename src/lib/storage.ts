@@ -59,7 +59,7 @@ const KIT_BUCKET = "kit-files";
 
 /** Uploads a kit asset under "<category>/<itemId>/…". Returns path or error. */
 export async function uploadKitFile(
-  category: "lancement" | "animation" | "email" | "visuels" | "workshops",
+  category: "lancement" | "animation" | "email" | "visuels" | "workshops" | "fiches",
   itemId: string,
   file: File,
 ): Promise<{ path: string | null; error: string | null }> {

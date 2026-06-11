@@ -91,6 +91,15 @@ create table if not exists kits_visuels (
 );
 create index if not exists kits_visuels_category_idx on kits_visuels (category);
 
+create table if not exists kits_fiches (
+  id         text primary key,
+  title      text not null,
+  language   text not null check (language in ('FR', 'EN')),
+  files      jsonb not null default '[]',  -- [{id, path, name, mimeType}] dans le bucket "kit-files"
+  created_at timestamptz not null default now()
+);
+create index if not exists kits_fiches_language_idx on kits_fiches (language);
+
 -- ─── Client actions (CSM home to-do list, per-CSM ownership) ────────────────
 create table if not exists client_actions (
   id            bigint primary key generated always as identity,

@@ -15,6 +15,7 @@ import {
   type AnimationItem,
   type EmailTopicKit,
   type VisuelKit,
+  type FicheKit,
 } from "@/lib/kits-store";
 import { VISUEL_CATEGORIES, type VisuelCategory, type VisuelFile } from "@/app/(client)/kits-communication/data";
 import { uploadKitFile, kitFileLabel, openKitFile } from "@/lib/storage";
@@ -36,7 +37,7 @@ import { KitFilePreviewList } from "@/components/KitFilePreview";
 
 // ─── normalisation (identique au client) ─────────────────────────────────────
 
-type KitTypeId = "tempsfort" | "atelier" | "email" | "lancement" | "visuel";
+type KitTypeId = "tempsfort" | "atelier" | "email" | "lancement" | "visuel" | "fiche";
 type AudId = "tous" | "managers" | "codir" | "elus" | "rh";
 type LangId = "fr" | "en" | "both";
 
@@ -49,8 +50,9 @@ const TYPE_META: Record<
   tempsfort: { label: "Temps fort", icon: "📅", badge: "bg-brand-blue-soft/15 text-brand-blue-soft" },
   lancement: { label: "Lancement", icon: "🚀", badge: "bg-[#e0b657]/15 text-[#e0b657]" },
   visuel: { label: "Visuel", icon: "🎨", badge: "bg-[#bca6e8]/15 text-[#bca6e8]" },
+  fiche: { label: "Fiche pratique", icon: "📋", badge: "bg-[#7dd3fc]/15 text-[#7dd3fc]" },
 };
-const TYPE_ORDER: KitTypeId[] = ["tempsfort", "atelier", "email", "lancement", "visuel"];
+const TYPE_ORDER: KitTypeId[] = ["tempsfort", "atelier", "email", "lancement", "visuel", "fiche"];
 
 const AUD_META: Record<AudId, string> = {
   tous: "Tous les collaborateurs",
@@ -68,13 +70,14 @@ const LANG_META: Record<LangId, string> = {
 };
 const LANG_ORDER: LangId[] = ["fr", "both", "en"];
 
-type EditingKind = "lancement" | "animation" | "email" | "visuel";
+type EditingKind = "lancement" | "animation" | "email" | "visuel" | "fiche";
 
 type ActiveCard =
   | { kind: "lancement"; data: LancementKit }
   | { kind: "animation"; data: AnimationItem }
   | { kind: "email"; data: EmailTopicKit }
   | { kind: "visuel"; data: VisuelKit }
+  | { kind: "fiche"; data: FicheKit }
   | { kind: "workshop"; workshop: Workshop };
 
 type KitCard = {
@@ -192,12 +195,12 @@ type TabId = "actualites" | "lancement" | "divers";
 const TAB_META: { id: TabId; icon: string; label: string; sub: string }[] = [
   { id: "actualites", icon: "📅", label: "Actualités", sub: "Temps forts du calendrier" },
   { id: "lancement", icon: "🚀", label: "Lancement", sub: "Déployer teale dans vos équipes" },
-  { id: "divers", icon: "🧰", label: "Divers", sub: "Ateliers, emails & visuels" },
+  { id: "divers", icon: "🧰", label: "Divers", sub: "Ateliers, emails, visuels & fiches pratiques" },
 ];
 const RUBRIC_TYPES: Record<TabId, KitTypeId[]> = {
   actualites: ["tempsfort"],
   lancement: ["lancement"],
-  divers: ["atelier", "email", "visuel"],
+  divers: ["atelier", "email", "visuel", "fiche"],
 };
 const STEP_ORDER = ["before", "dday", "after"] as const;
 
@@ -232,6 +235,27 @@ function formToVisuel(f: VisuelForm, existingId?: string): VisuelKit {
     id: existingId ?? "vis-" + Date.now().toString(36),
     title: f.title.trim(),
     category: f.category,
+    files: f.files,
+  };
+}
+
+interface FicheForm {
+  title: string;
+  language: "FR" | "EN";
+  files: VisuelFile[];
+}
+
+const EMPTY_FICHE: FicheForm = { title: "", language: "FR", files: [] };
+
+function ficheToForm(f: FicheKit): FicheForm {
+  return { title: f.title, language: f.language, files: f.files ?? [] };
+}
+
+function formToFiche(f: FicheForm, existingId?: string): FicheKit {
+  return {
+    id: existingId ?? "fiche-" + Date.now().toString(36),
+    title: f.title.trim(),
+    language: f.language,
     files: f.files,
   };
 }
@@ -355,15 +379,17 @@ const ADD_KINDS: { kind: EditingKind; label: string; icon: string }[] = [
   { kind: "email", label: "Email", icon: "💌" },
   { kind: "lancement", label: "Lancement", icon: "🚀" },
   { kind: "visuel", label: "Visuel", icon: "🎨" },
+  { kind: "fiche", label: "Fiche pratique", icon: "📋" },
 ];
 
 export default function CsmKitsPage() {
   const {
-    lancementKits, animationItems, emailTopicKits, visuelKits,
+    lancementKits, animationItems, emailTopicKits, visuelKits, ficheKits,
     addLancementKit, updateLancementKit, deleteLancementKit,
     addAnimationItem, updateAnimationItem, deleteAnimationItem,
     addEmailTopicKit, updateEmailTopicKit, deleteEmailTopicKit,
     addVisuelKit, updateVisuelKit, deleteVisuelKit,
+    addFicheKit, updateFicheKit, deleteFicheKit,
   } = useKitsStore();
   const { workshops } = useWorkshops();
   const { kits: newKitIds, ateliers: newAtelierIds } = useNewCatalogueItems();
@@ -385,8 +411,9 @@ export default function CsmKitsPage() {
       ...animationItems.map((a) => `ani:${a.id}`),
       ...emailTopicKits.map((e) => `email:${e.id}`),
       ...visuelKits.map((v) => `vis:${v.id}`),
+      ...ficheKits.map((f) => `fiche:${f.id}`),
     ];
-  }, [lancementKits, animationItems, emailTopicKits, visuelKits]);
+  }, [lancementKits, animationItems, emailTopicKits, visuelKits, ficheKits]);
   useEffect(() => {
     return () => {
       if (allKitIdsRef.current.length > 0) setSeenIds("kits", allKitIdsRef.current);
@@ -420,6 +447,7 @@ export default function CsmKitsPage() {
   const [animationForm, setAnimationForm] = useState<AnimationForm>(EMPTY_ANIMATION);
   const [emailForm, setEmailForm] = useState<EmailForm>(EMPTY_EMAIL);
   const [visuelForm, setVisuelForm] = useState<VisuelForm>(EMPTY_VISUEL);
+  const [ficheForm, setFicheForm] = useState<FicheForm>(EMPTY_FICHE);
   const [formError, setFormError] = useState("");
 
   // delete confirm + detail viewer
@@ -541,8 +569,26 @@ export default function CsmKitsPage() {
       );
     }
 
+    for (const f of ficheKits) {
+      out.push(
+        makeCard({
+          id: `fiche:${f.id}`,
+          type: "fiche",
+          title: f.title,
+          theme: "Fiche pratique",
+          audiences: ["tous"],
+          lang: f.language === "EN" ? "en" : "fr",
+          month: null,
+          isNew: isNew(`fiche:${f.id}`),
+          payload: { kind: "fiche", data: f },
+          editKind: "fiche",
+          rawId: f.id,
+        })
+      );
+    }
+
     return out;
-  }, [animationItems, workshops, emailTopicKits, lancementKits, visuelKits, newSet]);
+  }, [animationItems, workshops, emailTopicKits, lancementKits, visuelKits, ficheKits, newSet]);
 
   // ── base de la rubrique active (après recherche) ────────────────────────────
   const rubricBase = useMemo(() => {
@@ -667,12 +713,17 @@ export default function CsmKitsPage() {
     setEditingId("new");
     setFormError("");
     const prefix =
-      kind === "lancement" ? "lan" : kind === "animation" ? "ani" : kind === "email" ? "email" : "vis";
+      kind === "lancement" ? "lan"
+      : kind === "animation" ? "ani"
+      : kind === "email" ? "email"
+      : kind === "visuel" ? "vis"
+      : "fiche";
     setKitDraftId(genDraftId(prefix));
     if (kind === "lancement") setLancementForm(EMPTY_LANCEMENT);
     if (kind === "animation") setAnimationForm(EMPTY_ANIMATION);
     if (kind === "email") setEmailForm(EMPTY_EMAIL);
     if (kind === "visuel") setVisuelForm(EMPTY_VISUEL);
+    if (kind === "fiche") setFicheForm(EMPTY_FICHE);
   }
 
   function openEdit(kind: EditingKind, id: string) {
@@ -692,6 +743,9 @@ export default function CsmKitsPage() {
     } else if (kind === "visuel") {
       const item = visuelKits.find((v) => v.id === id);
       if (item) setVisuelForm(visuelToForm(item));
+    } else if (kind === "fiche") {
+      const item = ficheKits.find((f) => f.id === id);
+      if (item) setFicheForm(ficheToForm(item));
     }
   }
 
@@ -719,6 +773,11 @@ export default function CsmKitsPage() {
       if (visuelForm.files.length === 0) { setFormError("Uploadez au moins un fichier avant d'enregistrer."); return; }
       const item = formToVisuel(visuelForm, editingId === "new" ? kitDraftId ?? undefined : editingId!);
       if (editingId === "new") addVisuelKit(item); else updateVisuelKit(item);
+    } else if (editingKind === "fiche") {
+      if (!ficheForm.title.trim()) { setFormError("Le titre est obligatoire."); return; }
+      if (ficheForm.files.length === 0) { setFormError("Uploadez au moins un fichier avant d'enregistrer."); return; }
+      const item = formToFiche(ficheForm, editingId === "new" ? kitDraftId ?? undefined : editingId!);
+      if (editingId === "new") addFicheKit(item); else updateFicheKit(item);
     }
     closeForm();
   }
@@ -730,6 +789,7 @@ export default function CsmKitsPage() {
     else if (kind === "animation") deleteAnimationItem(id);
     else if (kind === "email") deleteEmailTopicKit(id);
     else if (kind === "visuel") deleteVisuelKit(id);
+    else if (kind === "fiche") deleteFicheKit(id);
     setConfirmDelete(null);
   }
 
@@ -740,6 +800,7 @@ export default function CsmKitsPage() {
     if (kind === "animation") return animationItems.find((a) => a.id === id)?.title ?? "";
     if (kind === "email") return emailTopicKits.find((e) => e.id === id)?.title ?? "";
     if (kind === "visuel") return visuelKits.find((v) => v.id === id)?.title ?? "";
+    if (kind === "fiche") return ficheKits.find((f) => f.id === id)?.title ?? "";
     return "";
   }
 
@@ -1079,6 +1140,8 @@ export default function CsmKitsPage() {
           setEmailForm={setEmailForm}
           visuelForm={visuelForm}
           setVisuelForm={setVisuelForm}
+          ficheForm={ficheForm}
+          setFicheForm={setFicheForm}
           error={formError}
           onSubmit={handleSubmit}
           onClose={closeForm}
@@ -1616,6 +1679,8 @@ function KitsFormSlideOver({
   setEmailForm,
   visuelForm,
   setVisuelForm,
+  ficheForm,
+  setFicheForm,
   error,
   onSubmit,
   onClose,
@@ -1631,6 +1696,8 @@ function KitsFormSlideOver({
   setEmailForm: Dispatch<SetStateAction<EmailForm>>;
   visuelForm: VisuelForm;
   setVisuelForm: Dispatch<SetStateAction<VisuelForm>>;
+  ficheForm: FicheForm;
+  setFicheForm: Dispatch<SetStateAction<FicheForm>>;
   error: string;
   onSubmit: () => void;
   onClose: () => void;
@@ -1666,6 +1733,21 @@ function KitsFormSlideOver({
     };
     setVisuelForm((f) => ({ ...f, files: [...f.files, newFile] }));
   };
+  const handleFicheUpload = async (file: File) => {
+    setUploadError("");
+    const { path, error: err } = await uploadKitFile("fiches", kitId, file);
+    if (err || !path) {
+      setUploadError(err ?? "Échec de l'envoi du fichier.");
+      return;
+    }
+    const newFile: VisuelFile = {
+      id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      path,
+      name: file.name,
+      mimeType: file.type || "application/octet-stream",
+    };
+    setFicheForm((f) => ({ ...f, files: [...f.files, newFile] }));
+  };
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1684,6 +1766,7 @@ function KitsFormSlideOver({
     kind === "lancement" ? "Kit de lancement"
     : kind === "animation" ? "Temps fort mensuel"
     : kind === "email" ? "Email thématique"
+    : kind === "fiche" ? "Fiche pratique"
     : "Visuel teale";
 
   return (
@@ -1885,6 +1968,45 @@ function KitsFormSlideOver({
             </>
           )}
 
+          {kind === "fiche" && (
+            <>
+              <div>
+                <label className={LABEL}>Titre *</label>
+                <input className={INPUT} value={ficheForm.title} onChange={(e) => setFicheForm((f) => ({ ...f, title: e.target.value }))} placeholder="Ex: Gérer son stress au quotidien" />
+              </div>
+              <div>
+                <label className={LABEL}>Langue *</label>
+                <select className={`${INPUT} field-select`} value={ficheForm.language} onChange={(e) => setFicheForm((f) => ({ ...f, language: e.target.value as "FR" | "EN" }))}>
+                  <option value="FR">FR — Français</option>
+                  <option value="EN">EN — English</option>
+                </select>
+                <p className="mt-1 text-[11px] text-[#6b7c75]">Une carte par langue : créez une fiche FR et une fiche EN.</p>
+              </div>
+              <div>
+                <label className={LABEL}>Fichiers * <span className="font-normal normal-case text-[#6b7c75]">— PDF, Word, images… plusieurs possibles</span></label>
+                {ficheForm.files.length > 0 && (
+                  <ul className="mb-2 space-y-1.5">
+                    {ficheForm.files.map((file) => (
+                      <li key={file.id} className="flex items-center gap-2 rounded-[8px] border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)] px-3 py-2 text-[12px] text-[#c1d4cc]">
+                        <span aria-hidden>📎</span>
+                        <span className="min-w-0 flex-1 truncate">{file.name || kitFileLabel(file.path)}</span>
+                        <button type="button" onClick={() => void openKitFile(file.path, file.name || kitFileLabel(file.path) || ficheForm.title)} className="shrink-0 text-[11px] font-semibold text-[#5eead4] hover:text-[#84d4a6]">Aperçu</button>
+                        <button type="button" onClick={() => setFicheForm((f) => ({ ...f, files: f.files.filter((x) => x.id !== file.id) }))} aria-label="Retirer ce fichier" className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] text-[#6b7c75] hover:bg-[rgba(230,170,153,0.12)] hover:text-[#E6AA99]">×</button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <label className="flex cursor-pointer items-center gap-2 rounded-[10px] border border-dashed border-[rgba(255,255,255,0.12)] bg-[rgba(255,255,255,0.02)] px-4 py-3 text-[12px] text-[#94a8a0] hover:border-[rgba(94,234,212,0.4)] hover:text-[#e8f5ef]">
+                  📤 {ficheForm.files.length > 0 ? "Ajouter un fichier" : "Uploader un fichier"}
+                  <input type="file" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,image/*" className="hidden" onChange={(e) => { const fs = e.target.files; if (fs) { Array.from(fs).forEach((f) => void handleFicheUpload(f)); e.target.value = ""; } }} />
+                </label>
+              </div>
+              {uploadError && (
+                <p className="rounded-[8px] bg-[rgba(239,68,68,0.1)] px-3 py-2 text-[12px] font-medium text-[#fca5a5]">{uploadError}</p>
+              )}
+            </>
+          )}
+
           {error && (
             <p className="rounded-[8px] bg-[rgba(239,68,68,0.1)] px-3 py-2 text-[12px] font-medium text-[#fca5a5]">{error}</p>
           )}
@@ -1946,6 +2068,10 @@ function KitDetailModal({
     kindLabel = "Visuel — " + (VISUEL_CATEGORIES.find((c) => c.id === p.data.category)?.label ?? p.data.category);
     title = p.data.title;
     body = <VisuelDetailBody item={p.data} />;
+  } else if (p.kind === "fiche") {
+    kindLabel = "Fiche pratique — " + (p.data.language === "EN" ? "English" : "Français");
+    title = p.data.title;
+    body = <FicheDetailBody item={p.data} />;
   } else {
     kindLabel = "Kit atelier";
     title = p.workshop.title;
@@ -2081,6 +2207,18 @@ function EmailDetailBody({ item }: { item: EmailTopicKit }) {
         <p className="mb-2 text-[10px] font-bold uppercase tracking-[1.2px] text-[#84d4a6]">Contenu à copier (client)</p>
         <BodyPreview body={item.body} />
       </div>
+    </div>
+  );
+}
+
+function FicheDetailBody({ item }: { item: FicheKit }) {
+  return (
+    <div className="space-y-4">
+      <DetailRow label="Langue" value={item.language === "EN" ? "🇬🇧 English" : "🇫🇷 Français"} />
+      <DetailRow label="Fichiers" value={`${item.files.length} fichier${item.files.length > 1 ? "s" : ""}`} />
+      <KitFilePreviewList
+        files={item.files.map((f) => ({ path: f.path, name: f.name || kitFileLabel(f.path), mimeType: f.mimeType }))}
+      />
     </div>
   );
 }
