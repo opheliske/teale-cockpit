@@ -14,6 +14,7 @@ export const csmNavSections: NavSection[] = [
   {
     title: "Opérations",
     items: [
+      { label: "Messages", href: "/csm/messages" },
       { label: "Suivi clients", href: "/csm/suivi-clients" },
       { label: "QBR et Ateliers", href: "/csm/qbr-ateliers" },
     ],
