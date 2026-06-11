@@ -1,6 +1,24 @@
 export type Step = 'before' | 'dday' | 'after';
 export type EmailLanguage = 'FR' | 'EN';
 
+// Public ciblé d'un kit — multi-valué, choisi par le CSM, filtrable côté kits.
+export type AudId =
+  | 'collaborateurs' | 'managers' | 'rh' | 'elus' | 'codir' | 'soignants' | 'etudiants';
+
+export const AUD_META: Record<AudId, string> = {
+  collaborateurs: 'Collaborateurs',
+  managers: 'Managers',
+  rh: 'RH',
+  elus: 'Élus',
+  codir: 'CODIR',
+  soignants: 'Soignants',
+  etudiants: 'Étudiants',
+};
+
+export const AUD_ORDER: AudId[] = [
+  'collaborateurs', 'managers', 'rh', 'elus', 'codir', 'soignants', 'etudiants',
+];
+
 // `body` — CSM-authored text the client can copy from their kits page.
 // Optional: when blank the client view falls back to the auto-generated
 // default template (preserves behaviour for legacy rows).
@@ -11,6 +29,7 @@ export type LancementKit = {
   step: Step;
   language: EmailLanguage;
   body?: string;
+  audiences: AudId[];
 };
 
 export type AnimationItem = {
@@ -26,6 +45,7 @@ export type AnimationItem = {
   pdfFr: string[];
   pdfEn: string[];
   body?: string;
+  audiences: AudId[];
 };
 
 export type EmailTopicKit = {
@@ -34,6 +54,7 @@ export type EmailTopicKit = {
   topic: string;
   language: EmailLanguage;
   body?: string;
+  audiences: AudId[];
 };
 
 export type VisuelCategory = 'logo' | 'icone' | 'picto' | 'banniere';
@@ -50,6 +71,7 @@ export type VisuelKit = {
   title: string;
   category: VisuelCategory;
   files: VisuelFile[];
+  audiences: AudId[];
   // Anciens visuels mono-fichier — conservés pour la rétro-compat. Le store
   // normalise toujours vers `files`, donc l'UI ne lit que `files`.
   path?: string;
@@ -63,6 +85,7 @@ export type FicheKit = {
   title: string;
   language: EmailLanguage; // "FR" | "EN"
   files: VisuelFile[];
+  audiences: AudId[];
 };
 
 // Vidéo — une carte par langue (FR ou EN), rubrique « Divers ». Peut porter un
@@ -73,6 +96,7 @@ export type VideoKit = {
   language: EmailLanguage; // "FR" | "EN"
   url?: string;
   files: VisuelFile[];
+  audiences: AudId[];
 };
 
 export const VISUEL_CATEGORIES: { id: VisuelCategory; label: string; icon: string }[] = [

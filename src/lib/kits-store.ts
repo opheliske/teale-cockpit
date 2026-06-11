@@ -9,11 +9,16 @@ import {
   type VisuelFile,
   type FicheKit,
   type VideoKit,
+  type AudId,
 } from "@/app/(client)/kits-communication/data";
 import { notifyChange, watchChanges } from "@/lib/sync";
 import { kitFileLabel } from "@/lib/storage";
 
 export type { LancementKit, AnimationItem, EmailTopicKit, VisuelKit, FicheKit, VideoKit };
+
+function audiencesOf(row: Record<string, unknown>): AudId[] {
+  return (row.audiences as AudId[] | null) ?? [];
+}
 
 function ficheFromRow(row: Record<string, unknown>): FicheKit {
   return {
@@ -21,11 +26,12 @@ function ficheFromRow(row: Record<string, unknown>): FicheKit {
     title: row.title as string,
     language: row.language as FicheKit["language"],
     files: (row.files as VisuelFile[] | null) ?? [],
+    audiences: audiencesOf(row),
   };
 }
 
 function ficheToRow(f: FicheKit) {
-  return { id: f.id, title: f.title, language: f.language, files: f.files ?? [] };
+  return { id: f.id, title: f.title, language: f.language, files: f.files ?? [], audiences: f.audiences ?? [] };
 }
 
 function videoFromRow(row: Record<string, unknown>): VideoKit {
@@ -35,6 +41,7 @@ function videoFromRow(row: Record<string, unknown>): VideoKit {
     language: row.language as VideoKit["language"],
     url: (row.url as string | null) ?? undefined,
     files: (row.files as VisuelFile[] | null) ?? [],
+    audiences: audiencesOf(row),
   };
 }
 
@@ -45,6 +52,7 @@ function videoToRow(v: VideoKit) {
     language: v.language,
     url: v.url?.trim() ? v.url.trim() : null,
     files: v.files ?? [],
+    audiences: v.audiences ?? [],
   };
 }
 
@@ -65,6 +73,7 @@ function visuelFromRow(row: Record<string, unknown>): VisuelKit {
     title: row.title as string,
     category: row.category as VisuelKit["category"],
     files,
+    audiences: audiencesOf(row),
     path: legacyPath,
     mimeType: legacyMime,
   };
@@ -77,6 +86,7 @@ function visuelToRow(v: VisuelKit) {
     title: v.title,
     category: v.category,
     files,
+    audiences: v.audiences ?? [],
     // Compat : path / mime_type = premier fichier (anciens lecteurs).
     path: files[0]?.path ?? null,
     mime_type: files[0]?.mimeType ?? null,
@@ -97,6 +107,7 @@ function animationFromRow(row: Record<string, unknown>): AnimationItem {
     pdfFr: row.pdf_fr as string[],
     pdfEn: row.pdf_en as string[],
     body: (row.body as string | null) ?? undefined,
+    audiences: audiencesOf(row),
   };
 }
 
@@ -114,6 +125,7 @@ function animationToRow(a: AnimationItem) {
     pdf_fr: a.pdfFr,
     pdf_en: a.pdfEn,
     body: a.body?.trim() ? a.body : null,
+    audiences: a.audiences ?? [],
   };
 }
 

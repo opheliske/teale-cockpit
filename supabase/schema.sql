@@ -54,7 +54,8 @@ create table if not exists kits_lancement (
   title    text not null,
   step     text not null check (step in ('before', 'dday', 'after')),
   language text not null check (language in ('FR', 'EN')),
-  body     text
+  body     text,
+  audiences jsonb not null default '[]'
 );
 
 create table if not exists kits_animation (
@@ -69,7 +70,8 @@ create table if not exists kits_animation (
   images_en jsonb not null default '[]',
   pdf_fr    jsonb not null default '[]',
   pdf_en    jsonb not null default '[]',
-  body      text
+  body      text,
+  audiences jsonb not null default '[]'
 );
 
 create table if not exists kits_email (
@@ -77,7 +79,8 @@ create table if not exists kits_email (
   title    text not null,
   topic    text not null,
   language text not null check (language in ('FR', 'EN')),
-  body     text
+  body     text,
+  audiences jsonb not null default '[]'
 );
 
 create table if not exists kits_visuels (
@@ -87,6 +90,7 @@ create table if not exists kits_visuels (
   files       jsonb not null default '[]',  -- [{id, path, name, mimeType}] dans le bucket "kit-files"
   path        text,                         -- legacy mono-fichier (rétro-compat)
   mime_type   text,                         -- legacy mono-fichier (rétro-compat)
+  audiences   jsonb not null default '[]',
   created_at  timestamptz not null default now()
 );
 create index if not exists kits_visuels_category_idx on kits_visuels (category);
@@ -96,6 +100,7 @@ create table if not exists kits_fiches (
   title      text not null,
   language   text not null check (language in ('FR', 'EN')),
   files      jsonb not null default '[]',  -- [{id, path, name, mimeType}] dans le bucket "kit-files"
+  audiences  jsonb not null default '[]',
   created_at timestamptz not null default now()
 );
 create index if not exists kits_fiches_language_idx on kits_fiches (language);
@@ -106,6 +111,7 @@ create table if not exists kits_videos (
   language   text not null check (language in ('FR', 'EN')),
   url        text,                          -- lien YouTube/Vimeo/Loom/mp4
   files      jsonb not null default '[]',   -- [{id, path, name, mimeType}] dans le bucket "kit-files"
+  audiences  jsonb not null default '[]',
   created_at timestamptz not null default now()
 );
 create index if not exists kits_videos_language_idx on kits_videos (language);

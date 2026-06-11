@@ -15,6 +15,9 @@ import {
   type VisuelKit,
   type FicheKit,
   type VideoKit,
+  type AudId,
+  AUD_META,
+  AUD_ORDER,
   VISUEL_CATEGORIES,
 } from "./data";
 import { useKitsStore } from "@/lib/kits-store";
@@ -38,7 +41,6 @@ import { VideoEmbed } from "@/components/VideoEmbed";
 // ─────────────────────────────────────────────────────────────────────────────
 
 type KitTypeId = "tempsfort" | "atelier" | "email" | "lancement" | "visuel" | "fiche" | "video";
-type AudId = "tous" | "managers" | "codir" | "elus" | "rh";
 type LangId = "fr" | "en" | "both";
 
 const TYPE_META: Record<
@@ -56,14 +58,6 @@ const TYPE_META: Record<
 // Ordre d'affichage du badge "type" dans la facette.
 const TYPE_ORDER: KitTypeId[] = ["tempsfort", "atelier", "email", "lancement", "visuel", "fiche", "video"];
 
-const AUD_META: Record<AudId, string> = {
-  tous: "Tous les collaborateurs",
-  managers: "Managers",
-  codir: "CODIR",
-  elus: "Élus",
-  rh: "Équipe RH",
-};
-const AUD_ORDER: AudId[] = ["managers", "codir", "elus", "rh", "tous"];
 
 const LANG_META: Record<LangId, string> = {
   fr: "Français",
@@ -152,19 +146,6 @@ function monthName(n: number): string {
   return monthLabel[allMonths[n - 1]] ?? "";
 }
 
-// Aucun champ "public" structuré n'existe dans le repo (le targetAudience des
-// ateliers décrit des situations, pas des rôles). On dérive donc le public du
-// titre par mots-clés ; défaut "tous" (Collaborateurs). Un vrai champ `public`
-// pourrait être ajouté au modèle plus tard pour plus de précision.
-function deriveAudiences(title: string): AudId[] {
-  const t = title.toLowerCase();
-  const out: AudId[] = [];
-  if (/manager/.test(t)) out.push("managers");
-  if (/codir|comit[ée] de direction/.test(t)) out.push("codir");
-  if (/(^|[^a-z])élus?([^a-z]|$)|(^|[^a-z])elus?([^a-z]|$)/.test(t)) out.push("elus");
-  if (/(^|[^a-z])rh([^a-z]|$)|ressources humaines/.test(t)) out.push("rh");
-  return out.length > 0 ? out : ["tous"];
-}
 
 function makeCard(c: Omit<KitCard, "searchHay">): KitCard {
   const hay = [
@@ -309,7 +290,7 @@ export default function KitsCommunicationPage() {
           type: "tempsfort",
           title: a.title,
           theme: a.type || "Temps fort",
-          audiences: deriveAudiences(a.title),
+          audiences: a.audiences ?? [],
           lang,
           month: monthIdx >= 0 ? monthIdx + 1 : null,
           isNew: isNew(`ani:${a.id}`),
@@ -329,7 +310,7 @@ export default function KitsCommunicationPage() {
           type: "email",
           title: e.title,
           theme: topicLabel(e.topic),
-          audiences: deriveAudiences(e.title),
+          audiences: e.audiences ?? [],
           lang: e.language === "EN" ? "en" : "fr",
           month: null,
           isNew: isNew(`email:${e.id}`),
@@ -345,7 +326,7 @@ export default function KitsCommunicationPage() {
           type: "lancement",
           title: k.title,
           theme: stepLabels[k.step] ?? "Lancement",
-          audiences: deriveAudiences(k.title),
+          audiences: k.audiences ?? [],
           lang: k.language === "EN" ? "en" : "fr",
           month: null,
           isNew: isNew(`lan:${k.id}`),
@@ -361,7 +342,7 @@ export default function KitsCommunicationPage() {
           type: "visuel",
           title: v.title,
           theme: VISUEL_CATEGORIES.find((c) => c.id === v.category)?.label ?? v.category,
-          audiences: ["tous"],
+          audiences: v.audiences ?? [],
           lang: "both",
           month: null,
           isNew: isNew(`vis:${v.id}`),
@@ -377,7 +358,7 @@ export default function KitsCommunicationPage() {
           type: "fiche",
           title: f.title,
           theme: "Fiche pratique",
-          audiences: ["tous"],
+          audiences: f.audiences ?? [],
           lang: f.language === "EN" ? "en" : "fr",
           month: null,
           isNew: isNew(`fiche:${f.id}`),
@@ -393,7 +374,7 @@ export default function KitsCommunicationPage() {
           type: "video",
           title: v.title,
           theme: "Vidéo",
-          audiences: ["tous"],
+          audiences: v.audiences ?? [],
           lang: v.language === "EN" ? "en" : "fr",
           month: null,
           isNew: isNew(`video:${v.id}`),
@@ -935,7 +916,7 @@ function Card({
   hideMonth?: boolean;
 }) {
   const meta = TYPE_META[card.type];
-  const shownAuds = card.audiences.filter((a) => a !== "tous");
+  const shownAuds = card.audiences;
   return (
     <button
       type="button"

@@ -18,7 +18,8 @@ import {
   type FicheKit,
   type VideoKit,
 } from "@/lib/kits-store";
-import { VISUEL_CATEGORIES, type VisuelCategory, type VisuelFile } from "@/app/(client)/kits-communication/data";
+import { VISUEL_CATEGORIES, type VisuelCategory, type VisuelFile, type AudId, AUD_META, AUD_ORDER } from "@/app/(client)/kits-communication/data";
+import { AudiencePicker } from "@/components/AudiencePicker";
 import { uploadKitFile, kitFileLabel, openKitFile } from "@/lib/storage";
 import { type Workshop } from "@/lib/workshops-store";
 import { setSeenIds } from "@/lib/catalogue-read-state";
@@ -40,7 +41,6 @@ import { VideoEmbed } from "@/components/VideoEmbed";
 // ─── normalisation (identique au client) ─────────────────────────────────────
 
 type KitTypeId = "tempsfort" | "atelier" | "email" | "lancement" | "visuel" | "fiche" | "video";
-type AudId = "tous" | "managers" | "codir" | "elus" | "rh";
 type LangId = "fr" | "en" | "both";
 
 const TYPE_META: Record<
@@ -57,14 +57,6 @@ const TYPE_META: Record<
 };
 const TYPE_ORDER: KitTypeId[] = ["tempsfort", "atelier", "email", "lancement", "visuel", "fiche", "video"];
 
-const AUD_META: Record<AudId, string> = {
-  tous: "Tous les collaborateurs",
-  managers: "Managers",
-  codir: "CODIR",
-  elus: "Élus",
-  rh: "Équipe RH",
-};
-const AUD_ORDER: AudId[] = ["managers", "codir", "elus", "rh", "tous"];
 
 const LANG_META: Record<LangId, string> = {
   fr: "Français",
@@ -159,16 +151,6 @@ function topicLabel(topic: string): string {
   }
 }
 
-// Public dérivé du titre par mots-clés (pas de champ structuré). Défaut "tous".
-function deriveAudiences(title: string): AudId[] {
-  const t = title.toLowerCase();
-  const out: AudId[] = [];
-  if (/manager/.test(t)) out.push("managers");
-  if (/codir|comit[ée] de direction/.test(t)) out.push("codir");
-  if (/(^|[^a-z])élus?([^a-z]|$)|(^|[^a-z])elus?([^a-z]|$)/.test(t)) out.push("elus");
-  if (/(^|[^a-z])rh([^a-z]|$)|ressources humaines/.test(t)) out.push("rh");
-  return out.length > 0 ? out : ["tous"];
-}
 
 function makeCard(c: Omit<KitCard, "searchHay">): KitCard {
   const hay = [
@@ -222,12 +204,13 @@ interface VisuelForm {
   title: string;
   category: VisuelCategory;
   files: VisuelFile[];
+  audiences: AudId[];
 }
 
-const EMPTY_VISUEL: VisuelForm = { title: "", category: "logo", files: [] };
+const EMPTY_VISUEL: VisuelForm = { title: "", category: "logo", files: [], audiences: [] };
 
 function visuelToForm(v: VisuelKit): VisuelForm {
-  return { title: v.title, category: v.category, files: v.files ?? [] };
+  return { title: v.title, category: v.category, files: v.files ?? [], audiences: v.audiences ?? [] };
 }
 
 function formToVisuel(f: VisuelForm, existingId?: string): VisuelKit {
@@ -236,6 +219,7 @@ function formToVisuel(f: VisuelForm, existingId?: string): VisuelKit {
     title: f.title.trim(),
     category: f.category,
     files: f.files,
+    audiences: f.audiences,
   };
 }
 
@@ -243,12 +227,13 @@ interface FicheForm {
   title: string;
   language: "FR" | "EN";
   files: VisuelFile[];
+  audiences: AudId[];
 }
 
-const EMPTY_FICHE: FicheForm = { title: "", language: "FR", files: [] };
+const EMPTY_FICHE: FicheForm = { title: "", language: "FR", files: [], audiences: [] };
 
 function ficheToForm(f: FicheKit): FicheForm {
-  return { title: f.title, language: f.language, files: f.files ?? [] };
+  return { title: f.title, language: f.language, files: f.files ?? [], audiences: f.audiences ?? [] };
 }
 
 function formToFiche(f: FicheForm, existingId?: string): FicheKit {
@@ -257,6 +242,7 @@ function formToFiche(f: FicheForm, existingId?: string): FicheKit {
     title: f.title.trim(),
     language: f.language,
     files: f.files,
+    audiences: f.audiences,
   };
 }
 
@@ -265,12 +251,13 @@ interface VideoForm {
   language: "FR" | "EN";
   url: string;
   files: VisuelFile[];
+  audiences: AudId[];
 }
 
-const EMPTY_VIDEO: VideoForm = { title: "", language: "FR", url: "", files: [] };
+const EMPTY_VIDEO: VideoForm = { title: "", language: "FR", url: "", files: [], audiences: [] };
 
 function videoToForm(v: VideoKit): VideoForm {
-  return { title: v.title, language: v.language, url: v.url ?? "", files: v.files ?? [] };
+  return { title: v.title, language: v.language, url: v.url ?? "", files: v.files ?? [], audiences: v.audiences ?? [] };
 }
 
 function formToVideo(f: VideoForm, existingId?: string): VideoKit {
@@ -280,6 +267,7 @@ function formToVideo(f: VideoForm, existingId?: string): VideoKit {
     language: f.language,
     url: f.url.trim() || undefined,
     files: f.files,
+    audiences: f.audiences,
   };
 }
 
@@ -288,6 +276,7 @@ interface LancementForm {
   step: Step;
   language: EmailLanguage;
   body: string;
+  audiences: AudId[];
 }
 
 interface AnimationForm {
@@ -303,6 +292,7 @@ interface AnimationForm {
   pdfFrText: string;
   pdfEnText: string;
   body: string;
+  audiences: AudId[];
 }
 
 interface EmailForm {
@@ -310,20 +300,21 @@ interface EmailForm {
   topic: string;
   language: EmailLanguage;
   body: string;
+  audiences: AudId[];
 }
 
-const EMPTY_LANCEMENT: LancementForm = { title: "", step: "before", language: "FR", body: "" };
+const EMPTY_LANCEMENT: LancementForm = { title: "", step: "before", language: "FR", body: "", audiences: [] };
 
 const EMPTY_ANIMATION: AnimationForm = {
   title: "", month: "January", type: "Playlist", status: "Upcoming / À venir",
   landing: "", languageFR: true, languageEN: false,
-  imagesFrText: "", imagesEnText: "", pdfFrText: "", pdfEnText: "", body: "",
+  imagesFrText: "", imagesEnText: "", pdfFrText: "", pdfEnText: "", body: "", audiences: [],
 };
 
-const EMPTY_EMAIL: EmailForm = { title: "", topic: "ABILITY TO COPE", language: "FR", body: "" };
+const EMPTY_EMAIL: EmailForm = { title: "", topic: "ABILITY TO COPE", language: "FR", body: "", audiences: [] };
 
 function lancementToForm(k: LancementKit): LancementForm {
-  return { title: k.title, step: k.step, language: k.language, body: k.body ?? "" };
+  return { title: k.title, step: k.step, language: k.language, body: k.body ?? "", audiences: k.audiences ?? [] };
 }
 
 function animationToForm(a: AnimationItem): AnimationForm {
@@ -340,11 +331,12 @@ function animationToForm(a: AnimationItem): AnimationForm {
     pdfFrText: a.pdfFr.join("\n"),
     pdfEnText: a.pdfEn.join("\n"),
     body: a.body ?? "",
+    audiences: a.audiences ?? [],
   };
 }
 
 function emailToForm(e: EmailTopicKit): EmailForm {
-  return { title: e.title, topic: e.topic, language: e.language, body: e.body ?? "" };
+  return { title: e.title, topic: e.topic, language: e.language, body: e.body ?? "", audiences: e.audiences ?? [] };
 }
 
 // id généré pour un brouillon (upload avant enregistrement). Défini au niveau
@@ -361,6 +353,7 @@ function formToLancement(f: LancementForm, existingId?: string): LancementKit {
     step: f.step,
     language: f.language,
     body: f.body.trim() || undefined,
+    audiences: f.audiences,
   };
 }
 
@@ -382,6 +375,7 @@ function formToAnimation(f: AnimationForm, existingId?: string): AnimationItem {
     pdfFr: lines(f.pdfFrText),
     pdfEn: lines(f.pdfEnText),
     body: f.body.trim() || undefined,
+    audiences: f.audiences,
   };
 }
 
@@ -392,6 +386,7 @@ function formToEmail(f: EmailForm, existingId?: string): EmailTopicKit {
     topic: f.topic,
     language: f.language,
     body: f.body.trim() || undefined,
+    audiences: f.audiences,
   };
 }
 
@@ -512,7 +507,7 @@ export default function CsmKitsPage() {
           type: "tempsfort",
           title: a.title,
           theme: a.type || "Temps fort",
-          audiences: deriveAudiences(a.title),
+          audiences: a.audiences ?? [],
           lang,
           month: monthIdx >= 0 ? monthIdx + 1 : null,
           isNew: isNew(`ani:${a.id}`),
@@ -534,7 +529,7 @@ export default function CsmKitsPage() {
           type: "email",
           title: e.title,
           theme: topicLabel(e.topic),
-          audiences: deriveAudiences(e.title),
+          audiences: e.audiences ?? [],
           lang: e.language === "EN" ? "en" : "fr",
           month: null,
           isNew: isNew(`email:${e.id}`),
@@ -552,7 +547,7 @@ export default function CsmKitsPage() {
           type: "lancement",
           title: k.title,
           theme: stepLabels[k.step] ?? "Lancement",
-          audiences: deriveAudiences(k.title),
+          audiences: k.audiences ?? [],
           lang: k.language === "EN" ? "en" : "fr",
           month: null,
           isNew: isNew(`lan:${k.id}`),
@@ -570,7 +565,7 @@ export default function CsmKitsPage() {
           type: "visuel",
           title: v.title,
           theme: VISUEL_CATEGORIES.find((c) => c.id === v.category)?.label ?? v.category,
-          audiences: ["tous"],
+          audiences: v.audiences ?? [],
           lang: "both",
           month: null,
           isNew: isNew(`vis:${v.id}`),
@@ -588,7 +583,7 @@ export default function CsmKitsPage() {
           type: "fiche",
           title: f.title,
           theme: "Fiche pratique",
-          audiences: ["tous"],
+          audiences: f.audiences ?? [],
           lang: f.language === "EN" ? "en" : "fr",
           month: null,
           isNew: isNew(`fiche:${f.id}`),
@@ -606,7 +601,7 @@ export default function CsmKitsPage() {
           type: "video",
           title: v.title,
           theme: "Vidéo",
-          audiences: ["tous"],
+          audiences: v.audiences ?? [],
           lang: v.language === "EN" ? "en" : "fr",
           month: null,
           isNew: isNew(`video:${v.id}`),
@@ -1354,7 +1349,7 @@ function Card({
   hideMonth?: boolean;
 }) {
   const meta = TYPE_META[card.type];
-  const shownAuds = card.audiences.filter((a) => a !== "tous");
+  const shownAuds = card.audiences;
   const editable = !!onEdit;
   return (
     <div
@@ -2117,6 +2112,29 @@ function KitsFormSlideOver({
               )}
             </>
           )}
+
+          {/* Public ciblé — commun à tous les types de kit (multi-sélection). */}
+          <div>
+            <label className={LABEL}>Public ciblé <span className="font-normal normal-case text-[#6b7c75]">— une ou plusieurs cibles</span></label>
+            <AudiencePicker
+              value={
+                kind === "lancement" ? lancementForm.audiences
+                : kind === "animation" ? animationForm.audiences
+                : kind === "email" ? emailForm.audiences
+                : kind === "visuel" ? visuelForm.audiences
+                : kind === "fiche" ? ficheForm.audiences
+                : videoForm.audiences
+              }
+              onChange={(a) => {
+                if (kind === "lancement") setLancementForm((f) => ({ ...f, audiences: a }));
+                else if (kind === "animation") setAnimationForm((f) => ({ ...f, audiences: a }));
+                else if (kind === "email") setEmailForm((f) => ({ ...f, audiences: a }));
+                else if (kind === "visuel") setVisuelForm((f) => ({ ...f, audiences: a }));
+                else if (kind === "fiche") setFicheForm((f) => ({ ...f, audiences: a }));
+                else setVideoForm((f) => ({ ...f, audiences: a }));
+              }}
+            />
+          </div>
 
           {error && (
             <p className="rounded-[8px] bg-[rgba(239,68,68,0.1)] px-3 py-2 text-[12px] font-medium text-[#fca5a5]">{error}</p>
