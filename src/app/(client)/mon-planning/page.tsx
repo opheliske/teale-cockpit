@@ -26,6 +26,7 @@ import { useUnreadComments } from "@/lib/use-unread-comments";
 import { markThreadRead } from "@/lib/comments-read-state";
 import { ChatMessageText } from "@/components/ChatMessageText";
 import { useCsmName } from "@/lib/use-csm-name";
+import { useThreadTyping, useThreadOtherSeen } from "@/lib/use-thread-presence";
 
 // Today, computed once at module load — derives the month status (past /
 // current / upcoming) and the default active year of the planning view.
@@ -1554,6 +1555,19 @@ function EventModal({
   const [editId, setEditId] = useState<number | null>(null);
   const [editText, setEditText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const { otherTyping: csmTyping, notifyTyping: notifyClientTyping } = useThreadTyping(threadId, "client");
+  const csmSeenMs = useThreadOtherSeen(threadId);
+  const clientLastSentId = useMemo(() => {
+    let id: number | null = null;
+    let t = 0;
+    for (const c of comments) {
+      if (c.author === "client" && c.id > 0) {
+        const ms = new Date(c.date).getTime();
+        if (ms >= t) { t = ms; id = c.id; }
+      }
+    }
+    return id;
+  }, [comments]);
 
   useEffect(() => {
     commentsStore.load(threadId);
@@ -1927,19 +1941,25 @@ function EventModal({
                         <button type="button" onClick={() => commentsStore.discard(c.id)} className="underline hover:opacity-80">Abandonner</button>
                       </span>
                     )}
+                    {c.id === clientLastSentId && !pending && !failed && csmSeenMs >= new Date(c.date).getTime() && (
+                      <span className="px-1 text-[10px] text-brand-teal-bright">✓ Lu</span>
+                    )}
                   </div>
                 );
               })}
               <div ref={bottomRef} />
             </div>
 
+            {csmTyping && (
+              <p className="mb-1 px-1 text-[10px] italic text-brand-teal-bright">{csmName} écrit…</p>
+            )}
             {/* Input */}
             <div className="flex items-end gap-2">
               <textarea
                 rows={2}
                 value={draft}
                 maxLength={2000}
-                onChange={(e) => setDraft(e.target.value)}
+                onChange={(e) => { setDraft(e.target.value); notifyClientTyping(); }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();

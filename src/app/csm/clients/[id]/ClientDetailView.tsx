@@ -33,6 +33,7 @@ import { healthStore, type HealthEntry, type HealthStatut } from "@/lib/health-s
 import { targetsStore, type TargetLabel, LABEL_COLORS } from "@/lib/targets-store";
 import { commentsStore, type PlanComment } from "@/lib/comments-store";
 import { ChatMessageText } from "@/components/ChatMessageText";
+import { useThreadTyping, useThreadOtherSeen } from "@/lib/use-thread-presence";
 import { buildPlanQuarters, calendarQuarter } from "@/lib/plan-quarters";
 import { countAtelierConsumed, isPlanItemPast } from "@/lib/plan-dates";
 
@@ -424,6 +425,20 @@ export default function ClientDetailView({ id }: { id: string }) {
   const [commentDraft, setCommentDraft] = useState("");
   const [editCommentId, setEditCommentId] = useState<number | null>(null);
   const [editCommentText, setEditCommentText] = useState("");
+  const chatThreadId = editingPlanItem ? String(editingPlanItem.id) : "";
+  const { otherTyping: clientTyping, notifyTyping: notifyCsmTyping } = useThreadTyping(chatThreadId, "csm");
+  const clientSeenMs = useThreadOtherSeen(chatThreadId);
+  const csmLastSentId = useMemo(() => {
+    let id: number | null = null;
+    let t = 0;
+    for (const c of planItemComments) {
+      if (c.author === "csm" && c.id > 0) {
+        const ms = new Date(c.date).getTime();
+        if (ms >= t) { t = ms; id = c.id; }
+      }
+    }
+    return id;
+  }, [planItemComments]);
   const commentBottomRef = useRef<HTMLDivElement>(null);
   const [editPlanType, setEditPlanType] = useState<PlanItemType>("atelier");
   const [editPlanIcon, setEditPlanIcon] = useState("");
@@ -3728,17 +3743,23 @@ export default function ClientDetailView({ id }: { id: string }) {
                         <button type="button" onClick={() => commentsStore.discard(c.id)} className="underline hover:text-[#f0b9ab]">Abandonner</button>
                       </span>
                     )}
+                    {c.id === csmLastSentId && !pending && !failed && clientSeenMs >= new Date(c.date).getTime() && (
+                      <span className="px-1 text-[10px] text-[#5eead4]">✓ Lu</span>
+                    )}
                   </div>
                 );
               })}
               <div ref={commentBottomRef} />
             </div>
+            {clientTyping && (
+              <p className="mb-1 px-1 text-[10px] italic text-[#5eead4]">Le client écrit…</p>
+            )}
             <div className="flex items-end gap-2">
               <textarea
                 rows={2}
                 value={commentDraft}
                 maxLength={2000}
-                onChange={(e) => setCommentDraft(e.target.value)}
+                onChange={(e) => { setCommentDraft(e.target.value); notifyCsmTyping(); }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
