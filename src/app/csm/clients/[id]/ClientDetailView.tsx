@@ -992,10 +992,10 @@ export default function ClientDetailView({ id }: { id: string }) {
   const deletePlanItem = (itemId: number) => {
     setDeletedPlanIds((prev) => new Set([...prev, itemId]));
     setEditingPlanItem(null);
-    // Cascade : les données rattachées à l'item vivent dans d'autres tables et
-    // ne suivaient pas la suppression — elles restaient orphelines sur la home
-    // client (messages CSM non lus, prochains rendez-vous). On les purge ici.
-    void commentsStore.deleteThread(String(itemId), id);
+    // L'événement agenda (QBR/onboarding) est une donnée dérivée → on le purge
+    // avec l'item. En revanche on NE supprime PLUS le fil de discussion : on
+    // conserve l'historique de chat. La home client filtre simplement les fils
+    // des actions supprimées (cf. unreadInbox dans (client)/page.tsx).
     const base = [
       ...planBase.planQ1,
       ...planBase.planQ2Done,

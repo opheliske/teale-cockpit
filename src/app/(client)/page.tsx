@@ -109,9 +109,15 @@ export default function ClientHomePage() {
     const list: Array<{ threadId: string; title: string; latestText: string; latestDate: string; count: number }> = [];
     for (const u of unreadCommentsClient.values()) {
       const numericId = Number(u.threadId);
-      const item = Number.isFinite(numericId)
+      const isPlanItemThread = Number.isFinite(numericId);
+      const item = isPlanItemThread
         ? planItems.find((i) => i.id === numericId)
         : undefined;
+      // Action supprimée du plan (fil numérique sans item correspondant) : on
+      // ne l'affiche plus ici — sans supprimer les messages (historique
+      // conservé). Les fils d'événements statiques (threadId non numérique)
+      // restent affichés comme avant.
+      if (isPlanItemThread && !item) continue;
       list.push({
         threadId: u.threadId,
         title: item?.title ?? "Action du plan",
