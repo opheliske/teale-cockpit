@@ -8,6 +8,9 @@ export type PlanComment = {
   author: "client" | "csm";
   text: string;
   date: string; // ISO
+  // États locaux d'un envoi optimiste (jamais présents sur les lignes serveur,
+  // qui ont toujours un id > 0). `pending` : en cours ; `failed` : échec.
+  status?: "pending" | "failed";
 };
 
 function fromRow(row: Record<string, unknown>): PlanComment {
@@ -22,6 +25,7 @@ function fromRow(row: Record<string, unknown>): PlanComment {
 }
 
 let _comments: PlanComment[] = [];
+let _tempSeq = 0; // ids négatifs décroissants pour les messages optimistes
 const _loadedThreads = new Set<string>();
 const _listeners = new Set<() => void>();
 
@@ -35,9 +39,12 @@ async function reloadThreads() {
       .eq("thread_id", threadId)
       .order("created_at");
     if (data) {
+      // On préserve les messages optimistes locaux (id < 0) pas encore en base.
+      const localTemps = _comments.filter((c) => c.threadId === threadId && c.id < 0);
       _comments = [
         ..._comments.filter((c) => c.threadId !== threadId),
         ...data.map(fromRow),
+        ...localTemps,
       ];
     }
   }
@@ -49,6 +56,36 @@ watchChanges(["plan_comments"], () => {
 
 function notify() {
   _listeners.forEach((l) => l());
+}
+
+async function insertComment(
+  threadId: string,
+  clientId: string,
+  author: "client" | "csm",
+  text: string,
+  tempId: number,
+): Promise<{ ok: boolean }> {
+  if (!(await ensureSession())) {
+    _comments = _comments.map((c) => (c.id === tempId ? { ...c, status: "failed" } : c));
+    notify();
+    return { ok: false };
+  }
+  const { data, error } = await supabase
+    .from("plan_comments")
+    .insert({ thread_id: threadId, client_id: clientId, author, text })
+    .select()
+    .single();
+  if (error || !data) {
+    if (error) console.error("[comments-store] add", error);
+    _comments = _comments.map((c) => (c.id === tempId ? { ...c, status: "failed" } : c));
+    notify();
+    return { ok: false };
+  }
+  // Remplace le message optimiste par la ligne serveur.
+  _comments = _comments.map((c) => (c.id === tempId ? fromRow(data) : c));
+  notify();
+  notifyChange("plan_comments");
+  return { ok: true };
 }
 
 export const commentsStore = {
@@ -71,32 +108,52 @@ export const commentsStore = {
     }
     _loadedThreads.add(threadId);
     const fetched = data.map(fromRow);
+    const localTemps = _comments.filter((c) => c.threadId === threadId && c.id < 0);
     _comments = [
       ..._comments.filter((c) => c.threadId !== threadId),
       ...fetched,
+      ...localTemps,
     ];
     notify();
   },
 
-  // clientId scopes the comment to a company so RLS can isolate it: a client
-  // can only insert/read comments for its own company.
+  // Envoi optimiste : le message apparaît immédiatement (status "pending"),
+  // puis bascule en ligne serveur ou en "failed". clientId scope le message à
+  // une société pour la RLS (un client n'écrit que pour la sienne).
   add: async (
     threadId: string,
     clientId: string,
     author: "client" | "csm",
     text: string,
-  ) => {
-    if (!(await ensureSession())) return;
-    const { data } = await supabase
-      .from("plan_comments")
-      .insert({ thread_id: threadId, client_id: clientId, author, text })
-      .select()
-      .single();
-    if (data) {
-      _comments = [..._comments, fromRow(data)];
-      notify();
-      notifyChange("plan_comments");
-    }
+  ): Promise<{ ok: boolean }> => {
+    const tempId = (_tempSeq -= 1);
+    const optimistic: PlanComment = {
+      id: tempId,
+      threadId,
+      clientId,
+      author,
+      text,
+      date: new Date().toISOString(),
+      status: "pending",
+    };
+    _comments = [..._comments, optimistic];
+    notify();
+    return insertComment(threadId, clientId, author, text, tempId);
+  },
+
+  // Réessaie l'envoi d'un message en échec (conserve son id local).
+  resend: async (tempId: number): Promise<{ ok: boolean }> => {
+    const c = _comments.find((x) => x.id === tempId);
+    if (!c) return { ok: false };
+    _comments = _comments.map((x) => (x.id === tempId ? { ...x, status: "pending" } : x));
+    notify();
+    return insertComment(c.threadId, c.clientId, c.author, c.text, tempId);
+  },
+
+  // Abandonne un message en échec (le retire de la liste locale).
+  discard: (tempId: number) => {
+    _comments = _comments.filter((c) => c.id !== tempId);
+    notify();
   },
 
   // Removes a whole thread — called when the plan item it hangs off is

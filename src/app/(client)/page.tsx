@@ -376,7 +376,7 @@ export default function ClientHomePage() {
                   {unreadInbox.slice(0, 3).map((u) => (
                     <li key={u.threadId}>
                       <Link
-                        href="/mon-planning"
+                        href={`/mon-planning?openPlan=${encodeURIComponent(u.threadId)}`}
                         className="flex items-start gap-2.5 rounded-[10px] border border-brand-salmon/15 bg-brand-salmon/[0.04] px-3 py-2 transition-colors hover:border-brand-salmon/35"
                       >
                         <span className="shrink-0 text-sm">💬</span>

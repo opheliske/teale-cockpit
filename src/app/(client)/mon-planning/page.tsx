@@ -24,6 +24,8 @@ import { buildPlanQuartersForCycle, type PlanQuarter } from "@/lib/plan-quarters
 import { csmClientsStore } from "@/lib/csm-clients-store";
 import { useUnreadComments } from "@/lib/use-unread-comments";
 import { markThreadRead } from "@/lib/comments-read-state";
+import { ChatMessageText } from "@/components/ChatMessageText";
+import { useCsmName } from "@/lib/use-csm-name";
 
 // Today, computed once at module load — derives the month status (past /
 // current / upcoming) and the default active year of the planning view.
@@ -638,6 +640,32 @@ export default function MonPlanningPage() {
     }
     return merged;
   }, [activeYear, urgencies, storeState, quarterFirstMonth, cycleOffset]);
+
+  // Deep-link : arrivée via l'alerte « Nouveaux messages » de la home
+  // (?openPlan=<threadId>) → on ouvre directement l'action concernée. Une seule
+  // tentative, une fois le plan chargé (la modale a un repli si l'action n'est
+  // pas dans l'année active).
+  const deepLinkedRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkedRef.current) return;
+    const openPlan = new URLSearchParams(window.location.search).get("openPlan");
+    if (!openPlan) {
+      deepLinkedRef.current = true;
+      return;
+    }
+    const hasAny = Object.values(yearEvents).some((arr) => arr.length > 0);
+    if (!hasAny) return; // attendre le chargement du plan
+    deepLinkedRef.current = true;
+    for (const m of Object.keys(yearEvents)) {
+      const ev = (yearEvents[m] ?? []).find((e) => e.threadId === openPlan);
+      if (ev) {
+        markThreadRead("client", openPlan);
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- ouverture depuis l'URL une fois le plan prêt
+        setActiveEvent({ event: ev, month: m });
+        break;
+      }
+    }
+  }, [yearEvents]);
 
   const switchYear = (y: Year) => {
     setActiveYear(y);
@@ -1517,6 +1545,7 @@ function EventModal({
   const assignedLabels = clientLabels.filter((l) => event.targets?.includes(l.id));
   const showDeckBadge = !!event.deckCreated && (event.type === "qbr" || event.type === "atelier");
   const { clientId: CLIENT_ID } = useActiveClient();
+  const csmName = useCsmName();
   const threadId = event.threadId ?? `${event.type}:${event.title}`;
   const [comments, setComments] = useState<PlanComment[]>(() =>
     commentsStore.getByThread(threadId)
@@ -1843,18 +1872,28 @@ function EventModal({
                 const isClient = c.author === "client";
                 const d = new Date(c.date);
                 const dateLabel = d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) + " · " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+                const pending = c.status === "pending";
+                const failed = c.status === "failed";
                 return (
                   <div key={c.id} className={`flex flex-col gap-0.5 ${isClient ? "items-end" : "items-start"}`}>
                     <span className="text-[10px] text-brand-muted-on-dark px-1">
-                      {isClient ? "Vous" : "CSM"} · {dateLabel}
+                      {isClient ? "Vous" : csmName} · {dateLabel}{pending ? " · envoi…" : ""}
                     </span>
                     <div className={`max-w-[85%] rounded-[12px] px-3.5 py-2.5 text-[13px] leading-snug ${
                       isClient
                         ? "rounded-br-[4px] bg-brand-teal-bright/15 text-brand-cream"
                         : "rounded-bl-[4px] bg-white/[0.06] text-brand-cream"
-                    }`}>
-                      {c.text}
+                    } ${pending ? "opacity-60" : ""} ${failed ? "border border-brand-salmon/55" : ""}`}>
+                      <ChatMessageText text={c.text} />
                     </div>
+                    {failed && (
+                      <span className="px-1 text-[10px] text-brand-salmon">
+                        Échec ·{" "}
+                        <button type="button" onClick={() => void commentsStore.resend(c.id)} className="underline hover:opacity-80">Renvoyer</button>
+                        {" · "}
+                        <button type="button" onClick={() => commentsStore.discard(c.id)} className="underline hover:opacity-80">Abandonner</button>
+                      </span>
+                    )}
                   </div>
                 );
               })}
@@ -1862,14 +1901,20 @@ function EventModal({
             </div>
 
             {/* Input */}
-            <div className="flex gap-2">
-              <input
-                type="text"
+            <div className="flex items-end gap-2">
+              <textarea
+                rows={2}
                 value={draft}
+                maxLength={2000}
                 onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendComment()}
-                placeholder="Écrire un message à votre CSM…"
-                className="flex-1 rounded-[10px] border border-brand-border-dark bg-white/[0.04] px-3.5 py-2.5 text-[13px] text-brand-cream placeholder-brand-muted-on-dark outline-none focus:border-brand-teal-bright/40"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    sendComment();
+                  }
+                }}
+                placeholder="Écrire un message à votre CSM…  (Entrée pour envoyer, Maj+Entrée = saut de ligne)"
+                className="flex-1 resize-none rounded-[10px] border border-brand-border-dark bg-white/[0.04] px-3.5 py-2.5 text-[13px] text-brand-cream placeholder-brand-muted-on-dark outline-none focus:border-brand-teal-bright/40"
               />
               <button
                 onClick={sendComment}

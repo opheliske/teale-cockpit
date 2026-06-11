@@ -32,6 +32,7 @@ import { csmEventsStore, parseFrDateWeekday } from "@/lib/csm-events-store";
 import { healthStore, type HealthEntry, type HealthStatut } from "@/lib/health-store";
 import { targetsStore, type TargetLabel, LABEL_COLORS } from "@/lib/targets-store";
 import { commentsStore, type PlanComment } from "@/lib/comments-store";
+import { ChatMessageText } from "@/components/ChatMessageText";
 import { buildPlanQuarters, calendarQuarter } from "@/lib/plan-quarters";
 import { countAtelierConsumed, isPlanItemPast } from "@/lib/plan-dates";
 
@@ -3672,41 +3673,55 @@ export default function ClientDetailView({ id }: { id: string }) {
                 const isCsm = c.author === "csm";
                 const d = new Date(c.date);
                 const dateLabel = d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) + " · " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+                const pending = c.status === "pending";
+                const failed = c.status === "failed";
                 return (
                   <div key={c.id} className={`flex flex-col gap-0.5 ${isCsm ? "items-end" : "items-start"}`}>
                     <span className="px-1 text-[10px] text-[#6b7c75]">
-                      {isCsm ? "Vous (CSM)" : "Client"} · {dateLabel}
+                      {isCsm ? "Vous (CSM)" : "Client"} · {dateLabel}{pending ? " · envoi…" : ""}
                     </span>
                     <div className={`max-w-[85%] rounded-[10px] px-3 py-2 text-[12px] leading-snug ${
                       isCsm
                         ? "rounded-br-[3px] bg-[rgba(94,234,212,0.12)] text-[#e8f5ef]"
                         : "rounded-bl-[3px] bg-[rgba(255,255,255,0.06)] text-[#e8f5ef]"
-                    }`}>
-                      {c.text}
+                    } ${pending ? "opacity-60" : ""} ${failed ? "border border-[rgba(230,170,153,0.55)]" : ""}`}>
+                      <ChatMessageText text={c.text} />
                     </div>
+                    {failed && (
+                      <span className="px-1 text-[10px] text-[#E6AA99]">
+                        Échec ·{" "}
+                        <button type="button" onClick={() => void commentsStore.resend(c.id)} className="underline hover:text-[#f0b9ab]">Renvoyer</button>
+                        {" · "}
+                        <button type="button" onClick={() => commentsStore.discard(c.id)} className="underline hover:text-[#f0b9ab]">Abandonner</button>
+                      </span>
+                    )}
                   </div>
                 );
               })}
               <div ref={commentBottomRef} />
             </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
+            <div className="flex items-end gap-2">
+              <textarea
+                rows={2}
                 value={commentDraft}
+                maxLength={2000}
                 onChange={(e) => setCommentDraft(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey && commentDraft.trim()) {
-                    commentsStore.add(String(editingPlanItem.id), id, "csm", commentDraft.trim());
-                    setCommentDraft("");
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    if (commentDraft.trim()) {
+                      void commentsStore.add(String(editingPlanItem.id), id, "csm", commentDraft.trim());
+                      setCommentDraft("");
+                    }
                   }
                 }}
-                placeholder="Répondre au client…"
-                className="flex-1 rounded-[8px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2 text-[12px] text-[#e8f5ef] placeholder-[rgba(232,245,239,0.3)] outline-none focus:border-[rgba(94,234,212,0.4)]"
+                placeholder="Répondre au client…  (Entrée pour envoyer, Maj+Entrée = saut de ligne)"
+                className="flex-1 resize-none rounded-[8px] border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-3 py-2 text-[12px] text-[#e8f5ef] placeholder-[rgba(232,245,239,0.3)] outline-none focus:border-[rgba(94,234,212,0.4)]"
               />
               <button
                 onClick={() => {
                   if (!commentDraft.trim()) return;
-                  commentsStore.add(String(editingPlanItem.id), id, "csm", commentDraft.trim());
+                  void commentsStore.add(String(editingPlanItem.id), id, "csm", commentDraft.trim());
                   setCommentDraft("");
                 }}
                 disabled={!commentDraft.trim()}
