@@ -116,6 +116,7 @@ type EventType =
   | "kit"
   | "qbr"
   | "onboarding"
+  | "custom"
   | "urgence";
 
 const eventTypeConfig: Record<
@@ -141,6 +142,11 @@ const eventTypeConfig: Record<
     label: "Onboarding",
     emoji: "🚀",
     pillClass: "bg-[rgba(251,146,60,0.15)] text-[#fdba74]",
+  },
+  custom: {
+    label: "Custom",
+    emoji: "⚡",
+    pillClass: "bg-[rgba(253,224,71,0.15)] text-[#fde047]",
   },
   urgence: {
     label: "Urgence",
@@ -246,6 +252,8 @@ function defaultDescription(type: EventType): string {
       return "Quarterly Business Review — moment partagé avec votre direction pour mesurer l'impact du programme teale et planifier la suite.";
     case "onboarding":
       return "Session d'activation teale pour une équipe ou un département spécifique : présentation de la plateforme, parcours d'inscription et premiers usages.";
+    case "custom":
+      return "Action personnalisée organisée avec votre CSM teale.";
     case "urgence":
       return "Situation d'urgence déclarée depuis le catalogue d'intervention. Une intervention teale est en cours d'organisation avec votre CSM.";
   }
@@ -359,7 +367,7 @@ const frMonthAbbr: Record<string, string> = {
 
 
 const PLAN_EVENT_TYPE_MAP: Record<StoredPlanItemType, EventType> = {
-  atelier: "atelier", kit: "kit", qbr: "qbr", custom: "atelier", onboarding: "onboarding",
+  atelier: "atelier", kit: "kit", qbr: "qbr", custom: "custom", onboarding: "onboarding",
 };
 
 const PLAN_MODE_LABELS: Record<PlanItemMode, string> = {

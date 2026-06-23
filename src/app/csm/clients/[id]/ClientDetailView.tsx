@@ -734,10 +734,11 @@ export default function ClientDetailView({ id }: { id: string }) {
 
   // Target labels
   const [clientLabels, setClientLabels] = useState<TargetLabel[]>(() => targetsStore.getLabels(id));
-  const [itemTargets, setItemTargets] = useState<Record<number, string[]>>(() => {
-    const all = [...(detail?.planQ1 ?? []), ...(detail?.planQ2Done ?? []), ...(detail?.planQ2Upcoming ?? []), ...(detail?.planQ3 ?? []), ...(detail?.planQ4 ?? [])];
-    return Object.fromEntries(all.map((i) => [i.id, targetsStore.getItemTargets(id, i.id)]));
-  });
+  // Mirror the store's full assignment map for this client. Initialised from
+  // the store (not from `detail`, which is undefined on the first render while
+  // the client loads async) and kept in sync via the subscription below — so
+  // freshly-added items and labels assigned after mount are reflected too.
+  const [itemTargets, setItemTargets] = useState<Record<number, string[]>>(() => targetsStore.getClientTargets(id));
   const [planTargetFilter, setPlanTargetFilter] = useState<string | null>(null);
   const [showLabelManager, setShowLabelManager] = useState(false);
   const [newLabelName, setNewLabelName] = useState("");
@@ -760,11 +761,7 @@ export default function ClientDetailView({ id }: { id: string }) {
     targetsStore.load(id);
     return targetsStore.subscribe(() => {
       setClientLabels(targetsStore.getLabels(id));
-      setItemTargets((prev) => {
-        const next: Record<number, string[]> = { ...prev };
-        for (const k of Object.keys(next)) next[Number(k)] = targetsStore.getItemTargets(id, Number(k));
-        return next;
-      });
+      setItemTargets(targetsStore.getClientTargets(id));
     });
   }, [id]);
 
@@ -968,9 +965,9 @@ export default function ClientDetailView({ id }: { id: string }) {
     commentBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [planItemComments]);
 
-  const savePlanEdit = () => {
+  const savePlanEdit = async () => {
     if (!editingPlanItem || !editPlanTitle.trim()) return;
-    targetsStore.setItemTargets(id, editingPlanItem.id, editPlanTargets);
+    await targetsStore.setItemTargets(id, editingPlanItem.id, editPlanTargets);
     setPlanOverrides((prev) => ({
       ...prev,
       [editingPlanItem.id]: {

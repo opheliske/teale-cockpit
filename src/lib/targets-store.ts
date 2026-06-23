@@ -60,6 +60,11 @@ export const targetsStore = {
   getItemTargets: (clientId: string, itemId: number): string[] =>
     assigns[clientId]?.[itemId] ?? [],
 
+  // Full assignment map for a client (itemId → labelIds). Returns a fresh
+  // copy so callers can use it directly as React state.
+  getClientTargets: (clientId: string): Record<number, string[]> =>
+    ({ ...(assigns[clientId] ?? {}) }),
+
   load: async (clientId: string) => {
     if (_loadedClients.has(clientId)) return;
 
