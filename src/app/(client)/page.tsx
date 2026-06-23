@@ -260,7 +260,7 @@ export default function ClientHomePage() {
 
         {/* ── Two columns ── Colonne gauche en 2 rangées (plan + communications),
             colonne droite à cheval sur les deux pour que les bas s'alignent. */}
-        <div className="grid grid-cols-12 grid-rows-[auto_minmax(0,1fr)] gap-4">
+        <div className="grid grid-cols-12 gap-4">
 
           {/* Plan — 4 trimestres en aperçu. self-start : hauteur naturelle, pas
               d'étirement — ça supprime le grand vide sous les carrés. */}
@@ -523,14 +523,13 @@ export default function ClientHomePage() {
           </div>
 
           {/* ── Communications du trimestre ── sous le plan, dans la colonne
-              gauche (rangée 2). Remplit la hauteur restante et scrolle en
-              interne pour finir au niveau du bas de « Documents partagés ».
-              Inner en absolute : découple la hauteur du contenu de celle de la
-              grille (sinon les cartes pousseraient la colonne au lieu de
-              scroller). */}
-          <section className="relative col-span-7 row-start-2 min-h-0 rounded-[14px] border border-[#1a3530] bg-[rgba(14,37,32,0.4)]">
-            <div className="absolute inset-0 flex flex-col p-5">
-              <div className="mb-4 flex shrink-0 items-start justify-between gap-3">
+              gauche (rangée 2). En flux normal : la section se dimensionne sur
+              son contenu, donc elle reste visible quelle que soit la hauteur de
+              la colonne de droite (un layout `1fr` + contenu en `absolute`
+              s'effondrait à 0 quand la colonne droite était plus courte que le
+              plan). */}
+          <section className="col-span-7 row-start-2 flex flex-col rounded-[14px] border border-[#1a3530] bg-[rgba(14,37,32,0.4)] p-5">
+            <div className="mb-4 flex shrink-0 items-start justify-between gap-3">
             <div>
               <h2 className="text-[15px] font-semibold text-[#e8f5ef]">
                 Communications du trimestre
@@ -545,7 +544,7 @@ export default function ClientHomePage() {
             </Link>
           </div>
 
-              <div className="grid min-h-0 flex-1 grid-cols-3 gap-3 overflow-y-auto pr-1">
+            <div className="grid grid-cols-3 gap-3">
             {currentQuarterMonthsWithKits.map((m) => {
               const isCurrent = m.status === "current";
               const isPast = m.status === "past";
@@ -615,7 +614,6 @@ export default function ClientHomePage() {
               );
             })}
               </div>
-            </div>
           </section>
         </div>
       </div>
