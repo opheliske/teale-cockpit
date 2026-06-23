@@ -13,7 +13,6 @@ export const navSections: NavSection[] = [
     title: "Pilotage",
     items: [
       { label: "Home", href: "/" },
-      { label: "Messages", href: "/messages" },
       { label: "Suivi projet", href: "/mon-planning" },
       { label: "Mes ateliers", href: "/mes-ateliers" },
     ],
